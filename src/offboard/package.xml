@@ -1,9 +1,13 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>super_px4_bridge</name>
+  <name>offboard</name>
   <version>0.1.0</version>
-  <description>Bridge node: SUPER PositionCommand (ENU) → PX4 TrajectorySetpoint (NED)</description>
+  <description>
+    PX4 offboard state machine: arm, takeoff, idle-hover, hand over to SUPER
+    planner, and land. Bridges planner PositionCommand (ENU) to PX4
+    TrajectorySetpoint (NED).
+  </description>
   <maintainer email="user@example.com">user</maintainer>
   <license>BSD</license>
 
@@ -13,6 +17,7 @@
   <depend>rclcpp_components</depend>
   <depend>px4_msgs</depend>
   <depend>mars_quadrotor_msgs</depend>
+  <depend>std_srvs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

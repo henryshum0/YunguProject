@@ -134,8 +134,9 @@ rog_map:
   #  else user should call function [updateMap] to update the map.
   ros_callback:
     enable: true
-    cloud_topic: "/cloud_registered"
-    odom_topic: "/lidar_slam/odom"
+    # Bridged from gz-sim by utils/gz_bridges (x500_lidar_bridge.yaml).
+    cloud_topic: "/x500_lidar/scan/points"
+    odom_topic: "/odom"
     odom_timeout: 2.0
 
 
