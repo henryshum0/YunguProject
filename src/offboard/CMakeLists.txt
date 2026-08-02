@@ -17,6 +17,8 @@ find_package(rclcpp_components REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(mars_quadrotor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # --- Standalone executable ---
 add_executable(offboard_node
@@ -35,6 +37,8 @@ ament_target_dependencies(offboard_node
   px4_msgs
   mars_quadrotor_msgs
   std_srvs
+  geometry_msgs
+  visualization_msgs
 )
 
 # --- Composable component ---
@@ -53,6 +57,8 @@ ament_target_dependencies(offboard_component
   px4_msgs
   mars_quadrotor_msgs
   std_srvs
+  geometry_msgs
+  visualization_msgs
 )
 
 rclcpp_components_register_node(offboard_component

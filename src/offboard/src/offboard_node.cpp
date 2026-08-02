@@ -24,6 +24,9 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     landing_z_ = declare_parameter("landing_z", landing_z_);
     cmd_timeout_ = declare_parameter("cmd_timeout", cmd_timeout_);
     cmd_topic_ = declare_parameter("cmd_topic", cmd_topic_);
+    local_pos_topic_ = declare_parameter("local_pos_topic", local_pos_topic_);
+    goal_topic_ = declare_parameter("goal_topic", goal_topic_);
+    goal_marker_topic_ = declare_parameter("goal_marker_topic", goal_marker_topic_);
 
     const auto update_period = std::chrono::milliseconds(static_cast<int>(1000.0 / update_rate_));
 
@@ -44,14 +47,22 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
         "/fmu/in/trajectory_setpoint", qos_px4);
     cmd_pub_ = create_publisher<px4_msgs::msg::VehicleCommand>(
         "/fmu/in/vehicle_command", qos_px4);
+    // Transient-local so a late-starting RViz still sees the latest goal marker.
+    auto qos_marker = rclcpp::QoS(1).transient_local();
+    goal_marker_pub_ = create_publisher<visualization_msgs::msg::Marker>(
+        goal_marker_topic_, qos_marker);
 
     // --- Subscribers ---
     cmd_sub_ = create_subscription<mars_quadrotor_msgs::msg::PositionCommand>(
         cmd_topic_, qos_super,
         std::bind(&OffboardNode::cmdCallback, this, std::placeholders::_1));
     local_pos_sub_ = create_subscription<px4_msgs::msg::VehicleLocalPosition>(
-        "/fmu/out/vehicle_local_position", qos_px4,
+        local_pos_topic_, qos_px4,
         std::bind(&OffboardNode::localPosCallback, this, std::placeholders::_1));
+    // RViz "2D Goal Pose" publishes reliable/volatile; accept it.
+    goal_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
+        goal_topic_, qos_super,
+        std::bind(&OffboardNode::goalCallback, this, std::placeholders::_1));
 
     // --- Landing service ---
     land_srv_ = create_service<std_srvs::srv::Trigger>(
@@ -121,6 +132,50 @@ void OffboardNode::cmdCallback(const mars_quadrotor_msgs::msg::PositionCommand::
 void OffboardNode::localPosCallback(const px4_msgs::msg::VehicleLocalPosition::SharedPtr msg)
 {
     local_pos_ = msg;
+}
+
+void OffboardNode::goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+{
+    RCLCPP_INFO(get_logger(), "Goal received: (%.2f, %.2f, %.2f)",
+                msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
+    publishGoalMarker(*msg);
+}
+
+void OffboardNode::publishGoalMarker(const geometry_msgs::msg::PoseStamped &goal)
+{
+    // Green sphere at the clicked goal position.
+    visualization_msgs::msg::Marker sphere;
+    sphere.header = goal.header;
+    sphere.ns = "goal";
+    sphere.id = 0;
+    sphere.type = visualization_msgs::msg::Marker::SPHERE;
+    sphere.action = visualization_msgs::msg::Marker::ADD;
+    sphere.pose = goal.pose;
+    sphere.scale.x = 0.3;
+    sphere.scale.y = 0.3;
+    sphere.scale.z = 0.3;
+    sphere.color.r = 0.0f;
+    sphere.color.g = 1.0f;
+    sphere.color.b = 0.0f;
+    sphere.color.a = 1.0f;
+    goal_marker_pub_->publish(sphere);
+
+    // Cyan arrow showing the goal yaw orientation.
+    visualization_msgs::msg::Marker arrow;
+    arrow.header = goal.header;
+    arrow.ns = "goal";
+    arrow.id = 1;
+    arrow.type = visualization_msgs::msg::Marker::ARROW;
+    arrow.action = visualization_msgs::msg::Marker::ADD;
+    arrow.pose = goal.pose;
+    arrow.scale.x = 0.6;
+    arrow.scale.y = 0.12;
+    arrow.scale.z = 0.12;
+    arrow.color.r = 0.0f;
+    arrow.color.g = 1.0f;
+    arrow.color.b = 1.0f;
+    arrow.color.a = 1.0f;
+    goal_marker_pub_->publish(arrow);
 }
 
 void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
