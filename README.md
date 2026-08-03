@@ -8,6 +8,9 @@ git clone --recursive https://github.com/henryshum0/YunguProject.git
 
 # build
 colcon build --symlink-install
+
+# before running the yungu map, put the yungu.glb and yungu_collider.stl file
+# under VisionFlow-PX4/Tools/simulation/gz/worlds
 ```
 
 ## Running the simulation
