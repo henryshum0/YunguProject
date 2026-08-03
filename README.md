@@ -2,6 +2,7 @@
 ```
 # clone simulator
 git clone --recursive https://github.com/henryshum0/YunguProject.git
+cd YunguProject
 
 # install depdency
 ./install_deps.sh
@@ -9,7 +10,7 @@ git clone --recursive https://github.com/henryshum0/YunguProject.git
 # build
 colcon build --symlink-install
 
-# before running the yungu map, put the yungu.glb and yungu_collider.stl file
+# before running the yungu map, put the yungu.glb file
 # under VisionFlow-PX4/Tools/simulation/gz/worlds
 ```
 
@@ -23,6 +24,7 @@ with a single script:
 ./src/utils/start_sim.sh
 
 # Terminal 2 — offboard state machine + SUPER planner + RViz
+source install/setup.bash
 ros2 launch offboard offboard.launch.py
 ```
 
