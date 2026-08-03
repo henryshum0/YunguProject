@@ -91,5 +91,4 @@ echo
 echo "Dependency installation finished."
 echo "Next steps:"
 echo "  1. source /opt/ros/${ROS_DISTRO}/setup.bash"
-echo "  2. colcon build --packages-select mars_quadrotor_msgs rog_map super_planner"
-echo "  3. For FAST-LIO: colcon build --packages-select fastlio_mapping"
+echo "  2. colcon build --symlink-install
