@@ -2,3 +2,6 @@
 	path = VisionFlow-PX4
 	url = https://github.com/Renwang-Huang/VisionFlow-PX4.git
 	branch = yungudemo
+[submodule "src/livox_ros_driver2"]
+	path = src/livox_ros_driver2
+	url = https://github.com/Ericsii/livox_ros_driver2.git
