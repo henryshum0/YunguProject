@@ -71,12 +71,12 @@ $SUDO apt-get install -y \
 
 # Best-effort packages. They may not be resolvable from the configured apt
 # repos on every system, so install them separately and warn instead of failing.
-$SUDO apt-get install -y \
-    "ros-${ROS_DISTRO}-rosfmt" \
-    "ros-${ROS_DISTRO}-livox-ros-driver2" \
-    || echo "NOTE: rosfmt / livox-ros-driver2 not available via apt. FAST-LIO "
-       "requires livox_ros_driver2 - build it from source if missing:"
-       "  git clone https://github.com/Livox-SDK/livox_ros_driver2.git"
+# $SUDO apt-get install -y \
+#     "ros-${ROS_DISTRO}-rosfmt" \
+#     "ros-${ROS_DISTRO}-livox-ros-driver2" \
+#     || echo "NOTE: rosfmt / livox-ros-driver2 not available via apt. FAST-LIO "
+#        "requires livox_ros_driver2 - build it from source if missing:"
+#        "  git clone https://github.com/Livox-SDK/livox_ros_driver2.git"
 
 # ---------------------------------------------------------------------------
 # 3. Python packages
