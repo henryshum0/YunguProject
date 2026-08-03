@@ -43,8 +43,8 @@ traj_opt:
     max_acc: 5.0
     max_jerk: 80.0
     max_omg: 1.5
-    max_acc_thr: 17.0
-    min_acc_thr: 6.0
+    max_acc_thr: 10.0
+    min_acc_thr: 3.0
     penna_margin: 0.05
 
   exp_traj:
@@ -120,7 +120,7 @@ rog_map:
   load_pcd_en: false
 
   map_sliding:
-    enable: false
+    enable: True
     # The minimum distance [m] to slide the map.
     threshold: 3.0
 
