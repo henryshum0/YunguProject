@@ -1,15 +1,13 @@
 
 ```
 # clone simulator
-git clone --recursive https://github.com/Renwang-Huang/VisionFlow-PX4.git
-
-# switch to yungu branch
-cd VisionFlow-PX4
-git checkout yungudemo
-cd ..
+git clone --recursive https://github.com/henryshum0/YunguProject.git
 
 # install depdency
 ./install_deps.sh
+
+# build
+colcon build --symlink-install
 ```
 
 ## Running the simulation
