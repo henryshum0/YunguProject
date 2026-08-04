@@ -10,9 +10,12 @@ from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
-    # RViz config shipped with the offboard package
+    # RViz config shipped with the offboard package.
+    # Default to the full path/planning visualization (corridors, trajectories,
+    # occupied map, TF, goal markers). Override with rviz_config:=x500.rviz
+    # to fall back to the minimal sensor-only view.
     default_rviz_config = os.path.join(
-        get_package_share_directory('offboard'), 'rviz', 'x500.rviz')
+        get_package_share_directory('offboard'), 'rviz', 'x500_lidar_paths.rviz')
 
     return LaunchDescription([
         # ------------------------------------------------------------------
