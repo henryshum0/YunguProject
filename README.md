@@ -47,6 +47,7 @@ agent and the bridge. Logs go to `/tmp/yungu_sim/` (`px4_sitl.log`,
 | `PX4_MODEL`  | `gz_x500_lidar_yungu`   | Gazebo model / airframe target for `make px4_sitl`   |
 | `XRCE_PORT`  | `8888`                  | UDP port for the MicroXRCEAgent                      |
 | `GZ_VERSION` | `harmonic`              | gz-transport version for `ros_gz_bridge` (gz-sim 8)  |
+| `HEADLESS`   | *(unset)*               | Any non-empty value (e.g. `1`) runs Gazebo without its GUI (server only) |
 
 ```bash
 # Run a different airframe / model
@@ -57,6 +58,10 @@ XRCE_PORT=2018 ./src/utils/start_sim.sh
 
 # Explicitly select the gz transport version
 GZ_VERSION=harmonic ./src/utils/start_sim.sh
+
+# Run Gazebo without its GUI (physics server only) - useful for CI or
+# machines without a display
+HEADLESS=1 ./src/utils/start_sim.sh
 ```
 
 ### Bridging and visualization
