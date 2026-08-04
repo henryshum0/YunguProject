@@ -57,6 +57,7 @@ namespace super_planner {
         double robot_r_;
         int box_search_skip_num_;
         int iris_iter_num_;
+        bool candidate_sfc_viz_en_ = false;
         double virtual_groud_height_ = 0.0;
         double virtual_ceil_height_ = 0.0;
         rog_map::ROGMapROS::Ptr map_ptr_;
@@ -84,7 +85,8 @@ namespace super_planner {
                           const double virtual_ceil_height,
                           const double robot_r,
                           const int box_search_skip_num,
-                          const int iris_iter_num);
+                          const int iris_iter_num,
+                          const bool candidate_sfc_viz_en = false);
 
         ~CorridorGenerator() = default;
 

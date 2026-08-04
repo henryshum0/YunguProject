@@ -14,6 +14,7 @@
 #   PX4_MODEL=gz_x500_lidar_yungu ./start_sim.sh
 #   XRCE_PORT=8888 ./start_sim.sh
 #   GZ_VERSION=harmonic ./start_sim.sh
+#   HEADLESS=1 ./start_sim.sh               # run Gazebo without its GUI (server only)
 #
 # Press Ctrl+C to stop everything.
 
@@ -27,6 +28,13 @@ BRIDGE_SCRIPT="${SCRIPT_DIR}/gz_bridges/bridge.sh"
 PX4_MODEL="${PX4_MODEL:-gz_x500_lidar_yungu}"
 XRCE_PORT="${XRCE_PORT:-8888}"
 GZ_VERSION="${GZ_VERSION:-harmonic}"
+
+# Set HEADLESS to any non-empty value (e.g. HEADLESS=1) to start Gazebo without
+# its GUI. PX4's gz-sim init script only launches the GUI when HEADLESS is empty,
+# so with this set it runs just the physics server (useful for CI or machines
+# without a display).
+HEADLESS="${HEADLESS:-}"
+export HEADLESS
 
 LOG_DIR="/tmp/yungu_sim"
 mkdir -p "${LOG_DIR}"
@@ -85,9 +93,13 @@ trap cleanup EXIT INT TERM
 # ---------------------------------------------------------------------------
 #  1. PX4 SITL + Gazebo
 # ---------------------------------------------------------------------------
-echo "Starting PX4 SITL + Gazebo (model: ${PX4_MODEL}) ..."
+if [[ -n "${HEADLESS}" ]]; then
+  echo "Starting PX4 SITL + Gazebo (model: ${PX4_MODEL}, HEADLESS: Gazebo GUI disabled) ..."
+else
+  echo "Starting PX4 SITL + Gazebo (model: ${PX4_MODEL}) ..."
+fi
 if [[ -n "${TERMINAL}" ]]; then
-  export PX4_DIR PX4_MODEL LOG_DIR
+  export PX4_DIR PX4_MODEL LOG_DIR HEADLESS
   setsid xterm -T "PX4 SITL (${PX4_MODEL})" -hold \
       -e bash -c 'cd "$PX4_DIR" && make px4_sitl "$PX4_MODEL" 2>&1 | tee "$LOG_DIR/px4_sitl.log"' &
   pids+=("$!")
