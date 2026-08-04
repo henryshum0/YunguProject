@@ -31,7 +31,8 @@ namespace super_planner {
                                          const rog_map::ROGMapROS::Ptr &map_ptr, const double bound_dis,
                                          const double seed_line_max_dis, const double min_overlap_threshold,
                                          const double virtual_groud_height, const double virtual_ceil_height,
-                                         const double robot_r, const int box_search_skip_num, const int iris_iter_num)
+                                         const double robot_r, const int box_search_skip_num, const int iris_iter_num,
+                                         const bool candidate_sfc_viz_en)
             : ros_ptr_(ros_ptr), map_ptr_(map_ptr) {
         ciri_ = std::make_shared<CIRI>(ros_ptr_);
         ciri_->setupParams(robot_r, iris_iter_num);
@@ -41,6 +42,7 @@ namespace super_planner {
         robot_r_ = robot_r;
         box_search_skip_num_ = box_search_skip_num;
         iris_iter_num_ = iris_iter_num;
+        candidate_sfc_viz_en_ = candidate_sfc_viz_en;
         virtual_ceil_height_ = virtual_ceil_height - robot_r;
         virtual_groud_height_ = virtual_groud_height + robot_r;
 //        failed_traj_log.open(DEBUG_FILE_DIR("sfc.csv"), std::ios::out | std::ios::trunc);
@@ -69,6 +71,15 @@ namespace super_planner {
         Vec3f interior_pt;
         double interior_depth;
         Polytope temp_poly, temp_poly_fix_p;
+        PolytopeVec candidate_polys;
+        // Publish every polytope spawned along the path BEFORE the overlap check
+        // decides which ones are kept / replaced, for debugging corridor
+        // connectivity (topic: visualization/ciri_debug_mkr).
+        auto publish_candidates = [&]() {
+            if (candidate_sfc_viz_en_ && !candidate_polys.empty()) {
+                ros_ptr_->vizCiriPolytopeVec(candidate_polys, "candidate_sfc");
+            }
+        };
         int max_loop = 1000;
         int cnt_loop = 0;
         first_id = 0;
@@ -81,6 +92,7 @@ namespace super_planner {
             shifted_start_pt = path[first_id];
             double dis = (path[first_id] - path[0]).norm() * 1.2;
             GenerateEmptyPolytope(path[0], dis, temp_poly);
+            candidate_polys.push_back(temp_poly);
             sfcs.emplace_back(temp_poly);
         }
 
@@ -117,6 +129,7 @@ namespace super_planner {
                 cout << YELLOW << " -- [SUPER] GeneratePolytopeFromLine failed." << RESET << endl;
                 return false;
             }
+            candidate_polys.push_back(temp_poly);
 
 // viz for debug
 //            ros_ptr_->vizCiriPolytope(temp_poly, "debug");
@@ -132,12 +145,14 @@ namespace super_planner {
                         cout << YELLOW << " -- [SUPER] GeneratePolytopeFromPoint failed." << RESET << endl;
                         return false;
                     }
+                    candidate_polys.push_back(temp_poly_fix_p);
                     overlap = sfcs.back().CrossWith(temp_poly_fix_p);
                     interior_depth = geometry_utils::findInteriorDist(overlap.GetPlanes(), interior_pt);
                     if (interior_depth <= 0.01) {
                         ros_ptr_->warn(
                                 " -- [SUPER] Cannot find continuous corridor on path, overlap only {}, force return.",
                                 interior_depth);
+                        publish_candidates();
 // viz for debug
 //                        ros_ptr_->vizCiriPointCloud(latest_pc);
 //                        usleep(100000);
@@ -153,6 +168,7 @@ namespace super_planner {
                         ros_ptr_->warn(
                                 " -- [SUPER] Cannot find continuous corridor on path, overlap only {}, force return.",
                                 interior_depth);
+                        publish_candidates();
                         // viz for debug
 //                        ros_ptr_->vizCiriPointCloud(latest_pc);
 //                        usleep(100000);
@@ -191,6 +207,7 @@ namespace super_planner {
             return false;
         }
 
+        publish_candidates();
         return true;
     }
 
