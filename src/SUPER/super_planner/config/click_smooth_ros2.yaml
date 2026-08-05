@@ -40,11 +40,11 @@ traj_opt:
 
   boundary:
     max_vel: 8.0
-    max_acc: 5.0
-    max_jerk: 80.0
-    max_omg: 1.5
-    max_acc_thr: 10.0
-    min_acc_thr: 3.0
+    max_acc: 15.0
+    max_jerk: 120.0
+    max_omg: 2.5
+    max_acc_thr: 17.0
+    min_acc_thr: 6.0
     penna_margin: 0.05
 
   exp_traj:
@@ -53,10 +53,10 @@ traj_opt:
     energy_cost_type: 4
     block_energy_cost: false
     opt_accuracy: 5.0e-6
-    scale_factor: 2.0
+    scale_factor: 1
     integral_reso: 15
     smooth_eps: 0.01
-    penna_t: 1.0e+7
+    penna_t: 5.0e+9
     penna_pos: 5.0e+9
     penna_vel: 5.0e+8
     penna_acc: 5.0e+8
@@ -72,7 +72,7 @@ traj_opt:
     energy_cost_type: 4
     block_energy_cost: true
     opt_accuracy: 1.0e-5
-    scale_factor: 2.0
+    scale_factor: 1.0
     integral_reso: 12
     smooth_eps: 0.01
     penna_t: 100.0
@@ -99,7 +99,7 @@ astar:
   allow_diag: true
   # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN
   heu_type: 2
-  debug_visualization_en: false
+  debug_visualization_en: true
 
 
 rog_map:
@@ -108,19 +108,19 @@ rog_map:
   inflation_step: 3
   unk_inflation_en: false
   unk_inflation_step: 1
-  map_size: [ 15,110,6 ]
+  map_size: [ 20, 20, 6 ]
   # If the map rolling is disable, the map origin [m] should be set.
   fix_map_origin: [ 0,0,1.5 ]
   frontier_extraction_en: false
 
   # Virtual ceil and ground
-  virtual_ceil_height: 3.5
+  virtual_ceil_height: 10
   virtual_ground_height: -0.1
 
   load_pcd_en: false
 
   map_sliding:
-    enable: True
+    enable: true
     # The minimum distance [m] to slide the map.
     threshold: 3.0
 

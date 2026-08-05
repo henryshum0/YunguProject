@@ -2,3 +2,4 @@ conan
 build
 install
 log
+.vscode
