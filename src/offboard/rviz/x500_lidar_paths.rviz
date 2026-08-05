@@ -62,8 +62,8 @@ Visualization Manager:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /x500_lidar/scan/points
+        Reliability Policy: Best Effort
+        Value: /cloud_registered
       Use Fixed Frame: true
       Use rainbow: true
     - Alpha: 1
@@ -183,30 +183,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /goal_marker
       Value: true
-    - Angle Tolerance: 0.1
-      Class: rviz_default_plugins/Odometry
-      Color: 255; 180; 0
-      Enabled: true
-      Keep: 3
-      Length: 1
-      Name: Vehicle Odometry (Orange Arrow)
-      Position Tolerance: 0.1
-      Shape:
-        Alpha: 1
-        Axes Length: 1
-        Axes Radius: 0.1
-        Color: 255; 180; 0
-        Head Length: 0.3
-        Head Radius: 0.1
-        Shaft Length: 1
-        Shaft Radius: 0.05
-        Value: Arrow
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /odom
   Enabled: true
   Global Options:
     Background Color: 35; 35; 35

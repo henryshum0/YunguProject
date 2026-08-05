@@ -1,7 +1,7 @@
 fsm:
   click_goal_en: true
   click_goal_topic: "/goal_pose"
-  click_height: 1.5
+  click_height: 5
   click_yaw_en: true
   replan_rate: 15.0
   cmd_topic: "/planning/pos_cmd"
@@ -16,9 +16,6 @@ super_planner:
   print_log: false
   visual_process: false
   frontend_in_known_free: false
-  # Publish the corridor polytopes spawned before the overlap check to
-  # /visualization/ciri_debug_mkr (debug only).
-  candidate_sfc_viz_en: true
   goal_yaw_en: false
   goal_vel_en: false
   corridor_bound_dis: 0.8
@@ -30,7 +27,7 @@ super_planner:
   planning_horizon: 7.0
   sensing_horizon: -1
   receding_dis: 1.0
-  robot_r: 0.8
+  robot_r: 0.2
   yaw_dot_max: 3.0
   # Yaw mode: 1 heading to velocity, 2 heading to goal
   yaw_mode: 1
@@ -42,12 +39,12 @@ traj_opt:
     print_optimizer_log: false
 
   boundary:
-    max_vel: 5.0
-    max_acc: 3.0
+    max_vel: 8.0
+    max_acc: 5
     max_jerk: 100.0
-    max_omg: 1.5
-    max_acc_thr: 8.0
-    min_acc_thr: 3.0
+    max_omg: 2.5
+    max_acc_thr: 15.0
+    min_acc_thr: 6.0
     penna_margin: 0.05
 
   exp_traj:
@@ -56,14 +53,14 @@ traj_opt:
     energy_cost_type: 4
     block_energy_cost: false
     opt_accuracy: 5.0e-6
-    scale_factor: 4.0
+    scale_factor: 1
     integral_reso: 15
     smooth_eps: 0.01
-    penna_t: 1.0e+7
+    penna_t: 5.0e+9
     penna_pos: 5.0e+9
     penna_vel: 5.0e+8
-    penna_acc: 5.0e+8
-    penna_jerk: -5.0e+8
+    penna_acc: 1.0e+10
+    penna_jerk: -5.0e+9
     penna_attract: 5.0e+8
     penna_omg: -1
     penna_thr: -1
@@ -75,11 +72,11 @@ traj_opt:
     energy_cost_type: 4
     block_energy_cost: true
     opt_accuracy: 1.0e-5
-    scale_factor: 4.0
+    scale_factor: 1.0
     integral_reso: 12
     smooth_eps: 0.01
     penna_t: 100.0
-    penna_ts: 1.0e+6
+    penna_ts: 1.0e+7
     penna_pos: 1.0e+10
     penna_vel: 1.0e+8
     penna_acc: 1.0e+8
@@ -88,7 +85,7 @@ traj_opt:
     penna_thr: -1
 
   flatness:
-    mass: 2.8
+    mass: 1.64
     dh: 0.35
     dv: 0.35
     cp: 0.001
@@ -102,16 +99,16 @@ astar:
   allow_diag: true
   # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN
   heu_type: 2
-  debug_visualization_en: false
+  debug_visualization_en: true
 
 
 rog_map:
-  resolution: 0.05
-  inflation_resolution: 0.2
+  resolution: 0.1
+  inflation_resolution: 0.3
   inflation_step: 3
   unk_inflation_en: false
   unk_inflation_step: 1
-  map_size: [ 40,40,10 ]
+  map_size: [ 20, 20, 6 ]
   # If the map rolling is disable, the map origin [m] should be set.
   fix_map_origin: [ 0,0,1.5 ]
   frontier_extraction_en: false
@@ -123,9 +120,9 @@ rog_map:
   load_pcd_en: false
 
   map_sliding:
-    enable: True
+    enable: true
     # The minimum distance [m] to slide the map.
-    threshold: 10.0
+    threshold: 3.0
 
   esdf:
     enable: false
@@ -137,14 +134,15 @@ rog_map:
   #  else user should call function [updateMap] to update the map.
   ros_callback:
     enable: true
-    # Bridged from gz-sim by utils/gz_bridges (x500_lidar_bridge.yaml).
-    cloud_topic: "/x500_lidar/scan/points"
-    odom_topic: "/odom"
+    # World-frame lidar cloud + odom provided by the offboard cloud_frame_bridge
+    # (transforms the raw gz lidar_link cloud into the world frame).
+    cloud_topic: "/cloud_registered"
+    odom_topic: "/lidar_slam/odom"
     odom_timeout: 2.0
 
 
   visualization:
-    enable: false
+    enable: true
     # when enabled, use rqt_reconfigure to change the visualization parameters.
     use_dynamic_reconfigure: false
     # The rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.

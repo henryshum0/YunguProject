@@ -4,9 +4,9 @@
   <name>offboard</name>
   <version>0.1.0</version>
   <description>
-    PX4 offboard state machine: arm, takeoff, idle-hover, hand over to SUPER
-    planner, and land. Bridges planner PositionCommand (ENU) to PX4
-    TrajectorySetpoint (NED).
+    PX4 offboard state machine: arm, switch to OFFBOARD, idle-hover, hand
+    over to SUPER planner, and land. Bridges planner PositionCommand (ENU) to
+    PX4 TrajectorySetpoint (NED).
   </description>
   <maintainer email="user@example.com">user</maintainer>
   <license>BSD</license>

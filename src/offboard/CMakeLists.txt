@@ -19,6 +19,8 @@ find_package(mars_quadrotor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 # --- Standalone executable ---
 add_executable(offboard_node
@@ -39,6 +41,28 @@ ament_target_dependencies(offboard_node
   std_srvs
   geometry_msgs
   visualization_msgs
+)
+
+# --- Goal marker node (RViz 2D Goal Pose -> /goal_marker markers) ---
+add_executable(goal_marker_node
+  src/goal_marker_node.cpp
+)
+
+ament_target_dependencies(goal_marker_node
+  rclcpp
+  geometry_msgs
+  visualization_msgs
+)
+
+# --- Cloud frame bridge (gz lidar_link cloud -> world-frame /cloud_registered) ---
+add_executable(cloud_frame_bridge
+  src/cloud_frame_bridge.cpp
+)
+
+ament_target_dependencies(cloud_frame_bridge
+  rclcpp
+  sensor_msgs
+  nav_msgs
 )
 
 # --- Composable component ---
@@ -69,6 +93,8 @@ rclcpp_components_register_node(offboard_component
 # --- Install ---
 install(TARGETS
   offboard_node
+  goal_marker_node
+  cloud_frame_bridge
   offboard_component
   DESTINATION lib/${PROJECT_NAME}
 )
