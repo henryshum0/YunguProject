@@ -28,7 +28,7 @@ class TfBridge(Node):
     def __init__(self):
         super().__init__('gz_tf_bridge')
 
-        self.declare_parameter('odom_topic', '/odom')
+        self.declare_parameter('odom_topic', '/lidar_slam/odom')
         self.declare_parameter('world_frame', 'world')
         self.declare_parameter('base_frame', 'base_link')
         self.declare_parameter('lidar_frame', 'lidar_link')

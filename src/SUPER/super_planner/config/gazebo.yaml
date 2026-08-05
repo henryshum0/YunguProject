@@ -53,39 +53,39 @@ traj_opt:
     energy_cost_type: 4
     block_energy_cost: false
     opt_accuracy: 5.0e-6
-    scale_factor: 1
+    scale_factor: 1.0
     integral_reso: 15
     smooth_eps: 0.01
-    penna_t: 5.0e+9
-    penna_pos: 5.0e+9
+    penna_t: 1.0e+8
+    penna_pos: 5.0e+8
     penna_vel: 5.0e+8
-    penna_acc: 1.0e+10
-    penna_jerk: -5.0e+9
-    penna_attract: 5.0e+8
-    penna_omg: -1
-    penna_thr: -1
+    penna_acc: 5.0e+8
+    penna_jerk: 5.0e+11
+    penna_attract: 1.0e+1
+    penna_omg: 5.0e+8
+    penna_thr: 5.0e+8
 
   backup_traj:
     uniform_time_en: true
-    pos_constraint_type: 2
+    pos_constraint_type: 1
     piece_num: 2
     energy_cost_type: 4
     block_energy_cost: true
-    opt_accuracy: 1.0e-5
+    opt_accuracy: 1.0e-6
     scale_factor: 1.0
     integral_reso: 12
     smooth_eps: 0.01
-    penna_t: 100.0
+    penna_t: 1.0e+6
     penna_ts: 1.0e+7
     penna_pos: 1.0e+10
     penna_vel: 1.0e+8
     penna_acc: 1.0e+8
-    penna_jerk: -1.0e+6
-    penna_omg: -1
-    penna_thr: -1
+    penna_jerk: -1.0e+8
+    penna_omg: -5.0e+8
+    penna_thr: 5.0e+8
 
   flatness:
-    mass: 1.64
+    mass: 2.8
     dh: 0.35
     dv: 0.35
     cp: 0.001
@@ -108,7 +108,7 @@ rog_map:
   inflation_step: 3
   unk_inflation_en: false
   unk_inflation_step: 1
-  map_size: [ 20, 20, 6 ]
+  map_size: [ 40, 40, 10 ]
   # If the map rolling is disable, the map origin [m] should be set.
   fix_map_origin: [ 0,0,1.5 ]
   frontier_extraction_en: false

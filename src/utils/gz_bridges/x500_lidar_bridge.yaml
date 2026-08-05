@@ -7,8 +7,9 @@
 #   GZ_VERSION=harmonic ros2 run ros_gz_bridge parameter_bridge \
 #     --ros-args -p config_file:="$(pwd)/x500_lidar_bridge.yaml"
 #
-# Odometry is bridged too because the TF broadcaster (tf_bridge.py) needs it
-# to publish world -> base_link so RViz can display the point cloud.
+# Odometry is NOT bridged from gz here: it is provided by PX4's
+# /fmu/out/vehicle_odometry and republished by the offboard super_bridge as
+# /lidar_slam/odom, which also feeds the TF broadcaster (tf_bridge.py).
 #
 # Note: GZ_VERSION=harmonic is required because this system runs gz-sim 8
 # (gz-transport13/gz-msgs10); without it ros_gz_bridge loads the Fortress
@@ -31,12 +32,3 @@
   direction: GZ_TO_ROS
   subscriber_queue_size: 5
   publisher_queue_size: 5
-
-# Vehicle odometry: gz.msgs.Odometry -> nav_msgs/msg/Odometry
-- ros_topic_name: "/odom"
-  gz_topic_name: "/odometry"
-  ros_type_name: "nav_msgs/msg/Odometry"
-  gz_type_name: "gz.msgs.Odometry"
-  direction: GZ_TO_ROS
-  subscriber_queue_size: 10
-  publisher_queue_size: 10

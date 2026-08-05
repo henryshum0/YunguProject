@@ -1,9 +1,11 @@
 #include <rclcpp/rclcpp.hpp>
 
+#include <cmath>
 #include <cstring>
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <px4_msgs/msg/vehicle_odometry.hpp>
 
 namespace offboard
 {
@@ -14,11 +16,9 @@ static void rotateByQuat(double qw, double qx, double qy, double qz,
                          double vx, double vy, double vz,
                          double &ox, double &oy, double &oz)
 {
-    // t = 2 * cross(q.xyz, v)
     const double tx = 2.0 * (qy * vz - qz * vy);
     const double ty = 2.0 * (qz * vx - qx * vz);
     const double tz = 2.0 * (qx * vy - qy * vx);
-    // v' = v + qw * t + cross(q.xyz, t)
     const double cx = qy * tz - qz * ty;
     const double cy = qz * tx - qx * tz;
     const double cz = qx * ty - qy * tx;
@@ -27,31 +27,64 @@ static void rotateByQuat(double qw, double qx, double qy, double qz,
     oz = vz + qw * tz + cz;
 }
 
+// Hamilton quaternion product p * q
+static void quatMul(double pw, double px, double py, double pz,
+                    double qw, double qx, double qy, double qz,
+                    double &w, double &x, double &y, double &z)
+{
+    w = pw * qw - px * qx - py * qy - pz * qz;
+    x = pw * qx + px * qw + py * qz - pz * qy;
+    y = pw * qy - px * qz + py * qw + pz * qx;
+    z = pw * qz + px * qy - py * qx + pz * qw;
+}
+
+// Convert a NED pose (position + quaternion) into ENU.
+//   p_enu = (y_ned, x_ned, -z_ned)
+//   q_enu = qE * q_ned * qD
+//     qE = (0, 1/sqrt(2), 1/sqrt(2), 0): NED -> ENU reference-frame change
+//     qD = (0, 1, 0, 0):                 PX4-NED body <-> gz-ENU body change
+//          (x fwd, y right, z down  vs  x fwd, y left, z up = 180 deg about x)
+static void nedToEnu(double pxn, double pyn, double pzn,
+                     double qnw, double qnx, double qny, double qnz,
+                     double &pxe, double &pye, double &pze,
+                     double &qew, double &qex, double &qey, double &qez)
+{
+    pxe = pyn;
+    pye = pxn;
+    pze = -pzn;
+
+    const double a = 1.0 / std::sqrt(2.0);
+    double t1w, t1x, t1y, t1z;
+    quatMul(0.0, a, a, 0.0, qnw, qnx, qny, qnz, t1w, t1x, t1y, t1z);   // qE * q_ned
+    quatMul(t1w, t1x, t1y, t1z, 0.0, 1.0, 0.0, 0.0, qew, qex, qey, qez); // * qD
+}
+
 /**
- * @brief Transform the raw gz-bridged lidar cloud into the world frame.
+ * @brief Transform the raw gz-bridged lidar cloud into the world (ENU) frame
+ * using PX4's odometry.
  *
  * The gz lidar (/x500_lidar/scan/points) publishes points in the lidar_link
  * (sensor) frame, but SUPER's ROG-Map treats the input cloud as world-frame
- * coordinates. This node registers the cloud using the world-frame odometry
- * (/odom) plus the static lidar_link -> base_link offset:
+ * coordinates. PX4's vehicle_odometry is NED, so it is converted to ENU and
+ * used to register the cloud:
  *
- *   p_world = R_odom * (p_lidar + offset) + t_odom
+ *   p_world = R_enu * (p_lidar + offset) + t_enu
  *
- * and republishes it (default /cloud_registered) with frame_id "world", plus
- * a pass-through odometry topic (default /lidar_slam/odom), matching the
- * topics used in super_planner/config/static_dense.yaml.
+ * The ENU pose is also republished as nav_msgs/Odometry (default
+ * /lidar_slam/odom) so SUPER's ray origin matches the registered cloud.
  */
-class CloudFrameBridge : public rclcpp::Node
+class SuperBridge : public rclcpp::Node
 {
 public:
-    explicit CloudFrameBridge(const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
-        : Node("cloud_frame_bridge", options)
+    explicit SuperBridge(const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
+        : Node("super_bridge", options)
     {
         cloud_in_topic_ = declare_parameter("cloud_in_topic", cloud_in_topic_);
         odom_topic_ = declare_parameter("odom_topic", odom_topic_);
         cloud_out_topic_ = declare_parameter("cloud_out_topic", cloud_out_topic_);
         odom_out_topic_ = declare_parameter("odom_out_topic", odom_out_topic_);
         world_frame_ = declare_parameter("world_frame", world_frame_);
+        base_frame_ = declare_parameter("base_frame", base_frame_);
         lidar_offset_x_ = declare_parameter("lidar_offset_x", lidar_offset_x_);
         lidar_offset_y_ = declare_parameter("lidar_offset_y", lidar_offset_y_);
         lidar_offset_z_ = declare_parameter("lidar_offset_z", lidar_offset_z_);
@@ -60,41 +93,64 @@ public:
 
         cloud_in_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
             cloud_in_topic_, qos,
-            std::bind(&CloudFrameBridge::cloudCallback, this, std::placeholders::_1));
-        odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+            std::bind(&SuperBridge::cloudCallback, this, std::placeholders::_1));
+        odom_sub_ = create_subscription<px4_msgs::msg::VehicleOdometry>(
             odom_topic_, qos,
-            std::bind(&CloudFrameBridge::odomCallback, this, std::placeholders::_1));
+            std::bind(&SuperBridge::odomCallback, this, std::placeholders::_1));
 
         cloud_out_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(cloud_out_topic_, qos);
         odom_out_pub_ = create_publisher<nav_msgs::msg::Odometry>(odom_out_topic_, qos);
 
         RCLCPP_INFO(get_logger(),
-                    "Cloud frame bridge: %s (lidar_link) --odom %s--> %s (%s) + %s",
+                    "Super bridge: %s (lidar_link) --px4 odom %s--> %s (%s) + %s",
                     cloud_in_topic_.c_str(), odom_topic_.c_str(),
                     cloud_out_topic_.c_str(), world_frame_.c_str(),
                     odom_out_topic_.c_str());
     }
 
 private:
-    void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+    void odomCallback(const px4_msgs::msg::VehicleOdometry::SharedPtr msg)
     {
+        // PX4 vehicle_odometry is NED; convert to ENU so the output cloud and
+        // odometry match the ENU world used by SUPER.
+        double pxe, pye, pze, qew, qex, qey, qez;
+        nedToEnu(msg->position[0], msg->position[1], msg->position[2],
+                 msg->q[0], msg->q[1], msg->q[2], msg->q[3],
+                 pxe, pye, pze, qew, qex, qey, qez);
+
         pose_valid_ = true;
-        px_ = msg->pose.pose.position.x;
-        py_ = msg->pose.pose.position.y;
-        pz_ = msg->pose.pose.position.z;
-        qw_ = msg->pose.pose.orientation.w;
-        qx_ = msg->pose.pose.orientation.x;
-        qy_ = msg->pose.pose.orientation.y;
-        qz_ = msg->pose.pose.orientation.z;
-        // Pass through under the output odom topic (already world frame).
-        odom_out_pub_->publish(*msg);
+        px_ = pxe;
+        py_ = pye;
+        pz_ = pze;
+        qw_ = qew;
+        qx_ = qex;
+        qy_ = qey;
+        qz_ = qez;
+
+        // Republish as a world-frame (ENU) nav_msgs::Odometry for SUPER.
+        nav_msgs::msg::Odometry out;
+        out.header.stamp = now();
+        out.header.frame_id = world_frame_;
+        out.child_frame_id = base_frame_;
+        out.pose.pose.position.x = pxe;
+        out.pose.pose.position.y = pye;
+        out.pose.pose.position.z = pze;
+        out.pose.pose.orientation.w = qew;
+        out.pose.pose.orientation.x = qex;
+        out.pose.pose.orientation.y = qey;
+        out.pose.pose.orientation.z = qez;
+        // Velocity NED -> ENU (same swap as position).
+        out.twist.twist.linear.x = msg->velocity[1];
+        out.twist.twist.linear.y = msg->velocity[0];
+        out.twist.twist.linear.z = -msg->velocity[2];
+        odom_out_pub_->publish(out);
     }
 
     void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
         if (!pose_valid_) {
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                                 "No odom pose yet, skipping cloud frame");
+                                 "No PX4 odom yet, skipping cloud frame");
             return;
         }
 
@@ -146,10 +202,11 @@ private:
     }
 
     std::string cloud_in_topic_{"/x500_lidar/scan/points"};
-    std::string odom_topic_{"/odom"};
+    std::string odom_topic_{"/fmu/out/vehicle_odometry"};
     std::string cloud_out_topic_{"/cloud_registered"};
     std::string odom_out_topic_{"/lidar_slam/odom"};
     std::string world_frame_{"world"};
+    std::string base_frame_{"base_link"};
     double lidar_offset_x_{0.0};
     double lidar_offset_y_{0.0};
     double lidar_offset_z_{0.16};  // lidar_link is 0.16 m above base_link
@@ -159,7 +216,7 @@ private:
     double qw_{1.0}, qx_{0.0}, qy_{0.0}, qz_{0.0};
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_in_sub_;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+    rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr odom_sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_out_pub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_out_pub_;
 };
@@ -169,7 +226,7 @@ private:
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<offboard::CloudFrameBridge>());
+    rclcpp::spin(std::make_shared<offboard::SuperBridge>());
     rclcpp::shutdown();
     return 0;
 }

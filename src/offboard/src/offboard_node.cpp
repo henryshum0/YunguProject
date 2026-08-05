@@ -17,14 +17,13 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     planner_enter_delay_ = declare_parameter("planner_enter_delay", planner_enter_delay_);
     planner_exit_delay_ = declare_parameter("planner_exit_delay", planner_exit_delay_);
     arm_wait_ = declare_parameter("arm_wait", arm_wait_);
-    offboard_wait_ = declare_parameter("offboard_wait", offboard_wait_);
-    takeoff_height_ = declare_parameter("takeoff_height", takeoff_height_);
-    takeoff_vel_ = declare_parameter("takeoff_vel", takeoff_vel_);
+    default_height_ = declare_parameter("default_height", default_height_);
     landing_vel_ = declare_parameter("landing_vel", landing_vel_);
     landing_z_ = declare_parameter("landing_z", landing_z_);
     cmd_timeout_ = declare_parameter("cmd_timeout", cmd_timeout_);
     cmd_topic_ = declare_parameter("cmd_topic", cmd_topic_);
     local_pos_topic_ = declare_parameter("local_pos_topic", local_pos_topic_);
+    status_topic_ = declare_parameter("status_topic", status_topic_);
 
     const auto update_period = std::chrono::milliseconds(static_cast<int>(1000.0 / update_rate_));
 
@@ -53,6 +52,9 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     local_pos_sub_ = create_subscription<px4_msgs::msg::VehicleLocalPosition>(
         local_pos_topic_, qos_px4,
         std::bind(&OffboardNode::localPosCallback, this, std::placeholders::_1));
+    status_sub_ = create_subscription<px4_msgs::msg::VehicleStatus>(
+        status_topic_, qos_px4,
+        std::bind(&OffboardNode::statusCallback, this, std::placeholders::_1));
 
     // --- Landing service ---
     land_srv_ = create_service<std_srvs::srv::Trigger>(
@@ -94,7 +96,6 @@ const char *OffboardNode::stateNameOf(State s)
         case State::INIT:         return "INIT";
         case State::ARMING:       return "ARMING";
         case State::SET_OFFBOARD: return "SET_OFFBOARD";
-        case State::TAKEOFF:      return "TAKEOFF";
         case State::IDLE:         return "IDLE";
         case State::PLANNER:      return "PLANNER";
         case State::LANDING:      return "LANDING";
@@ -122,6 +123,11 @@ void OffboardNode::cmdCallback(const mars_quadrotor_msgs::msg::PositionCommand::
 void OffboardNode::localPosCallback(const px4_msgs::msg::VehicleLocalPosition::SharedPtr msg)
 {
     local_pos_ = msg;
+}
+
+void OffboardNode::statusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr msg)
+{
+    status_ = msg;
 }
 
 void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
@@ -218,6 +224,28 @@ void OffboardNode::setOffboardMode()
 }
 
 // ======================================================================
+//  vehicle_status confirmation helpers
+// ======================================================================
+
+bool OffboardNode::isArmed() const
+{
+    return status_ != nullptr &&
+           status_->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED;
+}
+
+bool OffboardNode::isOffboard() const
+{
+    return status_ != nullptr &&
+           status_->nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD;
+}
+
+bool OffboardNode::isDisarmed() const
+{
+    return status_ != nullptr &&
+           status_->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_DISARMED;
+}
+
+// ======================================================================
 //  Planner rate measurement (hysteresis)
 // ======================================================================
 
@@ -297,8 +325,7 @@ void OffboardNode::enuToNedAcc(double ex, double ey, double ez,
 
 void OffboardNode::timerCallback()
 {
-    const bool planner_mode = (state_ == State::PLANNER);
-    publishOffboardMode(true, true, planner_mode);
+    publishOffboardMode(true, true, false);
 
     switch (state_) {
         // --------------------------------------------------------------
@@ -313,12 +340,15 @@ void OffboardNode::timerCallback()
         // --------------------------------------------------------------
         case State::ARMING: {
             publishSetpoint(0.0f, 0.0f, 0.0f);
-            if (stateElapsedSec() < 0.1) {
-                arm();
-            }
-            if (stateElapsedSec() > offboard_wait_) {
+            // if (stateElapsedSec() < 0.1) {
+            //     arm();
+            // }
+            // Confirm arming from vehicle_status instead of a fixed wait.
+            if (isArmed()) {
+                RCLCPP_INFO(get_logger(), "Vehicle confirmed ARMED");
                 setState(State::SET_OFFBOARD);
             }
+            else arm();
             break;
         }
         // --------------------------------------------------------------
@@ -327,27 +357,14 @@ void OffboardNode::timerCallback()
             if (stateElapsedSec() < 0.1) {
                 setOffboardMode();
             }
-            if (stateElapsedSec() > 3.0) {
-                // Take off above the start point.
+            // No takeoff phase: once OFFBOARD is confirmed via vehicle_status,
+            // go straight to IDLE at the default height.
+            if (isOffboard()) {
+                RCLCPP_INFO(get_logger(), "Vehicle confirmed OFFBOARD mode");
                 hold_x_ = 0.0f;
                 hold_y_ = 0.0f;
+                hold_z_ = static_cast<float>(-default_height_);
                 have_hold_ = true;
-                setState(State::TAKEOFF);
-            }
-            break;
-        }
-        // --------------------------------------------------------------
-        case State::TAKEOFF: {
-            const float target_z = static_cast<float>(-takeoff_height_);
-            // Climb with a fixed velocity; stop when close to target.
-            publishSetpoint(hold_x_, hold_y_, target_z,
-                            0.0f, 0.0f, static_cast<float>(takeoff_vel_));
-
-            const bool reached = local_pos_ &&
-                std::abs(local_pos_->z - target_z) < 0.1;
-            if (reached || stateElapsedSec() > 15.0) {
-                hold_z_ = target_z;
-                RCLCPP_INFO(get_logger(), "Takeoff complete (z = %.2f m)", hold_z_);
                 setState(State::IDLE);
             }
             break;

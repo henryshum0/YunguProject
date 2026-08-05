@@ -54,13 +54,14 @@ ament_target_dependencies(goal_marker_node
   visualization_msgs
 )
 
-# --- Cloud frame bridge (gz lidar_link cloud -> world-frame /cloud_registered) ---
-add_executable(cloud_frame_bridge
-  src/cloud_frame_bridge.cpp
+# --- Super bridge (gz lidar_link cloud -> world-frame /cloud_registered, PX4 odom) ---
+add_executable(super_bridge
+  src/super_bridge.cpp
 )
 
-ament_target_dependencies(cloud_frame_bridge
+ament_target_dependencies(super_bridge
   rclcpp
+  px4_msgs
   sensor_msgs
   nav_msgs
 )
@@ -94,7 +95,7 @@ rclcpp_components_register_node(offboard_component
 install(TARGETS
   offboard_node
   goal_marker_node
-  cloud_frame_bridge
+  super_bridge
   offboard_component
   DESTINATION lib/${PROJECT_NAME}
 )
