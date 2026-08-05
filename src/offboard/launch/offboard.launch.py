@@ -21,19 +21,27 @@ def generate_launch_description():
         # ------------------------------------------------------------------
         # Launch arguments
         # ------------------------------------------------------------------
-        DeclareLaunchArgument('update_rate', default_value='50.0'),
+        DeclareLaunchArgument('update_rate', default_value='100.0'),
         DeclareLaunchArgument('planner_cmd_hz', default_value='10.0',
                               description='Cmd rate threshold for planner hand-over [Hz]'),
         DeclareLaunchArgument('planner_enter_delay', default_value='0.5'),
         DeclareLaunchArgument('planner_exit_delay', default_value='1.0'),
         DeclareLaunchArgument('arm_wait', default_value='2.0'),
         DeclareLaunchArgument('offboard_wait', default_value='3.0'),
-        DeclareLaunchArgument('takeoff_height', default_value='1.5',
+        DeclareLaunchArgument('takeoff_height', default_value='5.0',
                               description='NED takeoff height (negative = up) [m]'),
         DeclareLaunchArgument('takeoff_vel', default_value='1.0'),
         DeclareLaunchArgument('landing_vel', default_value='0.5'),
         DeclareLaunchArgument('landing_z', default_value='0.15'),
         DeclareLaunchArgument('cmd_topic', default_value='/planning/pos_cmd'),
+        DeclareLaunchArgument('cloud_in_topic', default_value='/x500_lidar/scan/points',
+                              description='Raw gz lidar cloud (lidar_link frame)'),
+        DeclareLaunchArgument('odom_topic', default_value='/odom',
+                              description='World-frame odometry from gz bridge'),
+        DeclareLaunchArgument('cloud_registered_topic', default_value='/cloud_registered',
+                              description='World-frame lidar cloud for SUPER'),
+        DeclareLaunchArgument('lidar_slam_odom_topic', default_value='/lidar_slam/odom',
+                              description='Odom topic republished for SUPER'),
         DeclareLaunchArgument('local_pos_topic',
                               default_value='/fmu/out/vehicle_local_position_v1',
                               description='PX4 local position topic (note the _v1 suffix)'),
@@ -68,6 +76,38 @@ def generate_launch_description():
                 'landing_z': LaunchConfiguration('landing_z'),
                 'cmd_topic': LaunchConfiguration('cmd_topic'),
                 'local_pos_topic': LaunchConfiguration('local_pos_topic'),
+            }],
+        ),
+
+        # ------------------------------------------------------------------
+        # Cloud frame bridge
+        #   - subscribes to the raw gz lidar cloud (lidar_link frame) + /odom
+        #   - transforms points into the world frame and republishes as
+        #     /cloud_registered (with /lidar_slam/odom), which is what SUPER's
+        #     ROG-Map consumes (see super_planner/config/gazebo.yaml)
+        # ------------------------------------------------------------------
+        Node(
+            package='offboard',
+            executable='cloud_frame_bridge',
+            name='cloud_frame_bridge',
+            output='screen',
+            parameters=[{
+                'cloud_in_topic': LaunchConfiguration('cloud_in_topic'),
+                'odom_topic': LaunchConfiguration('odom_topic'),
+                'cloud_out_topic': LaunchConfiguration('cloud_registered_topic'),
+                'odom_out_topic': LaunchConfiguration('lidar_slam_odom_topic'),
+            }],
+        ),
+
+        # ------------------------------------------------------------------
+        # Goal marker node (RViz 2D Goal Pose -> /goal_marker markers)
+        # ------------------------------------------------------------------
+        Node(
+            package='offboard',
+            executable='goal_marker_node',
+            name='goal_marker_node',
+            output='screen',
+            parameters=[{
                 'goal_topic': LaunchConfiguration('goal_topic'),
                 'goal_marker_topic': LaunchConfiguration('goal_marker_topic'),
             }],

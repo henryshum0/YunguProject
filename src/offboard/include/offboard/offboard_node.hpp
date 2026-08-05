@@ -10,8 +10,6 @@
 #include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <mars_quadrotor_msgs/msg/position_command.hpp>
 #include <std_srvs/srv/trigger.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <visualization_msgs/msg/marker.hpp>
 
 namespace offboard
 {
@@ -70,9 +68,6 @@ private:
     /// reports get_message_version()=1 for vehicle_local_position, so the
     /// MicroXRCEAgent advertises it with the versioned name.
     std::string local_pos_topic_{"/fmu/out/vehicle_local_position_v1"};
-    /// RViz "2D Goal Pose" topic; also republished as a marker for display.
-    std::string goal_topic_{"/goal_pose"};
-    std::string goal_marker_topic_{"/goal_marker"};
 
     // ------------------------------------------------------------------
     //  Publishers / Subscribers / Services
@@ -80,10 +75,8 @@ private:
     rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr offboard_mode_pub_;
     rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr trajectory_pub_;
     rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr cmd_pub_;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_marker_pub_;
     rclcpp::Subscription<mars_quadrotor_msgs::msg::PositionCommand>::SharedPtr cmd_sub_;
     rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr local_pos_sub_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_srv_;
     rclcpp::TimerBase::SharedPtr timer_;
 
@@ -116,8 +109,6 @@ private:
     void timerCallback();
     void cmdCallback(const mars_quadrotor_msgs::msg::PositionCommand::SharedPtr msg);
     void localPosCallback(const px4_msgs::msg::VehicleLocalPosition::SharedPtr msg);
-    void goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
-    void publishGoalMarker(const geometry_msgs::msg::PoseStamped &goal);
     void landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
                       std::shared_ptr<std_srvs::srv::Trigger::Response> res);
 
@@ -132,10 +123,11 @@ private:
     // ------------------------------------------------------------------
     //  PX4 helpers
     // ------------------------------------------------------------------
-    void publishOffboardMode();
+    void publishOffboardMode(bool position, bool velocity, bool acceleration);
     void publishSetpoint(float x, float y, float z,
                          float vx = 0.0f, float vy = 0.0f, float vz = 0.0f,
-                         float yaw = NAN, float yawspeed = 0.0f);
+                         float yaw = NAN, float yawspeed = 0.0f,
+                         float ax = NAN, float ay = NAN, float az = NAN);
     void publishHold();
     void sendCommand(uint16_t command, float param1 = 0.0f, float param2 = 0.0f);
     void arm();
@@ -154,6 +146,8 @@ private:
     static void enuToNedPos(double ex, double ey, double ez,
                             float &nx, float &ny, float &nz);
     static void enuToNedVel(double ex, double ey, double ez,
+                            float &nx, float &ny, float &nz);
+    static void enuToNedAcc(double ex, double ey, double ez,
                             float &nx, float &ny, float &nz);
 };
 
