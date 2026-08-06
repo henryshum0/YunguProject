@@ -1,0 +1,55 @@
+# FAST-LIO config for Gazebo simulation (x500_lidar_yungu)
+#
+# LiDAR:  /x500_lidar/scan/points  (gz-sim bridged PointCloud2, 720×16, 10 Hz)
+# IMU:    /livox/imu               (bridged from PX4 SensorCombined)
+#
+# The LiDAR sits 0.16 m above base_link (= IMU origin in x500_base).
+
+/**:
+    ros__parameters:
+        feature_extract_enable: false
+        point_filter_num: 1           # 11520 pts/scan — keep all
+        max_iteration: 3
+        filter_size_surf: 0.3
+        filter_size_map: 0.3
+        cube_side_length: 500.0
+        runtime_pos_log_enable: true
+        map_file_path: "./test.pcd"
+
+        common:
+            lid_topic:  "/x500_lidar/scan/points_timed"
+            imu_topic:  "/livox/imu"
+            time_sync_en: false
+            time_offset_lidar_to_imu: 0.0
+
+        preprocess:
+            lidar_type: 2             # VELO16: extracts corner+surface features
+            scan_line: 16
+            scan_rate: 10
+            timestamp_unit: 2         # 2 = microsecond (matches relay output)
+            blind: 0.5
+
+        mapping:
+            acc_cov: 0.1              # default, works well
+            gyr_cov: 0.1
+            b_acc_cov: 0.0001
+            b_gyr_cov: 0.0001
+            fov_degree:    360.0
+            det_range:     35.0       # matches gz LiDAR max range
+            extrinsic_est_en: false   # fixed extrinsic for sim
+            extrinsic_T: [ 0.0, 0.0, 0.16 ]   # LiDAR 16 cm above IMU (base_link)
+            extrinsic_R: [ 1., 0., 0.,
+                           0., 1., 0.,
+                           0., 0., 1.]
+
+        publish:
+            path_en: true
+            scan_publish_en: true
+            dense_publish_en: true
+            scan_bodyframe_pub_en: false
+            effect_map_en: false
+            map_en: true               # publish accumulated map /Laser_map
+
+        pcd_save:
+            pcd_save_en: false
+            interval: -1

@@ -1,3 +1,8 @@
+# FAST-LIO planner config — derived from gazebo.yaml
+# Key changes:
+#   odom_topic: /odom → /Odometry  (FAST-LIO output)
+#   cloud_topic: x500_lidar → /cloud_registered  (FAST-LIO output)
+#   frame_id:   world → camera_init  (FAST-LIO world frame)
 fsm:
   click_goal_en: true
   click_goal_topic: "/goal_pose"
@@ -134,9 +139,9 @@ rog_map:
   #  else user should call function [updateMap] to update the map.
   ros_callback:
     enable: true
-    # Bridged from gz-sim by utils/gz_bridges (x500_lidar_bridge.yaml).
-    cloud_topic: "/x500_lidar/scan/points_world"
-    odom_topic: "/odom"
+    # FAST-LIO registered point cloud (world frame = camera_init)
+    cloud_topic: "/cloud_registered"
+    odom_topic: "/Odometry"
     odom_timeout: 2.0
 
 
@@ -150,7 +155,7 @@ rog_map:
     frame_rate: 0
     # visualization range along the odom [m].
     range: [ 15, 15,4 ]
-    frame_id: "world"
+    frame_id: "camera_init"
     pub_unknown_map_en: false
 
   # Intensity filter for input point cloud. If the point intensity is less than this value,
