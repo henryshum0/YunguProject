@@ -52,7 +52,7 @@ traj_opt:
     # 1 for xi 2 for pos
     pos_constraint_type: 1
     energy_cost_type: 4
-    block_energy_cost: false
+    block_energy_cost: true
     opt_accuracy: 5.0e-6
     scale_factor: 1.0
     integral_reso: 15

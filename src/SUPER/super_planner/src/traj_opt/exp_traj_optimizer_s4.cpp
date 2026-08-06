@@ -24,6 +24,7 @@
 #include <traj_opt/exp_traj_optimizer_s4.h>
 #include <utils/optimization/lbfgs.h>
 #include <ros_interface/ros_interface.hpp>
+#include <sstream>
 
 #define POS_IDX 1
 #define VEL_IDX 2
@@ -729,7 +730,15 @@ double ExpTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
             cout << "\tThr: " << opt_vars.penalty_log(7) << endl;
             cout << "\tOptimized Time: " << opt_vars.times.transpose() << endl;
         }
-        ros_ptr_->warn(" -- [ExpOpt] Opt failed, Omg or thr or Pos violation.");
+        std::ostringstream opt_fail_oss;
+        opt_fail_oss << " -- [ExpOpt] Opt failed. Pos=" << opt_vars.penalty_log(1)
+                     << " (thr 0.2) Acc=" << opt_vars.penalty_log(3)
+                     << " (thr " << cfg_.max_acc * cfg_.penna_margin << ") Omg="
+                     << opt_vars.penalty_log(6)
+                     << " (thr " << cfg_.max_omg * cfg_.penna_margin << ") Thr="
+                     << opt_vars.penalty_log(7)
+                     << " (thr " << cfg_.max_acc * cfg_.penna_margin << ")";
+        ros_ptr_->warn(opt_fail_oss.str());
         ret = -1;
     }
 

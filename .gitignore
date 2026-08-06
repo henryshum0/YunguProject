@@ -2,4 +2,6 @@ conan
 build
 install
 log
+cmd_log/
 .vscode
+__pycache__/
