@@ -34,6 +34,9 @@ class GazeboImuBridge(Node):
         self._got_lidar = False
         self._got_px4 = False
         self._offset_done = False
+        self._lidar_t = 0.0        # latest LiDAR frame time (rolling anchor)
+        self._px4_at_lidar = None  # PX4 time at latest LiDAR frame
+        self._last_px4_us = 0      # latest PX4 timestamp
         self._lidar_sub = self.create_subscription(
             PointCloud2, lidar_topic, self._lidar_cb, qos_be)
 
@@ -41,23 +44,23 @@ class GazeboImuBridge(Node):
         self.get_logger().info(f"IMU bridge: {in_topic} → {out_topic}")
 
     def _lidar_cb(self, msg: PointCloud2):
-        if not self._got_lidar:
-            self._lidar_t0 = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-            self._got_lidar = True
+        # Update the paired anchor on EVERY LiDAR frame (rolling reference).
+        # This keeps IMU and LiDAR clocks aligned even if they drift apart.
+        self._lidar_t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        self._px4_at_lidar = self._last_px4_us  # PX4 time at this LiDAR frame
+        self._got_lidar = True
 
     def _cb(self, msg: SensorCombined):
         px4_us = msg.timestamp
-        if not self._got_px4:
-            self._px4_t0 = px4_us
-            self._got_px4 = True
-        if not (self._got_lidar and self._got_px4):
+        self._last_px4_us = px4_us
+        if not self._got_lidar or self._px4_at_lidar is None:
             return
         if not self._offset_done:
             self._offset_done = True
 
-        # IMU time = first LiDAR time + elapsed PX4 time
-        dt = (px4_us - self._px4_t0) * 1e-6
-        sim_t = self._lidar_t0 + dt
+        # IMU time = latest LiDAR frame time + PX4 elapsed since that frame
+        dt = (px4_us - self._px4_at_lidar) * 1e-6
+        sim_t = self._lidar_t + dt
 
         imu = Imu()
         # Guard against negative timestamps (sim_t < 0 when lidar ref is in future)
@@ -70,12 +73,17 @@ class GazeboImuBridge(Node):
         imu.header.stamp.nanosec = nsec_part
         imu.header.frame_id = self._frame_id
         imu.orientation_covariance[0] = -1.0
+        # PX4 sensor_combined is FRD (z down, yaw CW+). FAST-LIO expects
+        # ENU body (z up, yaw CCW+). Flip y and z axes.
+        #   x stays (both point forward)
+        #   y -> -y   (FRD y = right, ENU y = left)
+        #   z -> -z   (FRD z = down, ENU z = up)
         imu.angular_velocity.x = float(msg.gyro_rad[0])
-        imu.angular_velocity.y = float(msg.gyro_rad[1])
-        imu.angular_velocity.z = float(msg.gyro_rad[2])
+        imu.angular_velocity.y = -float(msg.gyro_rad[1])
+        imu.angular_velocity.z = -float(msg.gyro_rad[2])
         imu.linear_acceleration.x = float(msg.accelerometer_m_s2[0])
-        imu.linear_acceleration.y = float(msg.accelerometer_m_s2[1])
-        imu.linear_acceleration.z = float(msg.accelerometer_m_s2[2])
+        imu.linear_acceleration.y = -float(msg.accelerometer_m_s2[1])
+        imu.linear_acceleration.z = -float(msg.accelerometer_m_s2[2])
         self._pub.publish(imu)
 
         self._count += 1

@@ -131,6 +131,10 @@ ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 1 body base_link &
 PIDS+=("$!")
 ros2 run tf2_ros static_transform_publisher 0 0 0.16 0 0 0 1 base_link lidar_link &
 PIDS+=("$!")
+# Connect the two TF trees: world (gazebo) <-> camera_init (FAST-LIO)
+# Both origins coincide (drone spawns at world origin, yaw aligned)
+ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 1 world camera_init &
+PIDS+=("$!")
 
 python3 "${SCRIPT_DIR}/gazebo_imu_bridge.py" &
 PIDS+=("$!"); sleep 2
@@ -141,10 +145,11 @@ PIDS+=("$!"); sleep 2
 ros2 run fast_lio fastlio_mapping --ros-args --params-file "${SCRIPT_DIR}/fastlio_gazebo.yaml" &
 PIDS+=("$!"); sleep 5
 
-# Cloud transform using FAST-LIO odom (camera_init ≈ world)
+# Cloud transform using Gazebo TRUTH odom — the world-frame cloud must be
+# accurate (not FAST-LIO's noisy pose) so it does not drift/rotate with the drone.
 python3 "${SCRIPT_DIR}/cloud_to_world.py" --ros-args \
     -p cloud_topic:=/x500_lidar/scan/points \
-    -p odom_topic:=/Odometry \
+    -p odom_topic:=/odom \
     -p out_topic:=/x500_lidar/scan/points_world &
 PIDS+=("$!"); sleep 2
 

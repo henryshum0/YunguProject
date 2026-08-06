@@ -158,7 +158,7 @@ rog_map:
   intensity_thresh: -10
   # The temporal downsample rate for input point cloud.
   #  e.g. if set to k, the point cloud will be downsampled to 1/k.
-  point_filt_num: 1
+  point_filt_num: 4
 
   # Probabilistc update
   raycasting:

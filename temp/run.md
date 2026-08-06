@@ -1,119 +1,116 @@
-# FAST-LIO 接入控制回路 — 完整启动与诊断流程
+# FAST-LIO 接入 PX4 — 完整启动与验证流程
 
-## ═══ 第一部分：完整启动流程 ═══
+## ═══ 第一部分：一键启动 ═══
 
-**终端1: 仿真**
+### 方式 A：Gazebo 真值模式（已验证可用）
 ```bash
-./temp/start_sim_gpu.sh
-# 等 "PX4 SITL is up"
-# Gazebo GUI 没自动开的话（进程只有 -s 参数时）：
-#   另开终端执行： gz sim -g
+# 1. 杀掉所有残留
+pkill -f start_all; pkill -f px4; pkill -f "gz sim"; pkill -f offboard_node; pkill -f fsm_node; pkill -f rviz2; pkill -f cloud_to_world; pkill -f gazebo_imu; pkill -f add_time; pkill -f fastlio; pkill -f static_transform 2>/dev/null
+sleep 3
+
+# 2. 一键启动
+./temp/start_all.sh
 ```
+- planner 用 `/odom`（Gazebo 真值）
+- RViz 固定帧: world
+- 适合验证仿真链路、SUPER 规划
 
-**终端2: FAST-LIO 链（自动检查数据）**
+### 方式 B：FAST-LIO 模式（调试中）
 ```bash
-source install/setup.bash
-./temp/start_fastlio_checked.sh
-# 等它打印 FAST-LIO chain READY（或看到 [mapping] 刷屏）
-# ⚠️ 这个终端千万别 Ctrl+C（会连带杀 FAST-LIO）
+# 1. 杀掉所有残留（同上）
+# 2. 一键启动
+./temp/start_all_fastlio.sh
 ```
+- planner 用 `/Odometry`（FAST-LIO）
+- RViz 固定帧: camera_init
+- 适合调试 FAST-LIO 定位
 
-**终端3: 控制链（offboard + planner）**
+### 起飞
 ```bash
-source install/setup.bash
-ros2 launch offboard offboard.launch.py planner_config:=fastlio_live.yaml rviz:=false
-# 观察 fsm_node 正常加载、offboard 状态机走完（→IDLE）
-```
-
-**终端4: RViz**
-```bash
-source install/setup.bash
-ros2 run rviz2 rviz2 -d temp/x500_fastlio.rviz
-# 确认 Fixed Frame = camera_init，点云 = /cloud_registered
-```
-
-**PX4 xterm: 起飞**
-```bash
+# PX4 xterm 或新终端：
 commander takeoff
 commander mode offboard
 ```
 
-**RViz 发 goal（3-5m 内近点）**
+## ═══ 第二部分：PX4 原生 offboard 点对点（不经 SUPER）═══
 
-## ═══ 第二部分：同步打点诊断（乱飞时用）═══
-
-**目的**：同时记录 FAST-LIO 位置 + Gazebo 真值 + planner 指令，判断坐标错位在哪一环。
-
-**⚠️ 重要**：必须用 Python 常驻版（bash 版有 DDS discovery 延迟 bug，录不到数据）。
+用于验证 FAST-LIO 定位精度，排除 SUPER 干扰。
 
 ```bash
-# 链路全部就绪 + 起飞悬停后，另开终端
+# 终端 A: 持续对比位置（先跑，挂着看）
 source install/setup.bash
-python3 temp/log_sync_check.py 30 /tmp/coord_sync.csv
-# 期间发 goal 观察乱飞
-# 录完自动退出并打印有数据的行
-cat /tmp/coord_sync.csv
+python3 temp/check_pos.py
+
+# 终端 B: PX4 原生 offboard 导航（起飞 + 飞到 (3,2) @ 1.5m 高度）
+source install/setup.bash
+python3 temp/px4_offboard_nav.py 3 2 1.5 8
 ```
 
-**CSV 格式**（每行是同一时刻）：
+参数说明：`px4_offboard_nav.py <x> <y> <高度> <悬停秒数>`
+- 坐标是 NED，相对起飞点
+- 例：飞到前方 3m、右侧 2m、高度 1.5m，悬停 8 秒
+
+**前提**：无人机需先脱开 SUPER 控制（`commander mode position`），或直接未解锁状态运行（脚本会自动 arm + offboard）。
+
+## ═══ 第三部分：验证 FAST-LIO 定位 ═══
+
+### 1. 位置对比（check_pos.py 输出）
 ```
-t,            fastlio_x,y,z,   truth_x,y,z,   cmd_x,y,z
-1785906.123,  0.1,0.2,1.5,     0.1,0.2,1.5,   0.5,0.3,1.5
+  t(s)   |  FAST-LIO (x,y,z)          |  Gazebo (x,y,z)            |  diff(m)
+  10.0   |  (2.95, 1.98, 1.50)        |  (3.00, 2.00, 1.50)        |   0.08
 ```
+- diff < 0.3m 且飞行中保持 → FAST-LIO 定位 OK
+- diff 持续增大 / 反向 → FAST-LIO 有问题
 
-**解读规则**：
+### 2. 旋转方向（yaw 对比）
+```bash
+# 终端 A: yaw 对比
+source install/setup.bash
+python3 temp/compare_yaw.py
 
-| 对比 | 正常 | 异常 |
-|------|------|------|
-| fastlio vs truth | 接近（scale≈1） | 差 15m → FAST-LIO 漂移 |
-| cmd vs fastlio | cmd 指向目标方向 | 反向 → offboard/planner 转换错 |
-| cmd vs truth | 一致 | 错位 → 坐标系问题 |
+# 终端 B: 转 90°
+source install/setup.bash
+python3 temp/turn_yaw.py 90
+```
+- 两列 yaw 同方向变化 → 旋转估计正确
+- 反向 / 卡死 → 陀螺仪轴问题（IMU bridge 翻转）
 
-**应急停飞**（乱飞时）：
+### 3. 点云是否固定
+- RViz 显示 `/x500_lidar/scan/points_world`
+- 无人机旋转时障碍物应固定不动
+- 跟着转 → FAST-LIO 位姿错
+
+## ═══ 第四部分：RViz 显示配置 ═══
+
+| 项 | 真值模式 | FAST-LIO 模式 |
+|----|---------|--------------|
+| 固定帧 | world | camera_init（或 world，已加静态 TF）|
+| 点云 | /x500_lidar/scan/points_world | /x500_lidar/scan/points_world |
+| QoS | Best Effort | Best Effort |
+
+**注意**：RViz 订阅点云必须用 Best Effort（发布者 cloud_to_world 是 Best Effort），配置已改好。
+
+## ═══ 附：应急停飞 ═══
 ```
 commander mode position    # 脱开 offboard
 commander land             # 降落
 # 紧急：commander disarm   直接停桨
 ```
 
-## ═══ 第三部分：点云异常诊断（点云跟着无人机转）═══
-
-**现象**：无人机旋转时，建好的点云跟着转，不是"一边转一边更新地图"。
-
-**可能原因**：
-1. **RViz 固定帧错了**（最常见）：Fixed Frame 如果是 body/base_link（跟随无人机的帧），点云自然跟着转
-2. **FAST-LIO 位姿没更新**：EKF 卡住/IMU 断了 → 点云用旧位姿变换 → 新扫描点投影错位 → 看起来点云在转
-
-**检查步骤**：
-```bash
-# 1. 确认 RViz 固定帧
-#    Global Options → Fixed Frame 必须是 camera_init
-
-# 2. 无人机原地旋转（慢转），同时看 /Odometry 的四元数是否变化
-ros2 topic echo /Odometry --once 2>&1 | grep -A5 "orientation:"
-# 转 90° 后四元数应该明显变化（z/w 分量变）
-# 如果四元数不变 → FAST-LIO 位姿没更新 → 查 IMU 链路
-
-# 3. 确认 IMU 数据在流（FAST-LIO 依赖它）
-ros2 topic echo /livox/imu --once 2>&1 | grep -A4 "angular_velocity"
-
-# 4. 看 FAST-LIO 终端是否还在刷 [mapping]（没刷 = EKF 卡住）
-```
-
-## ═══ 附：常用检查命令 ═══
-
+## ═══ 附：常用检查 ═══
 ```bash
 # FAST-LIO 状态
-ros2 topic info /Odometry                  # Publisher ≥ 1
-ros2 topic echo /Odometry --once           # 看位置/姿态
+ros2 topic echo /Odometry --once | grep -A3 "position:"
+ros2 topic info /Odometry | grep Publisher
 
 # 数据流
-ros2 topic echo /livox/imu --once          # IMU bridge
-ros2 topic echo /x500_lidar/scan/points_timed --once  # relay
+ros2 topic echo /livox/imu --once | grep -A3 "linear_acceleration"   # 静止应 +9.81
+ros2 topic echo /x500_lidar/scan/points_timed --once | grep -A2 "height:"
 
 # planner 状态
-ros2 node list | grep fsm                   # fsm_node 活着
+ros2 node list | grep fsm
 ros2 topic echo /planning/pos_cmd --once --qos-reliability best_effort
 
 # TF
-ros2 run tf2_ros tf2_echo camera_init body  # FAST-LIO TF
+ros2 run tf2_ros tf2_echo world camera_init   # 应持续输出（静态 TF）
+```

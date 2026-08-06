@@ -192,7 +192,23 @@ for _ in $(seq 1 30); do
 done
 
 # ===========================================================================
-#  Phase 1d — Point cloud → world transform (for ROG-Map)
+#  Phase 1d — FAST-LIO chain (observer mode: runs alongside truth control)
+# ===========================================================================
+echo "Starting FAST-LIO chain (observer)..."
+python3 "${SCRIPT_DIR}/gazebo_imu_bridge.py" \
+    >"${LOG_DIR}/gazebo_imu_bridge.log" 2>&1 &
+PIDS+=("$!")
+python3 "${SCRIPT_DIR}/add_time_field.py" \
+    >"${LOG_DIR}/add_time_field.log" 2>&1 &
+PIDS+=("$!")
+ros2 run fast_lio fastlio_mapping --ros-args \
+    --params-file "${SCRIPT_DIR}/fastlio_gazebo.yaml" \
+    >"${LOG_DIR}/fastlio.log" 2>&1 &
+PIDS+=("$!")
+sleep 4
+
+# ===========================================================================
+#  Phase 1e — Point cloud → world transform (for ROG-Map)
 # ===========================================================================
 echo "Starting cloud_to_world (lidar_link → world) ..."
 python3 "${SCRIPT_DIR}/cloud_to_world.py" \

@@ -53,18 +53,17 @@ class AddTimeField(Node):
         new_data = bytearray(n_points * new_point_step)
 
         import struct
-        # timestamp_unit=2 (microseconds), scan_period=1/10Hz=0.1s=100,000us
-        t_step = 100000.0 / n_points if n_points > 0 else 0.0
-
+        # Gazebo gpu_lidar is INSTANTANEOUS — all points sampled at the same
+        # moment. Fake linear timestamps made FAST-LIO apply wrong motion
+        # compensation. Set time=0 for all points (no intra-scan motion).
         for i in range(n_points):
             src_start = i * point_step_old
             dst_start = i * new_point_step
             new_data[dst_start:dst_start + point_step_old] = \
                 cloud.data[src_start:src_start + point_step_old]
-            # time field: float32 = point timestamp in microseconds
-            t_us = i * t_step
+            # time field: float32 zero — instantaneous scan, no motion comp
             new_data[dst_start + time_offset:dst_start + new_point_step] = \
-                struct.pack('<f', t_us)
+                b'\x00\x00\x00\x00'
 
         # Build new message
         new_cloud = PointCloud2()

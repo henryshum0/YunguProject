@@ -23,10 +23,11 @@
             time_offset_lidar_to_imu: 0.0
 
         preprocess:
-            lidar_type: 2             # VELO16: extracts corner+surface features
+            lidar_type: 0             # default_handler: no ring/time assumptions,
+                                      # best for Gazebo instantaneous scan
             scan_line: 16
             scan_rate: 10
-            timestamp_unit: 2         # 2 = microsecond (matches relay output)
+            timestamp_unit: 2
             blind: 0.5
 
         mapping:
@@ -38,6 +39,8 @@
             det_range:     35.0       # matches gz LiDAR max range
             extrinsic_est_en: false   # fixed extrinsic for sim
             extrinsic_T: [ 0.0, 0.0, 0.16 ]   # LiDAR 16 cm above IMU (base_link)
+            # Gazebo LiDAR and IMU are both ENU-aligned (base_link == world,
+            # no rotation in model.sdf) → identity rotation.
             extrinsic_R: [ 1., 0., 0.,
                            0., 1., 0.,
                            0., 0., 1.]
