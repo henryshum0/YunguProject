@@ -20,7 +20,7 @@ def generate_launch_description():
     default_data_path =  'benchmark.txt'
 
     perfect_drone_sim_config_name = 'high_speed.yaml'
-    super_config_name = 'static_high_speed.yaml'
+    super_config_name = 'gazebo.yaml'
 
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(

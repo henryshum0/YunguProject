@@ -23,6 +23,7 @@
 
 #include <traj_opt/backup_traj_optimizer_s4.h>
 #include <utils/header/color_msg_utils.hpp>
+#include <sstream>
 
 using namespace traj_opt;
 using namespace color_text;
@@ -546,7 +547,17 @@ double BackupTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
             cout << "\tThr: " << opt_vars.penalty_log(7) << endl;
             cout << "\tTs: " << opt_vars.ts << endl;
         }
-        ros_ptr_->warn(" -- [BackOpt] Opt failed, Omg or thr or Pos violation.");
+        std::ostringstream opt_fail_oss;
+        opt_fail_oss << " -- [BackOpt] Opt failed. Pos=" << opt_vars.penalty_log(1)
+                     << " (thr 0.2) Vel=" << opt_vars.penalty_log(2)
+                     << " (thr " << cfg_.max_vel * cfg_.penna_margin << ") Acc="
+                     << opt_vars.penalty_log(3)
+                     << " (thr " << cfg_.max_acc * cfg_.penna_margin << ") Omg="
+                     << opt_vars.penalty_log(6)
+                     << " (thr " << cfg_.max_omg * cfg_.penna_margin << ") Thr="
+                     << opt_vars.penalty_log(7)
+                     << " (thr " << cfg_.max_acc * cfg_.penna_margin << ")";
+        ros_ptr_->warn(opt_fail_oss.str());
     }
 
     if (ret >= 0) {

@@ -325,7 +325,8 @@ void OffboardNode::enuToNedAcc(double ex, double ey, double ez,
 
 void OffboardNode::timerCallback()
 {
-    publishOffboardMode(true, true, false);
+    if (state_==State::PLANNER) publishOffboardMode(false, true, true);
+    else publishOffboardMode(true, false, false);
 
     switch (state_) {
         // --------------------------------------------------------------
@@ -407,7 +408,7 @@ void OffboardNode::timerCallback()
             }
 
             // Forward the planner command (ENU → NED), including the
-            // trajectory's acceleration as feedforward.
+            // trajectory'x`xs acceleration as feedforward.
             const auto &cmd = *latest_cmd_;
             float nx, ny, nz, vx, vy, vz, ax, ay, az;
             enuToNedPos(cmd.position.x, cmd.position.y, cmd.position.z, nx, ny, nz);
