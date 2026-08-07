@@ -27,8 +27,8 @@ import sys
 
 import yaml
 
-HERE = os.path.dirname(os.path.realpath(__file__))  # .../src/utils
-DEFAULT_CONFIG = os.path.join(HERE, '..', '..', 'config', 'simulation.yaml')
+HERE = os.path.dirname(os.path.realpath(__file__))  # .../config
+DEFAULT_CONFIG = os.path.join(HERE, 'simulation.yaml')
 
 
 def _load(path):
@@ -58,6 +58,18 @@ def _print_scalar(value, key):
                  "(use 'bridge-config' for the topic list)")
     else:
         print(value)
+
+
+def get_value(path, key, default=None):
+    """Return the value at a dotted ``key`` from ``path`` (or ``default``).
+
+    Programmatic API for callers that want the value as a Python object
+    (e.g. a launch file), instead of the CLI's printed output.
+    """
+    try:
+        return _resolve_key(_load(path), key)
+    except (SystemExit, OSError):
+        return default
 
 
 def main():

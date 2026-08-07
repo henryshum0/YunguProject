@@ -11,7 +11,7 @@
 # ----------------------------------------------------------------------------
 
 # Gazebo vehicle model (PX4 gz airframe, e.g. x500_lidar, x500, swan_gamma_v1)
-model: x500_lidar
+model: swan_gamma_v2
 
 # Gazebo map/world (.sdf in VisionFlow-PX4/Tools/simulation/gz/worlds)
 world: yungu
@@ -35,16 +35,16 @@ bridge:
 
   # GZ topics bridged into ROS 2 (ros_gz_bridge parameter_bridge config entries)
   topics:
-    - ros_topic_name: "/x500_lidar/scan"
-      gz_topic_name: "/x500_lidar/scan"
+    - ros_topic_name: "/swan_gamma_v2/scan"
+      gz_topic_name: "/swan_gamma_v2/scan"
       ros_type_name: "sensor_msgs/msg/LaserScan"
       gz_type_name: "gz.msgs.LaserScan"
       direction: GZ_TO_ROS
       subscriber_queue_size: 10
       publisher_queue_size: 10
 
-    - ros_topic_name: "/x500_lidar/scan/points"
-      gz_topic_name: "/x500_lidar/scan/points"
+    - ros_topic_name: "/swan_gamma_v2/scan/points"
+      gz_topic_name: "/swan_gamma_v2/scan/points"
       ros_type_name: "sensor_msgs/msg/PointCloud2"
       gz_type_name: "gz.msgs.PointCloudPacked"
       direction: GZ_TO_ROS

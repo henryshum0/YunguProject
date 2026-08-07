@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 SIM_CONFIG="${WORKSPACE}/config/simulation.yaml"
-SIM_CONFIG_HELPER="${WORKSPACE}/src/utils/sim_config.py"
+SIM_CONFIG_HELPER="${WORKSPACE}/config/sim_config.py"
 TF_NODE="${SCRIPT_DIR}/tf_bridge.py"
 BRIDGE_YAML=""
 

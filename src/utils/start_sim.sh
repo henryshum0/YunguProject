@@ -34,7 +34,7 @@ PX4_DIR="${WORKSPACE}/VisionFlow-PX4"
 BRIDGE_SCRIPT="${SCRIPT_DIR}/gz_bridges/bridge.sh"
 STOP_SCRIPT="${SCRIPT_DIR}/stop_sim.sh"
 SIM_CONFIG="${WORKSPACE}/config/simulation.yaml"
-SIM_CONFIG_HELPER="${SCRIPT_DIR}/sim_config.py"
+SIM_CONFIG_HELPER="${WORKSPACE}/config/sim_config.py"
 
 [[ -f "${SIM_CONFIG}" ]] || { echo "ERROR: simulation config not found: ${SIM_CONFIG}" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not found on PATH" >&2; exit 1; }
