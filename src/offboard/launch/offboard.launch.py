@@ -1,4 +1,7 @@
+import importlib
 import os
+import sys
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -9,7 +12,44 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 
 
+def _find_sim_config():
+    """Locate config/simulation.yaml (the Yungu simulation config).
+
+    Priority: $YUNGU_SIM_CONFIG env var, then the closest ancestor of this
+    launch file that contains config/simulation.yaml (works with the repo's
+    symlink-install layout).
+    """
+    env = os.environ.get('YUNGU_SIM_CONFIG')
+    if env:
+        p = Path(env)
+        if p.is_file():
+            return p
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        cand = parent / 'config' / 'simulation.yaml'
+        if cand.is_file():
+            return cand
+    return None
+
+
 def generate_launch_description():
+    # The raw gz lidar topic follows the configured model, e.g. model=swan_gamma_v2
+    # -> /swan_gamma_v2/scan/points. Read config/simulation.yaml (via the shared
+    # config/sim_config.py helper) so the launch automatically tracks the model
+    # selected there. Override with cloud_in_topic:=... if needed.
+    default_cloud_in = '/x500_lidar/scan/points'
+    sim_config_path = _find_sim_config()
+    if sim_config_path is not None:
+        try:
+            # Reuse config/sim_config.py (sits next to simulation.yaml).
+            sys.path.insert(0, str(sim_config_path.parent))
+            _sim_cfg = importlib.import_module('sim_config')
+            model = _sim_cfg.get_value(sim_config_path, 'model', default='x500_lidar')
+            default_cloud_in = f'/{model}/scan/points'
+        except Exception as exc:  # noqa: BLE001 - keep the launch working
+            print(f'[offboard.launch] WARNING: could not read {sim_config_path}: '
+                  f'{exc}; falling back to {default_cloud_in}', file=sys.stderr)
+
     # RViz config shipped with the offboard package.
     # Default to the full path/planning visualization (corridors, trajectories,
     # occupied map, TF, goal markers). Override with rviz_config:=x500.rviz
@@ -32,8 +72,10 @@ def generate_launch_description():
         DeclareLaunchArgument('landing_vel', default_value='0.5'),
         DeclareLaunchArgument('landing_z', default_value='0.15'),
         DeclareLaunchArgument('cmd_topic', default_value='/planning/pos_cmd'),
-        DeclareLaunchArgument('cloud_in_topic', default_value='/x500_lidar/scan/points',
-                              description='Raw gz lidar cloud (lidar_link frame)'),
+        DeclareLaunchArgument('cloud_in_topic', default_value=default_cloud_in,
+                              description='Raw gz lidar cloud (lidar_link frame); '
+                                          'defaults to /<model>/scan/points from '
+                                          'config/simulation.yaml'),
         DeclareLaunchArgument('odom_topic', default_value='/fmu/out/vehicle_odometry',
                               description='PX4 odometry topic (NED, converted to ENU by the bridge)'),
         DeclareLaunchArgument('cloud_registered_topic', default_value='/cloud_registered',
@@ -52,7 +94,7 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz', default_value='true',
                               description='Launch RViz2 visualization'),
         DeclareLaunchArgument('rviz_config', default_value=default_rviz_config),
-        DeclareLaunchArgument('planner_config', default_value='gazebo.yaml',
+        DeclareLaunchArgument('planner_config', default_value='gazebo-smooth.yaml',
                               description='SUPER planner config (super_planner/config/)'),
 
         # ------------------------------------------------------------------

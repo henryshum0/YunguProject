@@ -63,7 +63,7 @@ static void nedToEnu(double pxn, double pyn, double pzn,
  * @brief Transform the raw gz-bridged lidar cloud into the world (ENU) frame
  * using PX4's odometry.
  *
- * The gz lidar (/x500_lidar/scan/points) publishes points in the lidar_link
+ * The gz lidar (/swan_gamma_v2/scan/points) publishes points in the lidar_link
  * (sensor) frame, but SUPER's ROG-Map treats the input cloud as world-frame
  * coordinates. PX4's vehicle_odometry is NED, so it is converted to ENU and
  * used to register the cloud:
@@ -201,7 +201,7 @@ private:
         cloud_out_pub_->publish(*out);
     }
 
-    std::string cloud_in_topic_{"/x500_lidar/scan/points"};
+    std::string cloud_in_topic_{"/swan_gamma_v2/scan/points"};
     std::string odom_topic_{"/fmu/out/vehicle_odometry"};
     std::string cloud_out_topic_{"/cloud_registered"};
     std::string odom_out_topic_{"/lidar_slam/odom"};
