@@ -112,3 +112,53 @@ that PX4 detaches into its own session — run:
 - The SUPER planner is launched by `offboard.launch.py` using
   `src/SUPER/super_planner/config/gazebo.yaml`, which subscribes to the bridged
   topics (`/x500_lidar/scan/points`, `/odom`).
+
+## FAST-LIO mode (LiDAR-inertial odometry + PX4 EKF2 fusion)
+
+A one-shot launcher that runs the full stack **with FAST-LIO** feeding its
+odometry into PX4's EKF2 (external vision fusion), then the fused PX4
+odometry drives the SUPER planner via `super_bridge` — mirroring the
+real-hardware setup (no Gazebo ground-truth involved):
+
+```
+FAST-LIO /Odometry ──→ fastlio_px4_bridge ──→ /fmu/in/vehicle_visual_odometry
+                                                     ↓ PX4 EKF2 fusion
+                        PX4 /fmu/out/vehicle_odometry ──→ super_bridge
+                                                     ↓
+                        /lidar_slam/odom + /cloud_registered ──→ planner
+```
+
+```bash
+# Full stack: GPU-forced Gazebo + PX4 + FAST-LIO + EKF2 fusion + planner + RViz
+./temp/start_all_fastlio.sh
+
+# Gazebo server-only (no GUI) — RViz still opens for planning visualization
+HEADLESS=1 ./temp/start_all_fastlio.sh
+
+# Skip RViz entirely
+NO_RVIZ=1 ./temp/start_all_fastlio.sh
+```
+
+What `start_all_fastlio.sh` adds over `start_sim.sh`:
+
+| # | Component | Notes |
+|---|---|---|
+| 1 | `temp/gazebo_imu_bridge.py` | PX4 `sensor_combined` (FRD) → `/livox/imu` (ENU): axis flip + rolling time sync |
+| 2 | `temp/add_time_field.py` | Adds `time` field to the Gazebo cloud (0 for instantaneous scans) |
+| 3 | `fast_lio` (`fastlio_mapping`) | LiDAR-inertial odometry, config: `temp/fastlio_gazebo.yaml` |
+| 4 | `temp/fastlio_px4_bridge.py` | FAST-LIO `/Odometry` (ENU) → `/fmu/in/vehicle_visual_odometry` (NED) for EKF2 |
+| 5 | `super_bridge` | PX4 fused odom + raw cloud → `/lidar_slam/odom` + `/cloud_registered` |
+
+PX4 EKF2 external-vision params are set in the x500 airframe
+(`4008_gz_x500_lidar`): `EKF2_EV_CTRL 15` (HPOS+VPOS+VEL+YAW fusion),
+`EKF2_EV_DELAY 5`, `EKF2_EVP_NOISE 0.1`, `EKF2_EVV_NOISE 0.1`,
+`EKF2_EVA_NOISE 0.05`, plus `COM_POWER_OVERRIDE 1` so SITL arming is not
+blocked by the power preflight check.
+
+**Verify the fusion pipeline is alive:**
+
+```bash
+ros2 topic echo /fmu/in/vehicle_visual_odometry --once --qos-reliability best_effort
+ros2 topic echo /lidar_slam/odom --once --qos-reliability best_effort
+ros2 topic echo /cloud_registered --once --qos-reliability best_effort
+```
