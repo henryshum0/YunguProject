@@ -413,6 +413,25 @@ namespace ros_interface {
             ciri_mkr_pub_->publish(mkr_arr);
         }
 
+        void vizCiriPolytopeVec(const geometry_utils::PolytopeVec &sfcs, const std::string & ns) override{
+            if (!visualization_en_) {
+                return;
+            }
+            if (ciri_mkr_pub_->get_subscription_count() <= 0) {
+                return;
+            }
+            Ros1Adapter::deleteAllMarkerArray(ciri_mkr_pub_);
+            visualization_msgs::msg::MarkerArray mkr_arr;
+            for (const auto &p : sfcs) {
+                ros_interface::Ros1Adapter::addPolytopeToMarkerArray(mkr_arr, p, ns, true,
+                                                                     Color::Chartreuse(), Color::Green(),
+                                                                     Color::Green(),
+                                                                     0.15,
+                                                                     0.02);
+            }
+            ciri_mkr_pub_->publish(mkr_arr);
+        }
+
         void vizCiriPointCloud(const vec_Vec3f & points) override {
             if (!visualization_en_) {
                 return;

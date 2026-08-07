@@ -1,8 +1,8 @@
 conan
 build
 install
-log__pycache__/
+log
+cmd_log/
+.vscode
+__pycache__/
 *.pyc
-
-# colcon build logs
-log/

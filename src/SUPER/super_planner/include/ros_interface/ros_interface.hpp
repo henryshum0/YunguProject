@@ -132,6 +132,8 @@ namespace ros_interface{
 
         virtual void vizCiriPolytope(const Polytope & polytope, const std::string & ns) = 0;
 
+        virtual void vizCiriPolytopeVec(const PolytopeVec & sfcs, const std::string & ns) = 0;
+
         virtual void vizCiriPointCloud(const vec_Vec3f & points) = 0;
 
 

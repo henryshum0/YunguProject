@@ -49,7 +49,8 @@ namespace super_planner {
                                                       rog_map_cfg.virtual_ceil_height,
                                                       cfg_.robot_r,
                                                       cfg_.obs_skip_num,
-                                                      cfg_.iris_iter_num);
+                                                      cfg_.iris_iter_num,
+                                                      cfg_.candidate_sfc_viz_en);
         cg_ptr_->SetLineNeighborList(cfg_.seed_line_neighbour);
 
 
