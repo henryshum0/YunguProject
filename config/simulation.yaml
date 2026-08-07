@@ -1,0 +1,52 @@
+# ============================================================================
+# Yungu simulation configuration
+# ============================================================================
+# Central place to choose the Gazebo vehicle model, the map/world, and the GZ
+# topics bridged into ROS 2. This file is read by:
+#   - src/utils/start_sim.sh                 -> model, world, gz_version, xrce_port
+#   - src/utils/gz_bridges/bridge.sh         -> bridge.*
+#
+# Environment variables still override the file, e.g.:
+#   PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./start_sim.sh
+# ----------------------------------------------------------------------------
+
+# Gazebo vehicle model (PX4 gz airframe, e.g. x500_lidar, x500, swan_gamma_v1)
+model: x500_lidar
+
+# Gazebo map/world (.sdf in VisionFlow-PX4/Tools/simulation/gz/worlds)
+world: yungu
+
+# Gazebo distro (this system runs gz-sim 8 / Harmonic)
+gz_version: harmonic
+
+# UDP port for the uXRCE-DDS agent
+xrce_port: 8888
+
+# ----------------------------------------------------------------------------
+# GZ <-> ROS 2 bridge
+# ----------------------------------------------------------------------------
+bridge:
+  # Launch the ros_gz_bridge parameter_bridge for the topics below
+  enabled: true
+
+  # Launch the TF bridge (tf_bridge.py) that publishes the world/base_link and
+  # base_link/lidar_link transforms
+  tf_enabled: true
+
+  # GZ topics bridged into ROS 2 (ros_gz_bridge parameter_bridge config entries)
+  topics:
+    - ros_topic_name: "/x500_lidar/scan"
+      gz_topic_name: "/x500_lidar/scan"
+      ros_type_name: "sensor_msgs/msg/LaserScan"
+      gz_type_name: "gz.msgs.LaserScan"
+      direction: GZ_TO_ROS
+      subscriber_queue_size: 10
+      publisher_queue_size: 10
+
+    - ros_topic_name: "/x500_lidar/scan/points"
+      gz_topic_name: "/x500_lidar/scan/points"
+      ros_type_name: "sensor_msgs/msg/PointCloud2"
+      gz_type_name: "gz.msgs.PointCloudPacked"
+      direction: GZ_TO_ROS
+      subscriber_queue_size: 5
+      publisher_queue_size: 5
