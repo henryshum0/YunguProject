@@ -150,7 +150,9 @@ What `start_all_fastlio.sh` adds over `start_sim.sh`:
 | 5 | `super_bridge` | PX4 fused odom + raw cloud → `/lidar_slam/odom` + `/cloud_registered` |
 
 PX4 EKF2 external-vision params are set in the x500 airframe
-(`4008_gz_x500_lidar`): `EKF2_EV_CTRL 15` (HPOS+VPOS+VEL+YAW fusion),
+(`4008_gz_x500_lidar`): `EKF2_EV_CTRL 13` (HPOS+VEL+YAW fusion — **no VPOS**:
+FAST-LIO has no absolute height reference, so the barometer keeps the
+vertical channel and the SLAM z drift is not propagated into altitude),
 `EKF2_EV_DELAY 5`, `EKF2_EVP_NOISE 0.1`, `EKF2_EVV_NOISE 0.1`,
 `EKF2_EVA_NOISE 0.05`, plus `COM_POWER_OVERRIDE 1` so SITL arming is not
 blocked by the power preflight check.

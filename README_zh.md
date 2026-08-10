@@ -146,9 +146,10 @@ NO_RVIZ=1 ./temp/start_all_fastlio.sh
 | 5 | `super_bridge` | PX4 融合里程计 + 原始点云 → `/lidar_slam/odom` + `/cloud_registered` |
 
 PX4 EKF2 外部视觉参数在 x500 机型中设置（`4008_gz_x500_lidar`）：
-`EKF2_EV_CTRL 15`（位置+垂直+速度+偏航融合）、`EKF2_EV_DELAY 5`、
-`EKF2_EVP_NOISE 0.1`、`EKF2_EVV_NOISE 0.1`、`EKF2_EVA_NOISE 0.05`，
-以及 `COM_POWER_OVERRIDE 1`（避免 SITL 电源预检阻止解锁）。
+`EKF2_EV_CTRL 13`（水平位置+速度+偏航融合——**不含 VPOS**：FAST-LIO 无绝对
+高度参考，垂直通道交给气压计，SLAM 的 z 漂移不会传导到飞行高度）、
+`EKF2_EV_DELAY 5`、`EKF2_EVP_NOISE 0.1`、`EKF2_EVV_NOISE 0.1`、
+`EKF2_EVA_NOISE 0.05`，以及 `COM_POWER_OVERRIDE 1`（避免 SITL 电源预检阻止解锁）。
 
 **验证融合链路是否正常运行：**
 
