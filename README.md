@@ -162,3 +162,35 @@ ros2 topic echo /fmu/in/vehicle_visual_odometry --once --qos-reliability best_ef
 ros2 topic echo /lidar_slam/odom --once --qos-reliability best_effort
 ros2 topic echo /cloud_registered --once --qos-reliability best_effort
 ```
+
+### FAST-LIO fusion — measured results (2026-08)
+
+Measured against the Gazebo ground truth (`/odom`) in the `yungu` world,
+using [`temp/check_pos4.py`](temp/check_pos4.py) (scenario-based attribution,
+CSV output):
+
+| Scenario | Horizontal error | Vertical bias | Notes |
+|---|---|---|---|
+| Static on ground | **0.00 m** | +0.52 m | zero drift, fully stable |
+| Hover @ 4.5 m | **0.04 m** | +0.42 m | horizontal is very good |
+| Flight (v ≤ 4.7 m/s) | 0.4–2.8 m (∝ speed) | +0.6–1.4 m | lag + vertical drift |
+| After stopping | **0.18 m** (recovers) | +1.36 m (persists) | horizontal recovers, vertical does not |
+
+The PX4-EKF2 fused odometry (`/lidar_slam/odom`) tracks FAST-LIO within
+**0.03–0.12 m** — EKF2 fully adopts the visual odometry, i.e. the fusion
+pipeline works as intended.
+
+Known bias sources (all accounted for, none a FAST-LIO algorithm bug):
+
+1. **Static/hover z bias (+0.42–0.52 m, constant)** — frame-origin offset:
+   FAST-LIO's `camera_init` origin is the first-frame LiDAR pose, while
+   Gazebo's world origin is the spawn pose. Not an error — align the origins
+   before comparing with ground truth. Horizontal is unaffected (≤ 0.04 m).
+2. **In-flight horizontal lag (~0.4–0.7 s, ∝ speed)** — flight bias ≈ speed ×
+   0.5–0.6 s; time-shifting the FAST-LIO output by −0.7 s removes ~75 % of the
+   bias. Caused by the *simulation* pipeline: ~184 KB point clouds forwarded
+   over multiple hops under WSL + PX4 clock vs sim-time skew. Real hardware
+   with hardware-stamped sensor data should not show this.
+3. **Vertical drift after flight (+1 m, persists)** — the SLAM has no absolute
+   height reference; the z offset gets absorbed into the map and stays locked.
+   Use a barometer/height source to constrain z on real hardware.

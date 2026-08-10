@@ -163,3 +163,34 @@ ros2 topic echo /cloud_registered --once --qos-reliability best_effort
 source install/setup.bash
 python3 temp/check_pos3.py 60
 ```
+**无GUI的fastlio启动**
+```
+HEADLESS=1 ./temp/start_all_fastlio.sh
+```
+### FAST-LIO 融合阶段性结果（2026-08）
+
+在 `yungu` 世界中以 Gazebo 真值（`/odom`）为基准，使用
+[`temp/check_pos4.py`](temp/check_pos4.py)（分场景归因、输出 CSV）实测：
+
+| 场景 | 水平误差 | 垂直偏差 | 说明 |
+|---|---|---|---|
+| 地面静止 | **0.00 m** | +0.52 m | 零漂移，完全稳定 |
+| 悬停 4.5 m | **0.04 m** | +0.42 m | 水平精度很好 |
+| 飞行（v ≤ 4.7 m/s）| 0.4–2.8 m（∝速度）| +0.6–1.4 m | 滞后 + 垂直漂移 |
+| 停住后 | **0.18 m**（收敛）| +1.36 m（不回落）| 水平恢复，垂直锁死 |
+
+PX4 EKF2 融合里程计（`/lidar_slam/odom`）与 FAST-LIO 输出相差 **0.03–0.12 m**——
+EKF2 完全采纳视觉里程计，融合链路按预期工作。
+
+已定位的三个偏差来源（均有明确归属，均非 FAST-LIO 算法缺陷）：
+
+1. **静止/悬停垂直基准差（+0.42–0.52 m，恒定）** — 坐标系原点差：FAST-LIO
+   的 `camera_init` 原点取第一帧 LiDAR 位置，Gazebo world 原点取模型 spawn
+   位置。不是错误——与真值对比前应先对齐原点。水平方向不受影响（≤ 0.04 m）。
+2. **飞行水平滞后（约 0.4–0.7 s，∝速度）** — 飞行偏差 ≈ 速度 × 0.5–0.6 s；
+   将 FAST-LIO 输出按时间平移 −0.7 s 可消除约 75% 偏差。由**仿真管道**造成
+   （WSL 下约 184 KB 大点云多跳转发 + PX4 时钟与仿真时钟偏差）。真机使用
+   硬件打标传感器数据时不应出现此问题。
+3. **飞行后垂直漂移（+1 m，不回落）** — SLAM 无绝对高度参考，z 偏移被吸进
+   地图后永久保留。真机建议用气压计/高度源约束 z。
+
