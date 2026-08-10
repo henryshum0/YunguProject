@@ -157,3 +157,9 @@ ros2 topic echo /fmu/in/vehicle_visual_odometry --once --qos-reliability best_ef
 ros2 topic echo /lidar_slam/odom --once --qos-reliability best_effort
 ros2 topic echo /cloud_registered --once --qos-reliability best_effort
 ```
+
+**fastlio比较调试**
+```
+source install/setup.bash
+python3 temp/check_pos3.py 60
+```
