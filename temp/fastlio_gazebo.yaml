@@ -26,7 +26,7 @@
             lidar_type: 0             # default_handler: no ring/time assumptions,
                                       # best for Gazebo instantaneous scan
             scan_line: 16
-            scan_rate: 10
+            scan_rate: 20
             timestamp_unit: 2
             blind: 0.5
 

@@ -189,7 +189,22 @@ PIDS+=("$!"); sleep 2
 python3 "${SCRIPT_DIR}/add_time_field.py" &
 PIDS+=("$!"); sleep 2
 
-ros2 run fast_lio fastlio_mapping --ros-args --params-file "${SCRIPT_DIR}/fastlio_gazebo.yaml" &
+# Wait for both sensor streams before starting FAST-LIO: if it comes up
+# before the LiDAR/IMU data is stable, it can crash on a regressing
+# timestamp ("cannot store a negative time point").
+echo "Waiting for LiDAR + IMU streams..."
+for _ in $(seq 1 30); do
+    if ros2 topic info /x500_lidar/scan/points_timed 2>/dev/null | grep -q "Publisher count: 1" &&
+       ros2 topic info /livox/imu 2>/dev/null | grep -q "Publisher count: 1"; then
+        echo "Sensor streams ready."
+        break
+    fi
+    sleep 1
+done
+sleep 2
+
+ros2 run fast_lio fastlio_mapping --ros-args --params-file "${SCRIPT_DIR}/fastlio_gazebo.yaml" \
+    >"${LOG_DIR}/fastlio.log" 2>&1 &
 PIDS+=("$!"); sleep 5
 
 # FAST-LIO odometry → PX4 EKF2 external vision
