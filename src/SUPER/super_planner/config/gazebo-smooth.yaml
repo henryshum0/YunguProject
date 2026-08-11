@@ -3,7 +3,7 @@ fsm:
   click_goal_topic: "/goal_pose"
   click_height: 5
   click_yaw_en: true
-  replan_rate: 5.0
+  replan_rate: 30.0
   cmd_topic: "/planning/pos_cmd"
   mpc_cmd_topic: "/planning_cmd/poly_traj"
   timer_en: true
@@ -19,7 +19,7 @@ super_planner:
   goal_yaw_en: false
   goal_vel_en: false
   corridor_bound_dis: 0.8
-  corridor_line_max_length: 1.0
+  corridor_line_max_length: 6.0
   safe_corridor_line_max_length: 6.0
   iris_iter_num: 2
   obs_skip_num: 2
@@ -61,7 +61,7 @@ traj_opt:
     penna_vel: 9.0e+9
     penna_acc: 1.0e+11
     penna_jerk: -5.0e+9
-    penna_attract: 5.0e+6
+    penna_attract: 3.0e+6
     penna_omg: 3e+8
     penna_thr: 8e+7
 
@@ -85,7 +85,7 @@ traj_opt:
     penna_thr: 1e+7
 
   flatness:
-    mass: 12.488
+    mass: 13
     dh: 0.35
     dv: 0.35
     cp: 0.001
@@ -98,7 +98,7 @@ astar:
   visual_process: false
   allow_diag: true
   # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN
-  heu_type: 2
+  heu_type: 1
   debug_visualization_en: true
 
 
