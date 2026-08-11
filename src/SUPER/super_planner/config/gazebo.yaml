@@ -17,7 +17,7 @@ super_planner:
   visual_process: false
   frontend_in_known_free: false
   goal_yaw_en: false
-  goal_vel_en: false
+  goal_vel_en: 0.0
   corridor_bound_dis: 0.8
   corridor_line_max_length: 1.0
   safe_corridor_line_max_length: 6.0
@@ -39,11 +39,11 @@ traj_opt:
     print_optimizer_log: false
 
   boundary:
-    max_vel: 10.0
-    max_acc: 5.0
-    max_jerk: 80.0
+    max_vel: 5
+    max_acc: 10.0
+    max_jerk: 140
     max_omg: 5.0
-    max_acc_thr: 15
+    max_acc_thr: 20
     min_acc_thr: 0.0
     penna_margin: 0.05
 
@@ -51,12 +51,12 @@ traj_opt:
     # 1 for xi 2 for pos
     pos_constraint_type: 1
     energy_cost_type: 4
-    block_energy_cost: true
+    block_energy_cost: false
     opt_accuracy: 5.0e-6
     scale_factor: 1
     integral_reso: 15
     smooth_eps: 0.05
-    penna_t: 1.0e+10
+    penna_t: 2.0e+9
     penna_pos: 1.0e+10
     penna_vel: 5.0e+8
     penna_acc: 1.0e+11
@@ -85,7 +85,7 @@ traj_opt:
     penna_thr: 1e+7
 
   flatness:
-    mass: 2.8
+    mass: 12.488
     dh: 0.35
     dv: 0.35
     cp: 0.001

@@ -112,3 +112,23 @@ that PX4 detaches into its own session — run:
 - The SUPER planner is launched by `offboard.launch.py` using
   `src/SUPER/super_planner/config/gazebo.yaml`, which subscribes to the bridged
   topics (`/x500_lidar/scan/points`, `/odom`).
+
+### Recording & plotting (`cmd_record`)
+
+The [`cmd_record`](src/cmd_record) package records the commanded trajectory
+together with the real drone odometry — one CSV per goal click — and shows a
+live matplotlib plot (plus post-hoc plotting). Run it in a third terminal:
+
+```bash
+# Terminal 3 — recorder + live plot (click a goal in RViz to start recording)
+source install/setup.bash
+ros2 launch cmd_record record.launch.py
+
+# Plot a saved segment afterwards (defaults to the newest CSV in cmd_log/)
+ros2 run cmd_record plot_csv
+```
+
+Each goal click writes `cmd_log/goal_<NNN>_<timestamp>.csv` containing the goal
+position, the commanded trajectory, and the real odometry. Its dependencies
+(numpy, matplotlib, and `python3-tk` for the live plot) are installed by
+`./install_deps.sh`.
