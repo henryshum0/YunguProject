@@ -211,6 +211,10 @@ PIDS+=("$!"); sleep 5
 python3 "${SCRIPT_DIR}/fastlio_px4_bridge.py" &
 PIDS+=("$!"); sleep 2
 
+# Ground-truth trajectory for RViz (truth vs FAST-LIO path comparison)
+python3 "${SCRIPT_DIR}/gt_path_node.py" &
+PIDS+=("$!"); sleep 1
+
 # NOTE: no cloud_to_world here — super_bridge (in offboard.launch.py) reads the
 # PX4 fused vehicle_odometry and transforms the raw lidar cloud into the world
 # frame itself (→ /cloud_registered). This mirrors the real-hardware setup
