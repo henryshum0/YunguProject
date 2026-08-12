@@ -170,18 +170,20 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /visualization/goal
-    - Class: rviz_default_plugins/Marker
+    - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Goal Marker (Sphere + Arrow)
+      Name: Waypoint Buffer
       Namespaces:
-        goal: true
+        waypoint: true
+        active: true
+        route: true
       Queue Size: 10
       Topic:
         Depth: 5
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /goal_marker
+        Value: /waypoint_markers
       Value: true
   Enabled: true
   Global Options:
@@ -208,7 +210,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /goal_pose
+        Value: /waypoint_pose
     - Class: rviz_default_plugins/PublishPoint
       Single click: true
       Topic:

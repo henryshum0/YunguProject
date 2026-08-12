@@ -44,7 +44,7 @@ edits take effect on the next launch (no rebuild needed).
 | File | Purpose | Key parameters |
 |------|---------|----------------|
 | [`config/simulation.yaml`](config/simulation.yaml) | Simulator: Gazebo vehicle model, map/world, uXRCE-DDS port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
-| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner tuning | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `landing_vel`, `landing_z`, `goal_height`, `planner_config` |
+| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner tuning + waypoint following | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `landing_vel`, `landing_z`, `goal_height`, `planner_config`, `waypoint_reached_dist`, `waypoint_hold_time` |
 | [`config/birdview.yaml`](config/birdview.yaml) | Aerial birdview overlay on the ground plane (top-down map reference in RViz) | `extent_x`, `extent_y`, `z`, `offset_x`, `offset_y`, `yaw`, `max_points` |
 | [`config/super_planner/gazebo-smooth.yaml`](config/super_planner/gazebo-smooth.yaml) | SUPER planner behaviour (frontend, trajectory optimization, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
 

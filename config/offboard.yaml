@@ -17,7 +17,7 @@ offboard:
   update_rate: 100.0
 
   # Cmd rate threshold for planner hand-over [Hz]
-  planner_cmd_hz: 10.0
+  planner_cmd_hz: 80.0
 
   # Delay before/after switching to the planner [s]
   planner_enter_delay: 0.5
@@ -40,4 +40,11 @@ offboard:
 
   # SUPER planner config: a file name (resolved against config/super_planner/,
   # falling back to super_planner/config/) or an absolute path.
-  planner_config: gazebo-smooth.yaml
+  planner_config: gazebo-3m.yaml
+
+  # Waypoint following: buffered waypoints (/waypoint_pose -> /waypoint_buffer)
+  # are flown one at a time. A waypoint is "reached" when the drone is within
+  # waypoint_reached_dist [m] horizontally; it then holds for
+  # waypoint_hold_time [s] before the next waypoint is sent to SUPER.
+  waypoint_reached_dist: 3.0
+  waypoint_hold_time: 0.0
