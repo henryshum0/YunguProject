@@ -100,6 +100,12 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# --- Python scripts (birdview overlay publisher) ---
+install(PROGRAMS
+  scripts/birdview_publisher.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME}

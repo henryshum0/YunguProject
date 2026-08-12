@@ -109,9 +109,10 @@ that PX4 detaches into its own session — run:
 - RViz shows the drone (TF), the lidar point cloud, and a "2D Goal Pose" tool
   that publishes goals to `/goal_pose` (default `rviz:=true`, disable with
   `rviz:=false`).
-- The SUPER planner is launched by `offboard.launch.py` using
-  `src/SUPER/super_planner/config/gazebo.yaml`, which subscribes to the bridged
-  topics (`/x500_lidar/scan/points`, `/odom`).
+- The SUPER planner is launched by `offboard.launch.py`; it loads its config
+  from `config/super_planner/gazebo-smooth.yaml` (the project-level `config/`
+  folder) and subscribes to the bridged topics (`/x500_lidar/scan/points`,
+  `/odom`).
 
 ### Recording & plotting (`cmd_record`)
 
