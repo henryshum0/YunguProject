@@ -30,7 +30,11 @@ export GZ_VERSION="${GZ_VERSION:-$(python3 "${SIM_CONFIG_HELPER}" --config "${SI
 if ! command -v ros2 >/dev/null 2>&1; then
   if [[ -f /opt/ros/humble/setup.bash ]]; then
     # shellcheck disable=SC1091
+    # ROS 2's generated setup scripts probe variables that may be unset, so
+    # temporarily disable nounset while sourcing them.
+    set +u
     source /opt/ros/humble/setup.bash
+    set -u
   else
     echo "ERROR: 'ros2' not found and /opt/ros/humble/setup.bash is missing." >&2
     exit 1

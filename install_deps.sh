@@ -82,7 +82,11 @@ $SUDO apt-get install -y \
 # 3. Python packages
 # ---------------------------------------------------------------------------
 section "3/3 Installing Python packages"
-python3 -m pip install --user --quiet numpy pandas matplotlib || true
+# Keep numpy on 1.x: the system matplotlib (apt, e.g. 3.5.1 on Ubuntu 22.04) is
+# compiled against the NumPy 1.x ABI and crashes under numpy>=2
+# ("_ARRAY_API not found" / "numpy.core.multiarray failed to import").
+# pandas 2.x supports numpy 1.26, so this does not break it.
+python3 -m pip install --user --quiet 'numpy<2' pandas matplotlib || true
 
 # ---------------------------------------------------------------------------
 # Done

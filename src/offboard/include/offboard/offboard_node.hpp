@@ -20,7 +20,7 @@ namespace offboard
  *
  *  State flow:
  *
- *    INIT ──► ARMING ──► SET_OFFBOARD ──► IDLE ◄──► PLANNER
+ *    INIT ──► ARMING ──► SET_OFFBOARD ──► TAKEOFF ──► IDLE ◄──► PLANNER
  *                                          │
  *                                          ▼
  *                                       LANDING ──► LANDED
@@ -43,6 +43,7 @@ private:
         INIT,          ///< stream origin setpoints
         ARMING,        ///< send arm command, keep streaming
         SET_OFFBOARD,  ///< switch to OFFBOARD mode
+        TAKEOFF,       ///< follow a smooth trajectory to the hover height
         IDLE,          ///< hover in place, waiting for planner
         PLANNER,       ///< forward planner commands
         LANDING,       ///< descend and disarm
@@ -58,6 +59,7 @@ private:
     double planner_exit_delay_{1.0};  ///< sustained inactive time before leaving PLANNER [s]
     double arm_wait_{2.0};            ///< time in INIT before arming [s]
     double default_height_{1.5};      ///< NED hover height when no hold point exists [m, negative = up]
+    double takeoff_duration_{10.0};   ///< duration of the smooth takeoff trajectory [s]
     double landing_vel_{0.5};         ///< descend speed [m/s]
     double landing_z_{0.15};          ///< NED z at which to disarm [m]
     double cmd_timeout_{0.5};         ///< max age of planner cmd before considered lost [s]
@@ -100,6 +102,11 @@ private:
     float hold_z_{0.0f};
     bool have_hold_{false};
 
+    /// NED position captured when the smooth TAKEOFF state begins.
+    float takeoff_start_x_{0.0f};
+    float takeoff_start_y_{0.0f};
+    float takeoff_start_z_{0.0f};
+
     // planner activity (hysteresis)
     bool planner_active_{false};
     bool planner_cond_val_{false};
@@ -132,6 +139,7 @@ private:
                          float yaw = NAN, float yawspeed = 0.0f,
                          float ax = NAN, float ay = NAN, float az = NAN);
     void publishHold();
+    void publishTakeoffSetpoint();
     void sendCommand(uint16_t command, float param1 = 0.0f, float param2 = 0.0f);
     void arm();
     void disarm();

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 
 using namespace std::chrono_literals;
 
@@ -18,6 +19,7 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     planner_exit_delay_ = declare_parameter("planner_exit_delay", planner_exit_delay_);
     arm_wait_ = declare_parameter("arm_wait", arm_wait_);
     default_height_ = declare_parameter("default_height", default_height_);
+    takeoff_duration_ = declare_parameter("takeoff_duration", takeoff_duration_);
     landing_vel_ = declare_parameter("landing_vel", landing_vel_);
     landing_z_ = declare_parameter("landing_z", landing_z_);
     cmd_timeout_ = declare_parameter("cmd_timeout", cmd_timeout_);
@@ -96,6 +98,7 @@ const char *OffboardNode::stateNameOf(State s)
         case State::INIT:         return "INIT";
         case State::ARMING:       return "ARMING";
         case State::SET_OFFBOARD: return "SET_OFFBOARD";
+        case State::TAKEOFF:      return "TAKEOFF";
         case State::IDLE:         return "IDLE";
         case State::PLANNER:      return "PLANNER";
         case State::LANDING:      return "LANDING";
@@ -188,6 +191,36 @@ void OffboardNode::publishSetpoint(float x, float y, float z,
 void OffboardNode::publishHold()
 {
     publishSetpoint(hold_x_, hold_y_, hold_z_, 0.0f, 0.0f, 0.0f);
+}
+
+void OffboardNode::publishTakeoffSetpoint()
+{
+    const double duration = std::max(takeoff_duration_, 0.1);
+    const double s = std::clamp(stateElapsedSec() / duration, 0.0, 1.0);
+    const double s2 = s * s;
+    const double s3 = s2 * s;
+    const double s4 = s3 * s;
+    const double s5 = s4 * s;
+
+    // Quintic time scaling: position, velocity and acceleration are all
+    // continuous, with zero velocity and acceleration at both endpoints.
+    const double blend = 10.0 * s3 - 15.0 * s4 + 6.0 * s5;
+    const double blend_dot = (30.0 * s2 - 60.0 * s3 + 30.0 * s4) / duration;
+    const double blend_ddot = (60.0 * s - 180.0 * s2 + 120.0 * s3)
+                              / (duration * duration);
+
+    const double dz = static_cast<double>(hold_z_ - takeoff_start_z_);
+    const float z = static_cast<float>(takeoff_start_z_ + dz * blend);
+    const float vz = static_cast<float>(dz * blend_dot);
+    const float az = static_cast<float>(dz * blend_ddot);
+
+    publishSetpoint(takeoff_start_x_, takeoff_start_y_, z,
+                    0.0f, 0.0f, vz, NAN, 0.0f, NAN, NAN, az);
+
+    if (s >= 1.0) {
+        RCLCPP_INFO(get_logger(), "Smooth takeoff complete at z=%.2f m", hold_z_);
+        setState(State::IDLE);
+    }
 }
 
 void OffboardNode::sendCommand(uint16_t command, float param1, float param2)
@@ -325,8 +358,13 @@ void OffboardNode::enuToNedAcc(double ex, double ey, double ez,
 
 void OffboardNode::timerCallback()
 {
-    if (state_==State::PLANNER) publishOffboardMode(false, true, true);
-    else publishOffboardMode(true, false, false);
+    if (state_ == State::PLANNER) {
+        publishOffboardMode(false, true, true);
+    } else if (state_ == State::TAKEOFF) {
+        publishOffboardMode(true, true, true);
+    } else {
+        publishOffboardMode(true, false, false);
+    }
 
     switch (state_) {
         // --------------------------------------------------------------
@@ -358,16 +396,35 @@ void OffboardNode::timerCallback()
             if (stateElapsedSec() < 0.1) {
                 setOffboardMode();
             }
-            // No takeoff phase: once OFFBOARD is confirmed via vehicle_status,
-            // go straight to IDLE at the default height.
             if (isOffboard()) {
                 RCLCPP_INFO(get_logger(), "Vehicle confirmed OFFBOARD mode");
-                hold_x_ = 0.0f;
-                hold_y_ = 0.0f;
+
+                if (local_pos_ && local_pos_->xy_valid && local_pos_->z_valid
+                    && std::isfinite(local_pos_->x) && std::isfinite(local_pos_->y)
+                    && std::isfinite(local_pos_->z)) {
+                    takeoff_start_x_ = local_pos_->x;
+                    takeoff_start_y_ = local_pos_->y;
+                    takeoff_start_z_ = local_pos_->z;
+                } else {
+                    takeoff_start_x_ = 0.0f;
+                    takeoff_start_y_ = 0.0f;
+                    takeoff_start_z_ = 0.0f;
+                }
+
+                hold_x_ = takeoff_start_x_;
+                hold_y_ = takeoff_start_y_;
                 hold_z_ = static_cast<float>(-default_height_);
                 have_hold_ = true;
-                setState(State::IDLE);
+                RCLCPP_INFO(get_logger(),
+                            "Starting %.1f s smooth takeoff: z %.2f -> %.2f m",
+                            std::max(takeoff_duration_, 0.1), takeoff_start_z_, hold_z_);
+                setState(State::TAKEOFF);
             }
+            break;
+        }
+        // --------------------------------------------------------------
+        case State::TAKEOFF: {
+            publishTakeoffSetpoint();
             break;
         }
         // --------------------------------------------------------------

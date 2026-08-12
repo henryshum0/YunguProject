@@ -223,9 +223,15 @@ if [[ -n "${HEADLESS}" ]]; then
 else
   echo "Starting PX4 SITL + Gazebo (target: ${PX4_TARGET}) ..."
 fi
+
+# Do not let a successful line from a previous run make this launch look ready.
+: >"${LOG_DIR}/px4_sitl.log"
+
 if [[ -n "${TERMINAL}" ]]; then
   export PX4_DIR PX4_TARGET LOG_DIR HEADLESS
-  setsid xterm -T "PX4 SITL (${PX4_TARGET})" -hold \
+  # Use an Xft/fontconfig font. The legacy xterm "fixed" bitmap font is not
+  # installed by default in WSLg and makes xterm exit before PX4 is launched.
+  setsid xterm -fa Monospace -fs 10 -T "PX4 SITL (${PX4_TARGET})" -hold \
       -e bash -c 'cd "$PX4_DIR" && make px4_sitl "$PX4_TARGET" 2>&1 | tee "$LOG_DIR/px4_sitl.log"' &
   pids+=("$!")
 else
@@ -233,15 +239,28 @@ else
       >"${LOG_DIR}/px4_sitl.log" 2>&1 &
   pids+=("$!")
 fi
+px4_launcher_pid="$!"
 
 echo "Waiting for PX4 SITL to come up ..."
+px4_ready=0
 for _ in $(seq 1 90); do
   if grep -qE "Ready for takeoff|INFO *\[commander\]" "${LOG_DIR}/px4_sitl.log" 2>/dev/null; then
     echo "PX4 SITL is up."
+    px4_ready=1
     break
+  fi
+  if ! kill -0 "${px4_launcher_pid}" 2>/dev/null; then
+    echo "ERROR: PX4 SITL launcher exited before PX4 became ready." >&2
+    tail -n 40 "${LOG_DIR}/px4_sitl.log" >&2 || true
+    exit 1
   fi
   sleep 1
 done
+if [[ "${px4_ready}" -ne 1 ]]; then
+  echo "ERROR: PX4 SITL did not become ready within 90 seconds." >&2
+  tail -n 40 "${LOG_DIR}/px4_sitl.log" >&2 || true
+  exit 1
+fi
 sleep 2
 
 # ---------------------------------------------------------------------------
