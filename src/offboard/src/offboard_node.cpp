@@ -358,13 +358,8 @@ void OffboardNode::enuToNedAcc(double ex, double ey, double ez,
 
 void OffboardNode::timerCallback()
 {
-    if (state_ == State::PLANNER) {
-        publishOffboardMode(false, true, true);
-    } else if (state_ == State::TAKEOFF) {
-        publishOffboardMode(true, true, true);
-    } else {
-        publishOffboardMode(true, false, false);
-    }
+    if (state_==State::PLANNER) publishOffboardMode(true, true, true);
+    else publishOffboardMode(true, false, false);
 
     switch (state_) {
         // --------------------------------------------------------------
