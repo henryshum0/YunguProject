@@ -19,6 +19,27 @@ Visualization Manager:
       Plane: XY
       Plane Cell Count: 50
       Reference Frame: <Fixed Frame>
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: Birdview Aerial Map
+      Position Transformer: XYZ
+      Selectable: false
+      Size (Pixels): 5
+      Size (m): 0.01
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /birdview_cloud
+      Use Fixed Frame: true
+      Use rainbow: false
     - Class: rviz_default_plugins/TF
       Enabled: true
       Frame Timeout: 15
@@ -120,17 +141,6 @@ Visualization Manager:
         Value: /fsm/path
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Frontend Guide Path (Pink)
-      Namespaces:
-        guide_path: true
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/frontend_path
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
       Name: S4 Optimized Trajectory (speed color)
       Namespaces: {}
       Topic:
@@ -139,37 +149,6 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /visualization/exp_traj
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Safe Corridors (transparent blue)
-      Namespaces: {}
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/exp_sfc
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Candidate Corridors (pre-overlap check)
-      Namespaces:
-        candidate_sfc: true
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/ciri_debug_mkr
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Goal and Debug (Yellow)
-      Namespaces: {}
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/goal
     - Class: rviz_default_plugins/Marker
       Enabled: true
       Name: Goal Marker (Sphere + Arrow)
@@ -222,17 +201,25 @@ Visualization Manager:
       Class: rviz_default_plugins/TF
   Views:
     Current:
-      Class: rviz_default_plugins/Orbit
-      Distance: 18
-      Focal Point:
-        X: 0
-        Y: 0
-        Z: 1.5
-      Name: Current View
-      Near Clip Distance: 0.01
-      Pitch: 0.55
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Top Down (map view)
+      Scale: 10
       Target Frame: <Fixed Frame>
-      Yaw: 0.8
+      Value: TopDownOrtho (rviz)
+      X: 0
+      Y: 0
+    Saved:
+      - Class: rviz_default_plugins/Orbit
+        Distance: 18
+        Focal Point:
+          X: 0
+          Y: 0
+          Z: 1.5
+        Name: 3D Perspective
+        Near Clip Distance: 0.01
+        Pitch: 0.55
+        Target Frame: <Fixed Frame>
+        Yaw: 0.8
 Window Geometry:
   Height: 900
   Width: 1500

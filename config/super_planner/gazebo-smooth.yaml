@@ -19,6 +19,8 @@ super_planner:
   goal_yaw_en: false
   goal_vel_en: false
   corridor_bound_dis: 0.8
+  # increasing the corridor length decreases the number of polynomials to solve
+  # thus increase the smoothness with less constraints.
   corridor_line_max_length: 6.0
   safe_corridor_line_max_length: 6.0
   iris_iter_num: 2

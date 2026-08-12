@@ -84,7 +84,11 @@ int main(int argc, char** argv) {
     std::string cfg_path = "click.yaml";
     node->declare_parameter("config_name", cfg_path);
     node->get_parameter("config_name", cfg_path);
-    cfg_path = CONFIG_FILE_DIR(cfg_path);
+    // config_name is either an absolute path (e.g. the project-level config/
+    // passed by offboard.launch.py) or a file name under <ROOT_DIR>/config/.
+    if (cfg_path.empty() || cfg_path.front() != '/') {
+        cfg_path = CONFIG_FILE_DIR(cfg_path);
+    }
     fsm_ptr->init(node,cfg_path);
 
     // 打印启动信息（ROS2风格）
