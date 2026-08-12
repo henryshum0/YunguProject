@@ -1,6 +1,8 @@
 import importlib
 import os
+import re
 import sys
+import tempfile
 from pathlib import Path
 
 from launch import LaunchDescription
@@ -65,16 +67,96 @@ def generate_launch_description():
             print(f'[offboard.launch] WARNING: could not read {sim_config_path}: '
                   f'{exc}; falling back to {default_cloud_in}', file=sys.stderr)
 
-    # SUPER planner config. It lives with the rest of the project config in
-    # config/super_planner/ (gazebo-smooth.yaml); fsm_node accepts an absolute
-    # path via config_name. Fall back to a bare file name resolved against
-    # super_planner/config/ if the project-level file is missing.
-    default_planner_config = 'gazebo-smooth.yaml'
+    # Project root (ancestor containing config/simulation.yaml).
     project_root = _find_project_root()
+
+    # Offboard tuning params live in config/offboard.yaml (read via the shared
+    # config/sim_config.py helper). ROS2 topic names are deliberately NOT here;
+    # they stay as launch args (cmd_topic, odom_topic, cloud_*, *_topic, ...).
+    offboard_cfg_path = None
     if project_root is not None:
-        planner_cfg = project_root / 'config' / 'super_planner' / 'gazebo-smooth.yaml'
+        _of_cand = project_root / 'config' / 'offboard.yaml'
+        if _of_cand.is_file():
+            offboard_cfg_path = str(_of_cand)
+
+    def _offboard_cfg(key, default):
+        if sim_config is None or offboard_cfg_path is None:
+            return default
+        try:
+            return sim_config.get_value(offboard_cfg_path,
+                                        f'offboard.{key}', default)
+        except Exception:  # noqa: BLE001 - keep the launch working
+            return default
+
+    # SUPER planner config: a file name (or absolute path) from config/offboard.yaml.
+    # A bare name is resolved against config/super_planner/ first; otherwise it
+    # stays bare and fsm_node resolves it against super_planner/config/.
+    planner_cfg_name = str(_offboard_cfg('planner_config', 'gazebo-smooth.yaml'))
+    default_planner_config = planner_cfg_name
+    if project_root is not None:
+        planner_cfg = project_root / 'config' / 'super_planner' / planner_cfg_name
         if planner_cfg.is_file():
             default_planner_config = str(planner_cfg)
+
+    # Offboard state-machine tuning defaults (config/offboard.yaml).
+    cfg_update_rate = str(_offboard_cfg('update_rate', 100.0))
+    cfg_planner_cmd_hz = str(_offboard_cfg('planner_cmd_hz', 10.0))
+    cfg_planner_enter_delay = str(_offboard_cfg('planner_enter_delay', 0.5))
+    cfg_planner_exit_delay = str(_offboard_cfg('planner_exit_delay', 1.0))
+    cfg_arm_wait = str(_offboard_cfg('arm_wait', 2.0))
+    cfg_default_height = str(_offboard_cfg('default_height', 5.0))
+    cfg_landing_vel = str(_offboard_cfg('landing_vel', 0.5))
+    cfg_landing_z = str(_offboard_cfg('landing_z', 0.15))
+
+    # Planner-config overrides applied by the launch (SUPER reads these from
+    # its YAML file, not ROS params). A temporary copy of the planner config is
+    # generated and fsm_node is pointed at it, only when something changes.
+    fsm_config_path = default_planner_config
+
+    # Master visualization switch (config/offboard.yaml): controls RViz windows,
+    # the birdview overlay, and SUPER's marker publishing.
+    visualization = _offboard_cfg('visualization', True)
+    if isinstance(visualization, str):
+        visualization = visualization.strip().lower() in ('1', 'true', 'yes')
+    cfg_visualization = 'true' if visualization else 'false'
+
+    # Goal height -> fsm.click_height.
+    goal_height = _offboard_cfg('goal_height', None)
+    if goal_height is not None:
+        try:
+            goal_height = float(goal_height)
+        except (TypeError, ValueError):
+            goal_height = None
+
+    if (goal_height is not None or not visualization) and os.path.isfile(default_planner_config):
+        try:
+            with open(default_planner_config, encoding='utf-8') as f:
+                text = f.read()
+            new_text = text
+            if goal_height is not None:
+                m = re.search(r'click_height\s*:\s*([^\s#]+)', new_text)
+                cur = float(m.group(1)) if m else None
+                if cur is None or abs(cur - goal_height) > 1e-9:
+                    new_text, _ = re.subn(
+                        r'(click_height\s*:\s*)[^\s#]+',
+                        r'\g<1>' + repr(goal_height), new_text, count=1)
+            if not visualization:
+                new_text, _ = re.subn(
+                    r'(visualization_en\s*:\s*)[^\s#]+',
+                    r'\g<1>false', new_text, count=1)
+            if new_text != text:
+                out = os.path.join(
+                    tempfile.gettempdir(),
+                    f'yungu_planner_{os.path.basename(default_planner_config)}')
+                with open(out, 'w', encoding='utf-8') as f:
+                    f.write(new_text)
+                fsm_config_path = out
+                print(f'[offboard.launch] planner config overrides -> {out}',
+                      file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001 - keep the launch working
+            print(f'[offboard.launch] WARNING: could not apply planner config '
+                  f'overrides ({exc}); using original planner config',
+                  file=sys.stderr)
 
     # Birdview aerial overlay (top-down map reference in RViz). The tuneable
     # transform parameters live in config/birdview.yaml (read via the shared
@@ -104,30 +186,28 @@ def generate_launch_description():
         if cand.is_file():
             default_birdview_image = str(cand)
 
-    # RViz configs shipped with the offboard package.
-    #   birdview.rviz (default): clean top-down planning view - aerial birdview
-    #       overlay + occupied map + trajectory (no debug markers).
-    #   freelook.rviz: full 3D debug view - corridors, trajectories, markers,
-    #       free-rotate Orbit camera, no birdview overlay.
-    #   x500.rviz: minimal sensor-only view (fallback).
-    # rviz_config takes a bare file name resolved against the package rviz/
-    # dir, e.g. rviz_config:=freelook.rviz.
     default_rviz_config = 'birdview.rviz'
 
     return LaunchDescription([
         # ------------------------------------------------------------------
         # Launch arguments
         # ------------------------------------------------------------------
-        DeclareLaunchArgument('update_rate', default_value='100.0'),
-        DeclareLaunchArgument('planner_cmd_hz', default_value='10.0',
+        DeclareLaunchArgument('update_rate', default_value=cfg_update_rate,
+                              description='State machine update rate [Hz]'),
+        DeclareLaunchArgument('planner_cmd_hz', default_value=cfg_planner_cmd_hz,
                               description='Cmd rate threshold for planner hand-over [Hz]'),
-        DeclareLaunchArgument('planner_enter_delay', default_value='0.5'),
-        DeclareLaunchArgument('planner_exit_delay', default_value='1.0'),
-        DeclareLaunchArgument('arm_wait', default_value='2.0'),
-        DeclareLaunchArgument('default_height', default_value='5.0',
+        DeclareLaunchArgument('planner_enter_delay', default_value=cfg_planner_enter_delay,
+                              description='Delay before entering planner mode [s]'),
+        DeclareLaunchArgument('planner_exit_delay', default_value=cfg_planner_exit_delay,
+                              description='Delay before exiting planner mode [s]'),
+        DeclareLaunchArgument('arm_wait', default_value=cfg_arm_wait,
+                              description='Wait after arming before OFFBOARD [s]'),
+        DeclareLaunchArgument('default_height', default_value=cfg_default_height,
                               description='NED hover height after OFFBOARD (negative = up) [m]'),
-        DeclareLaunchArgument('landing_vel', default_value='0.5'),
-        DeclareLaunchArgument('landing_z', default_value='0.15'),
+        DeclareLaunchArgument('landing_vel', default_value=cfg_landing_vel,
+                              description='Landing descent velocity [m/s]'),
+        DeclareLaunchArgument('landing_z', default_value=cfg_landing_z,
+                              description='Final landing height [m]'),
         DeclareLaunchArgument('cmd_topic', default_value='/planning/pos_cmd'),
         DeclareLaunchArgument('cloud_in_topic', default_value=default_cloud_in,
                               description='Raw gz lidar cloud (lidar_link frame); '
@@ -148,7 +228,7 @@ def generate_launch_description():
                               description='RViz 2D Goal Pose topic'),
         DeclareLaunchArgument('goal_marker_topic', default_value='/goal_marker',
                               description='Goal visualization marker topic'),
-        DeclareLaunchArgument('rviz', default_value='true',
+        DeclareLaunchArgument('rviz', default_value=cfg_visualization,
                               description='Launch the RViz2 visualization windows'),
         DeclareLaunchArgument('rviz_config', default_value=default_rviz_config,
                               description='Config for the planning window '
@@ -159,11 +239,11 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz_freelook_config', default_value='freelook.rviz',
                               description='Config for the 3D debug window '
                                           '(freelook.rviz by default)'),
-        DeclareLaunchArgument('planner_config', default_value=default_planner_config,
+        DeclareLaunchArgument('planner_config', default_value=fsm_config_path,
                               description='SUPER planner config (absolute path under '
                                           'config/super_planner/, or a file name in '
                                           'super_planner/config/)'),
-        DeclareLaunchArgument('birdview', default_value='true',
+        DeclareLaunchArgument('birdview', default_value=cfg_visualization,
                               description='Publish the aerial birdview overlay (/birdview_cloud)'),
         DeclareLaunchArgument('birdview_image', default_value=default_birdview_image,
                               description='Birdview PNG path (default: resources/yungu_birdview.png)'),
