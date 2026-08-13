@@ -16,11 +16,10 @@ colcon build --symlink-install
 
 ## Running the simulation
 
-The full stack (Gazebo + PX4 SITL + MicroXRCEAgent + gz bridge) is launched
-with a single script:
+Start everything with two terminals:
 
 ```bash
-# Terminal 1 — simulator + agent + bridge
+# Terminal 1 — simulator + agent + bridge (Gazebo + PX4 SITL + MicroXRCEAgent + gz bridge)
 ./src/utils/start_sim.sh
 
 # Terminal 2 — offboard state machine + SUPER planner + RViz
@@ -28,30 +27,52 @@ source install/setup.bash
 ros2 launch offboard offboard.launch.py
 ```
 
-### Simulation config (`config/simulation.yaml`)
+`start_sim.sh` picks the vehicle model and map from `config/simulation.yaml`,
+waits for PX4 to report "Ready for takeoff", then starts the MicroXRCEAgent and
+the GZ↔ROS bridge (logs in `/tmp/yungu_sim/`). Stop everything with `Ctrl+C`,
+or run `./src/utils/stop_sim.sh` if anything lingers.
 
-The vehicle **model**, the Gazebo **map/world**, the GZ version, the uXRCE-DDS
-port, and the GZ→ROS **bridge topics** are all chosen in
-[`config/simulation.yaml`](config/simulation.yaml) — the single source of truth
-for the sim. Edit it, then run `start_sim.sh` with no arguments:
+Everything else — the offboard state machine, SUPER planner, birdview overlay
+and both RViz windows — comes up with `offboard.launch.py`.
 
-| Key               | Description                                                        |
-|-------------------|--------------------------------------------------------------------|
-| `model`           | Gazebo vehicle model / PX4 gz airframe (e.g. `x500_lidar`)         |
-| `world`           | Gazebo map (.sdf in `VisionFlow-PX4/Tools/simulation/gz/worlds`, e.g. `yungu`) |
-| `gz_version`      | Gazebo distro (`harmonic`)                                         |
-| `xrce_port`       | UDP port for the MicroXRCEAgent                                    |
-| `bridge.enabled`  | Launch the GZ↔ROS `parameter_bridge`                               |
-| `bridge.tf_enabled` | Launch the TF bridge (`tf_bridge.py`)                            |
-| `bridge.topics`   | GZ topics bridged into ROS 2 (e.g. `/x500_lidar/scan`, `/x500_lidar/scan/points`) |
+## Configuration files
 
-`model` + `world` combine into the PX4 make target `gz_<model>_<world>`
-(e.g. `gz_x500_lidar_yungu`). To see the effective values and the full list of
-available models/maps:
+All run-time configuration lives in the [`config/`](config/) folder and is read
+through the shared [`config/sim_config.py`](config/sim_config.py) helper, so
+edits take effect on the next launch (no rebuild needed).
 
-```bash
-./src/utils/start_sim.sh --help
-```
+| File | Purpose | Key parameters |
+|------|---------|----------------|
+| [`config/simulation.yaml`](config/simulation.yaml) | Simulator: Gazebo vehicle model, map/world, uXRCE-DDS port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
+| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner tuning + waypoint following | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `landing_vel`, `landing_z`, `goal_height`, `planner_config`, `waypoint_reached_dist`, `waypoint_hold_time` |
+| [`config/birdview.yaml`](config/birdview.yaml) | Aerial birdview overlay on the ground plane (top-down map reference in RViz) | `extent_x`, `extent_y`, `z`, `offset_x`, `offset_y`, `yaw`, `max_points` |
+| [`config/super_planner/gazebo-smooth.yaml`](config/super_planner/gazebo-smooth.yaml) | SUPER planner behaviour (frontend, trajectory optimization, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
+
+Notable behaviour:
+
+- `simulation.yaml` is the single source of truth for the sim: `model` +
+  `world` combine into the PX4 make target `gz_<model>_<world>`
+  (e.g. `gz_x500_lidar_yungu`). `./src/utils/start_sim.sh --help` lists the
+  available models/maps.
+- `offboard.yaml` `visualization: false` runs headless — no RViz, no birdview
+  overlay, and SUPER's marker publishing is turned off.
+- `offboard.yaml` `goal_height` overrides SUPER's `fsm.click_height` (goal
+  height used by the RViz "2D Goal Pose" tool); `planner_config` selects which
+  SUPER config is used.
+- Env-var overrides still work for one-off sim runs without editing the file,
+  e.g. `PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./src/utils/start_sim.sh`,
+  `XRCE_PORT=2018`, or `HEADLESS=1` (no Gazebo GUI).
+
+### RViz views
+
+`offboard.launch.py` opens two RViz windows together (both optional):
+
+- **birdview** — top-down planning view: aerial map + occupied map + trajectory
+  (planning window, `rviz_config:=birdview.rviz` by default)
+- **freelook** — free-rotate 3D debug view: corridors, trajectories, markers
+  (debug window, `rviz_freelook_config:=freelook.rviz` by default)
+
+Toggle them with `rviz:=true/false` and `rviz_freelook:=true/false`.
 
 ### Env-var overrides
 

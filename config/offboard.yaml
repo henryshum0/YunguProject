@@ -1,0 +1,50 @@
+# ============================================================================
+# Offboard state machine + planner tuning
+# ============================================================================
+# Tuning parameters for the PX4 offboard state machine and the SUPER planner.
+# Read by src/offboard/launch/offboard.launch.py (via config/sim_config.py).
+#
+# ROS2 topic names are deliberately NOT here - they stay as launch arguments
+# (cmd_topic, odom_topic, cloud_in_topic, local_pos_topic, status_topic,
+# goal_topic, goal_marker_topic, ...). Changes here take effect on the next
+# `ros2 launch offboard offboard.launch.py`.
+# ----------------------------------------------------------------------------
+
+offboard: 
+  visualization: true
+
+  # State machine update rate [Hz]
+  update_rate: 100.0
+
+  # Cmd rate threshold for planner hand-over [Hz]
+  planner_cmd_hz: 80.0
+
+  # Delay before/after switching to the planner [s]
+  planner_enter_delay: 0.5
+  planner_exit_delay: 1.0
+
+  # Wait after ARM before switching to OFFBOARD [s]
+  arm_wait: 2.0
+
+  # NED hover height after OFFBOARD (negative = up) [m]
+  default_height: 5.0
+
+  # Goal height used by SUPER's 2D Goal Pose planner [m]. This overrides
+  # fsm.click_height in the SUPER planner config
+  # (config/super_planner/<planner_config>).
+  goal_height: 5.0
+
+  # Landing descent velocity [m/s] and final landing height [m]
+  landing_vel: 0.5
+  landing_z: 0.15
+
+  # SUPER planner config: a file name (resolved against config/super_planner/,
+  # falling back to super_planner/config/) or an absolute path.
+  planner_config: gazebo-3m.yaml
+
+  # Waypoint following: buffered waypoints (/waypoint_pose -> /waypoint_buffer)
+  # are flown one at a time. A waypoint is "reached" when the drone is within
+  # waypoint_reached_dist [m] horizontally; it then holds for
+  # waypoint_hold_time [s] before the next waypoint is sent to SUPER.
+  waypoint_reached_dist: 3.0
+  waypoint_hold_time: 0.0
