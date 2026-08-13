@@ -107,6 +107,8 @@ def generate_launch_description():
     cfg_default_height = str(_offboard_cfg('default_height', 5.0))
     cfg_landing_vel = str(_offboard_cfg('landing_vel', 0.5))
     cfg_landing_z = str(_offboard_cfg('landing_z', 0.15))
+    cfg_waypoint_reached_dist = str(_offboard_cfg('waypoint_reached_dist', 0.5))
+    cfg_waypoint_hold_time = str(_offboard_cfg('waypoint_hold_time', 2.0))
 
     # Planner-config overrides applied by the launch (SUPER reads these from
     # its YAML file, not ROS params). A temporary copy of the planner config is
@@ -227,9 +229,22 @@ def generate_launch_description():
         DeclareLaunchArgument('status_topic', default_value='/fmu/out/vehicle_status_v4',
                               description='PX4 vehicle status topic (note the _v4 suffix)'),
         DeclareLaunchArgument('goal_topic', default_value='/goal_pose',
-                              description='RViz 2D Goal Pose topic'),
-        DeclareLaunchArgument('goal_marker_topic', default_value='/goal_marker',
-                              description='Goal visualization marker topic'),
+                              description='Topic the offboard node uses to hand the current '
+                                          'waypoint/goal to SUPER (reserved)'),
+        DeclareLaunchArgument('waypoint_topic', default_value='/waypoint_pose',
+                              description='Waypoint ingestion topic: publish waypoints here '
+                                          '(e.g. re-target the RViz 2D Goal Pose tool)'),
+        DeclareLaunchArgument('waypoint_buffer_topic', default_value='/waypoint_buffer',
+                              description='Topic where the goal marker node forwards buffered '
+                                          'waypoints for the offboard node'),
+        DeclareLaunchArgument('waypoint_marker_topic', default_value='/waypoint_markers',
+                              description='Topic where the offboard node publishes the waypoint '
+                                          'buffer state as a MarkerArray (regularly)'),
+        DeclareLaunchArgument('waypoint_reached_dist', default_value=cfg_waypoint_reached_dist,
+                              description='Horizontal distance [m] to consider a waypoint reached'),
+        DeclareLaunchArgument('waypoint_hold_time', default_value=cfg_waypoint_hold_time,
+                              description='Hold time [s] between reaching a waypoint and starting '
+                                          'the next one'),
         DeclareLaunchArgument('rviz', default_value=cfg_visualization,
                               description='Launch the RViz2 visualization windows'),
         DeclareLaunchArgument('rviz_config', default_value=default_rviz_config,
@@ -271,6 +286,11 @@ def generate_launch_description():
                 'cmd_topic': LaunchConfiguration('cmd_topic'),
                 'local_pos_topic': LaunchConfiguration('local_pos_topic'),
                 'status_topic': LaunchConfiguration('status_topic'),
+                'goal_topic': LaunchConfiguration('goal_topic'),
+                'waypoint_buffer_topic': LaunchConfiguration('waypoint_buffer_topic'),
+                'waypoint_reached_dist': LaunchConfiguration('waypoint_reached_dist'),
+                'waypoint_hold_time': LaunchConfiguration('waypoint_hold_time'),
+                'waypoint_marker_topic': LaunchConfiguration('waypoint_marker_topic'),
             }],
         ),
 
@@ -296,7 +316,12 @@ def generate_launch_description():
         ),
 
         # ------------------------------------------------------------------
-        # Goal marker node (RViz 2D Goal Pose -> /goal_marker markers)
+        # Goal marker node (waypoint ingestion -> waypoint buffer)
+        #   - subscribes /waypoint_pose (user waypoints, e.g. RViz 2D Goal Pose
+        #     re-targeted to this topic)
+        #   - forwards the waypoints to /waypoint_buffer for the offboard node
+        #     to buffer and fly (offboard visualizes the buffer on
+        #     /waypoint_markers)
         # ------------------------------------------------------------------
         Node(
             package='offboard',
@@ -304,8 +329,8 @@ def generate_launch_description():
             name='goal_marker_node',
             output='screen',
             parameters=[{
-                'goal_topic': LaunchConfiguration('goal_topic'),
-                'goal_marker_topic': LaunchConfiguration('goal_marker_topic'),
+                'waypoint_topic': LaunchConfiguration('waypoint_topic'),
+                'waypoint_buffer_topic': LaunchConfiguration('waypoint_buffer_topic'),
             }],
         ),
 

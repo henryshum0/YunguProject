@@ -26,6 +26,12 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     cmd_topic_ = declare_parameter("cmd_topic", cmd_topic_);
     local_pos_topic_ = declare_parameter("local_pos_topic", local_pos_topic_);
     status_topic_ = declare_parameter("status_topic", status_topic_);
+    goal_topic_ = declare_parameter("goal_topic", goal_topic_);
+    waypoint_buffer_topic_ = declare_parameter("waypoint_buffer_topic", waypoint_buffer_topic_);
+    waypoint_reached_dist_ = declare_parameter("waypoint_reached_dist", waypoint_reached_dist_);
+    waypoint_hold_time_ = declare_parameter("waypoint_hold_time", waypoint_hold_time_);
+    waypoint_marker_topic_ = declare_parameter("waypoint_marker_topic", waypoint_marker_topic_);
+    waypoint_marker_rate_ = declare_parameter("waypoint_marker_rate", waypoint_marker_rate_);
 
     const auto update_period = std::chrono::milliseconds(static_cast<int>(1000.0 / update_rate_));
 
@@ -57,6 +63,24 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     status_sub_ = create_subscription<px4_msgs::msg::VehicleStatus>(
         status_topic_, qos_px4,
         std::bind(&OffboardNode::statusCallback, this, std::placeholders::_1));
+
+    // --- Waypoint goal publisher (current waypoint -> SUPER, one at a time) ---
+    // SUPER subscribes with best_effort/volatile, so match that QoS exactly.
+    goal_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>(
+        goal_topic_, qos_super);
+
+    // --- Waypoint buffer (buffered waypoints forwarded by the goal marker node) ---
+    waypoint_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
+        waypoint_buffer_topic_, rclcpp::QoS(10).reliable(),
+        std::bind(&OffboardNode::waypointCallback, this, std::placeholders::_1));
+
+    // --- Waypoint buffer visualization (MarkerArray, latched + regular) ---
+    waypoint_marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
+        waypoint_marker_topic_, rclcpp::QoS(1).transient_local());
+    const auto marker_period = std::chrono::milliseconds(
+        static_cast<int>(1000.0 / std::max(waypoint_marker_rate_, 1.0)));
+    marker_timer_ = create_wall_timer(marker_period,
+                                      std::bind(&OffboardNode::publishWaypointMarkers, this));
 
     // --- Landing service ---
     land_srv_ = create_service<std_srvs::srv::Trigger>(
@@ -151,6 +175,173 @@ void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Re
     setState(State::LANDING);
     res->success = true;
     res->message = "Landing";
+}
+
+// ======================================================================
+//  Waypoint buffer / following
+// ======================================================================
+
+void OffboardNode::waypointCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+{
+    waypoint_buffer_.push_back(*msg);
+    RCLCPP_INFO(get_logger(), "Waypoint buffered (#%zu): (%.2f, %.2f, %.2f)",
+                waypoint_buffer_.size(),
+                msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
+}
+
+void OffboardNode::publishNextWaypoint()
+{
+    if (waypoint_buffer_.empty()) {
+        return;
+    }
+
+    current_wp_ = waypoint_buffer_.front();
+    waypoint_buffer_.pop_front();
+    wp_reached_ = false;
+    const size_t seq = ++waypoint_seq_;
+
+    // Forward this single waypoint to SUPER (world frame, ENU), which plans to
+    // it. /goal_pose is reserved for exactly this.
+    geometry_msgs::msg::PoseStamped goal;
+    goal.header.stamp = now();
+    goal.header.frame_id = current_wp_->header.frame_id.empty()
+                               ? "world" : current_wp_->header.frame_id;
+    goal.pose = current_wp_->pose;
+    goal_pub_->publish(goal);
+
+    RCLCPP_INFO(get_logger(), "Waypoint #%zu sent to SUPER: (%.2f, %.2f, %.2f), "
+                "%zu still buffered",
+                seq,
+                goal.pose.position.x, goal.pose.position.y, goal.pose.position.z,
+                waypoint_buffer_.size());
+}
+
+void OffboardNode::waypointTick()
+{
+    // Run during flight states only (never during takeoff/landing). Checking
+    // in PLANNER as well lets a reached waypoint advance to the next goal
+    // immediately, without waiting for SUPER to drop out of the planner.
+    if (state_ != State::IDLE && state_ != State::PLANNER) {
+        return;
+    }
+
+    // A waypoint is being pursued (already sent to SUPER).
+    if (current_wp_) {
+        // Wait for the drone to reach the waypoint (horizontal distance).
+        if (!wp_reached_ && local_pos_ && local_pos_->xy_valid) {
+            // PX4 local position is NED; convert to ENU (planner convention).
+            const double enu_x = local_pos_->y;
+            const double enu_y = local_pos_->x;
+            const double dx = enu_x - current_wp_->pose.position.x;
+            const double dy = enu_y - current_wp_->pose.position.y;
+            const double dist = std::hypot(dx, dy);
+            if (dist <= waypoint_reached_dist_) {
+                wp_reached_ = true;
+                wp_reached_t_ = now();
+                RCLCPP_INFO(get_logger(),
+                            "Waypoint reached (dist=%.2f m) - holding %.1f s",
+                            dist, waypoint_hold_time_);
+            }
+        }
+        // Hold at the reached waypoint, then advance to the next one.
+        if (wp_reached_ && (now() - wp_reached_t_).seconds() >= waypoint_hold_time_) {
+            current_wp_.reset();
+            wp_reached_ = false;
+            RCLCPP_INFO(get_logger(), "Waypoint hold complete - advancing");
+            if (!waypoint_buffer_.empty()) {
+                publishNextWaypoint();
+            }
+        }
+        return;
+    }
+
+    // No active waypoint: start the next one if any are buffered.
+    if (!waypoint_buffer_.empty()) {
+        publishNextWaypoint();
+    }
+}
+
+void OffboardNode::publishWaypointMarkers()
+{
+    visualization_msgs::msg::MarkerArray markers;
+
+    // Clear stale markers from the previous publish.
+    visualization_msgs::msg::Marker clear;
+    clear.header.stamp = now();
+    clear.header.frame_id = "world";
+    clear.ns = "";
+    clear.id = 0;
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    markers.markers.push_back(clear);
+
+    // Green spheres for the buffered (pending) waypoints.
+    int i = 0;
+    for (const auto &wp : waypoint_buffer_) {
+        visualization_msgs::msg::Marker m;
+        m.header.stamp = now();
+        m.header.frame_id = "world";
+        m.ns = "waypoint";
+        m.id = i++;
+        m.type = visualization_msgs::msg::Marker::SPHERE;
+        m.action = visualization_msgs::msg::Marker::ADD;
+        m.pose.position = wp.pose.position;
+        m.scale.x = 2.0f;
+        m.scale.y = 2.0f;
+        m.scale.z = 2.0f;
+        m.color.r = 0.0f;
+        m.color.g = 1.0f;
+        m.color.b = 0.0f;
+        m.color.a = 1.0f;
+        markers.markers.push_back(m);
+    }
+
+    // Yellow sphere for the waypoint currently being pursued.
+    if (current_wp_) {
+        visualization_msgs::msg::Marker m;
+        m.header.stamp = now();
+        m.header.frame_id = "world";
+        m.ns = "active";
+        m.id = 0;
+        m.type = visualization_msgs::msg::Marker::SPHERE;
+        m.action = visualization_msgs::msg::Marker::ADD;
+        m.pose.position = current_wp_->pose.position;
+        m.scale.x = 2.0f;
+        m.scale.y = 2.0f;
+        m.scale.z = 2.0f;
+        m.color.r = 1.0f;
+        m.color.g = 1.0f;
+        m.color.b = 0.0f;
+        m.color.a = 1.0f;
+        markers.markers.push_back(m);
+    }
+
+    // Cyan line connecting the route: the active waypoint (if any) then the
+    // buffered waypoints, in order. Only drawn with >= 2 points.
+    {
+        visualization_msgs::msg::Marker line;
+        line.header.stamp = now();
+        line.header.frame_id = "world";
+        line.ns = "route";
+        line.id = 0;
+        line.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        line.action = visualization_msgs::msg::Marker::ADD;
+        line.scale.x = 1.0f;  // line width [m]
+        line.color.r = 0.0f;
+        line.color.g = 1.0f;
+        line.color.b = 1.0f;
+        line.color.a = 1.0f;
+        if (current_wp_) {
+            line.points.push_back(current_wp_->pose.position);
+        }
+        for (const auto &wp : waypoint_buffer_) {
+            line.points.push_back(wp.pose.position);
+        }
+        if (line.points.size() >= 2) {
+            markers.markers.push_back(line);
+        }
+    }
+
+    waypoint_marker_pub_->publish(markers);
 }
 
 // ======================================================================
@@ -450,6 +641,19 @@ void OffboardNode::timerCallback()
                                 hold_x_, hold_y_, hold_z_);
                     have_hold_ = true;
                 }
+                // Exiting the planner means either all buffered waypoints were
+                // flown (buffer already empty) or a waypoint failed; either way
+                // discard any remaining waypoints and the in-flight one so the
+                // drone stops at the current goal.
+                const size_t pending = waypoint_buffer_.size();
+                waypoint_buffer_.clear();
+                current_wp_.reset();
+                wp_reached_ = false;
+                if (pending > 0) {
+                    RCLCPP_INFO(get_logger(),
+                                "Planner exited with %zu waypoint(s) unflown - "
+                                "waypoint buffer cleared", pending);
+                }
                 setState(State::IDLE);
                 break;
             }
@@ -499,6 +703,11 @@ void OffboardNode::timerCallback()
             break;
         }
     }
+
+    // Waypoint following runs on every state-machine tick (internally gated to
+    // IDLE/PLANNER), so a waypoint reached while SUPER is still planning can
+    // advance to the next one immediately.
+    waypointTick();
 }
 
 }  // namespace offboard

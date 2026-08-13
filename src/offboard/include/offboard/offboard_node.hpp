@@ -3,7 +3,9 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <deque>
+#include <optional>
 
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/trajectory_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
@@ -11,6 +13,7 @@
 #include <px4_msgs/msg/vehicle_status.hpp>
 #include <mars_quadrotor_msgs/msg/position_command.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 namespace offboard
 {
@@ -70,6 +73,18 @@ private:
     std::string local_pos_topic_{"/fmu/out/vehicle_local_position_v1"};
     /// PX4 vehicle status topic; MESSAGE_VERSION=4 → "_v4" suffix.
     std::string status_topic_{"/fmu/out/vehicle_status_v4"};
+    /// Waypoint following: horizontal distance [m] to consider a waypoint
+    /// reached, and hold time [s] between reaching one and starting the next.
+    double waypoint_reached_dist_{0.5};
+    double waypoint_hold_time_{2.0};
+    /// Topic the current waypoint is published to for SUPER (one at a time).
+    std::string goal_topic_{"/goal_pose"};
+    /// Topic where buffered waypoints arrive (published by the goal marker node).
+    std::string waypoint_buffer_topic_{"/waypoint_buffer"};
+    /// Topic the waypoint buffer is visualized on (MarkerArray, published regularly).
+    std::string waypoint_marker_topic_{"/waypoint_markers"};
+    /// Rate [Hz] at which the waypoint buffer markers are (re)published.
+    double waypoint_marker_rate_{10.0};
 
     // ------------------------------------------------------------------
     //  Publishers / Subscribers / Services
@@ -82,6 +97,10 @@ private:
     rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr status_sub_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_srv_;
     rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::TimerBase::SharedPtr marker_timer_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr waypoint_marker_pub_;
 
     // ------------------------------------------------------------------
     //  Internal state
@@ -112,6 +131,13 @@ private:
     bool planner_cond_val_{false};
     rclcpp::Time planner_cond_t_;
 
+    // buffered waypoints (run consecutively); current one is sent to SUPER
+    std::deque<geometry_msgs::msg::PoseStamped> waypoint_buffer_;
+    std::optional<geometry_msgs::msg::PoseStamped> current_wp_;
+    bool wp_reached_{false};
+    rclcpp::Time wp_reached_t_;
+    size_t waypoint_seq_{0};
+
     // ------------------------------------------------------------------
     //  Callbacks
     // ------------------------------------------------------------------
@@ -121,6 +147,7 @@ private:
     void statusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr msg);
     void landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
                       std::shared_ptr<std_srvs::srv::Trigger::Response> res);
+    void waypointCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
 
     // ------------------------------------------------------------------
     //  State helpers
@@ -155,6 +182,13 @@ private:
     // ------------------------------------------------------------------
     void updatePlannerActivity();
     double cmdRateHz() const;
+
+    // ------------------------------------------------------------------
+    //  Waypoint following
+    // ------------------------------------------------------------------
+    void waypointTick();
+    void publishNextWaypoint();
+    void publishWaypointMarkers();
 
     // ------------------------------------------------------------------
     //  Conversion (ENU → NED)
