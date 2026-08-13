@@ -159,19 +159,13 @@ ros2 topic echo /lidar_slam/odom --once --qos-reliability best_effort
 ros2 topic echo /cloud_registered --once --qos-reliability best_effort
 ```
 
-**fastlio比较调试**
-```
-source install/setup.bash
-python3 temp/check_pos3.py 60
-```
 **无GUI的fastlio启动**
 ```
 HEADLESS=1 ./temp/start_all_fastlio.sh
 ```
 ### FAST-LIO 融合阶段性结果（2026-08）
 
-在 `yungu` 世界中以 Gazebo 真值（`/odom`）为基准，使用
-[`temp/check_pos4.py`](temp/check_pos4.py)（分场景归因、输出 CSV）实测：
+在 `yungu` 世界中以 Gazebo 真值（`/odom`）为基准（分场景归因）实测：
 
 | 场景 | 水平误差 | 垂直偏差 | 说明 |
 |---|---|---|---|

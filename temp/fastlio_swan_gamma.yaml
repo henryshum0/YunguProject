@@ -1,9 +1,9 @@
-# FAST-LIO config for Gazebo simulation (x500_lidar_yungu)
+# FAST-LIO config for Gazebo simulation (swan_gamma_v2_yungu)
 #
-# LiDAR:  /x500_lidar/scan/points  (gz-sim bridged PointCloud2, 720×16, 10 Hz)
+# LiDAR:  /swan_gamma_v2/scan/points  (gz-sim bridged PointCloud2, 720×16, 10 Hz)
 # IMU:    /livox/imu               (bridged from PX4 SensorCombined)
 #
-# The LiDAR sits 0.16 m above base_link (= IMU origin in x500_base).
+# The LiDAR sits 0.16 m above base_link (= IMU origin in swan_gamma_v2).
 
 /**:
     ros__parameters:
@@ -17,7 +17,7 @@
         map_file_path: "./test.pcd"
 
         common:
-            lid_topic:  "/x500_lidar/scan/points_timed"
+            lid_topic:  "/swan_gamma_v2/scan/points_timed"
             imu_topic:  "/livox/imu"
             time_sync_en: false
             time_offset_lidar_to_imu: 0.0
@@ -26,7 +26,7 @@
             lidar_type: 0             # default_handler: no ring/time assumptions,
                                       # best for Gazebo instantaneous scan
             scan_line: 16
-            scan_rate: 20
+            scan_rate: 10             # swan_gamma_v2 lidar update_rate = 10 Hz
             timestamp_unit: 2
             blind: 0.5
 

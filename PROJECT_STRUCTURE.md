@@ -129,15 +129,13 @@
 | 文件 | 作用 |
 |------|------|
 | `start_all_fastlio.sh` | **一键全栈**：GPU + PX4 + FAST-LIO 链 + EKF2 融合 + planner + RViz |
-| `start_all.sh` | 一键全栈（Gazebo 真值模式，调试用） |
-| `start_sim_gpu.sh` | GPU 强制仿真 + 控制链（HEADLESS 支持） |
 | `gazebo_imu_bridge.py` | PX4 sensor_combined (FRD) → /livox/imu (ENU)：**轴翻转 + 滚动时间同步** |
 | `add_time_field.py` | Gazebo 点云补 time 字段（瞬时扫描填 0） |
 | `fastlio_px4_bridge.py` | FAST-LIO /Odometry (ENU) → PX4 /fmu/in/vehicle_visual_odometry (NED) |
+| `gt_path_node.py` | Gazebo 真值轨迹（/gt_path），RViz 对比用 |
 | `fastlio_gazebo.yaml` | FAST-LIO 仿真配置（lidar_type:0, 外参单位阵） |
-| `fastlio_live.yaml` | planner 配置（FAST-LIO 直接定位变体） |
+| `fastlio_swan_gamma.yaml` | FAST-LIO 配置（swan_gamma_v2 模型变体，start_all_fastlio.sh 自动选择） |
 | `x500_fastlio.rviz` | FAST-LIO 模式 RViz 配置 |
-| `PROJECT_STRUCTURE.md` | 本文档 |
 
 ---
 
@@ -164,7 +162,6 @@ COM_POWER_OVERRIDE 1   # SITL 电源预检绕过（允许解锁）
 | 官方仿真（真值） | `./src/utils/start_sim.sh` + `ros2 launch offboard offboard.launch.py` |
 | FAST-LIO 全栈 | `./temp/start_all_fastlio.sh` |
 | FAST-LIO 无 GUI | `HEADLESS=1 ./temp/start_all_fastlio.sh` |
-| GPU 强制仿真+控制 | `./temp/start_sim_gpu.sh` |
 | 停止 | `./src/utils/stop_sim.sh` 或 Ctrl+C |
 
 ---

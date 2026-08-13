@@ -167,9 +167,8 @@ ros2 topic echo /cloud_registered --once --qos-reliability best_effort
 
 ### FAST-LIO fusion — measured results (2026-08)
 
-Measured against the Gazebo ground truth (`/odom`) in the `yungu` world,
-using [`temp/check_pos4.py`](temp/check_pos4.py) (scenario-based attribution,
-CSV output):
+Measured against the Gazebo ground truth (`/odom`) in the `yungu` world
+(scenario-based attribution):
 
 | Scenario | Horizontal error | Vertical bias | Notes |
 |---|---|---|---|
@@ -196,3 +195,23 @@ Known bias sources (all accounted for, none a FAST-LIO algorithm bug):
 3. **Vertical drift after flight (+1 m, persists)** — the SLAM has no absolute
    height reference; the z offset gets absorbed into the map and stays locked.
    Use a barometer/height source to constrain z on real hardware.
+
+### Recording & plotting (`cmd_record`)
+
+The [`cmd_record`](src/cmd_record) package records the commanded trajectory
+together with the real drone odometry — one CSV per goal click — and shows a
+live matplotlib plot (plus post-hoc plotting). Run it in a third terminal:
+
+```bash
+# Terminal 3 — recorder + live plot (click a goal in RViz to start recording)
+source install/setup.bash
+ros2 launch cmd_record record.launch.py
+
+# Plot a saved segment afterwards (defaults to the newest CSV in cmd_log/)
+ros2 run cmd_record plot_csv
+```
+
+Each goal click writes `cmd_log/goal_<NNN>_<timestamp>.csv` containing the goal
+position, the commanded trajectory, and the real odometry. Its dependencies
+(numpy, matplotlib, and `python3-tk` for the live plot) are installed by
+`./install_deps.sh`.

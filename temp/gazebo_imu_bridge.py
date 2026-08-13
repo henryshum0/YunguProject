@@ -38,6 +38,8 @@ class GazeboImuBridge(Node):
         self._px4_at_lidar = None  # PX4 time at latest LiDAR frame
         self._last_px4_us = None   # latest PX4 timestamp (None = not seen yet)
         self._last_pub_t = None    # last published IMU time (monotonic clamp)
+        self._rate = 1.0           # PX4→sim clock rate (sim sec per PX4 sec)
+        self._prev_pair = None     # (sim_t, px4_us) of previous lidar frame
         self._lidar_sub = self.create_subscription(
             PointCloud2, lidar_topic, self._lidar_cb, qos_be)
 
@@ -63,6 +65,20 @@ class GazeboImuBridge(Node):
         self._px4_at_lidar = self._last_px4_us  # PX4 time at this LiDAR frame
         self._got_lidar = True
 
+        # Estimate the PX4→sim clock rate from consecutive lidar frames:
+        # rate = d(sim) / d(px4). The PX4 hrt clock runs ~0.7% faster than the
+        # gz sim clock; without this correction the IMU timeline drifts ahead
+        # of the lidar timeline (≈0.7% of runtime) and FAST-LIO's time
+        # alignment degrades until it diverges after a few minutes.
+        if self._prev_pair is not None:
+            ps, pp = self._prev_pair
+            d_sim = t - ps
+            d_px4 = (self._last_px4_us - pp) * 1e-6
+            if d_sim > 0.01 and d_px4 > 0.01:
+                inst = d_sim / d_px4
+                self._rate = 0.9 * self._rate + 0.1 * inst
+        self._prev_pair = (t, self._last_px4_us)
+
     def _cb(self, msg: SensorCombined):
         px4_us = msg.timestamp
         self._last_px4_us = px4_us
@@ -72,7 +88,8 @@ class GazeboImuBridge(Node):
             self._offset_done = True
 
         # IMU time = latest LiDAR frame time + PX4 elapsed since that frame
-        dt = (px4_us - self._px4_at_lidar) * 1e-6
+        # (scaled by the measured PX4→sim clock rate, see _lidar_cb).
+        dt = (px4_us - self._px4_at_lidar) * self._rate * 1e-6
         sim_t = self._lidar_t + dt
 
         # Monotonic clamp — FAST-LIO aborts on regressing timestamps
