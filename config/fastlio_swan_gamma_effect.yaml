@@ -1,9 +1,17 @@
-# FAST-LIO config for Gazebo simulation (x500_lidar_yungu)
+# FAST-LIO config for Gazebo simulation (swan_gamma_v2_yungu) — ikd-Tree incremental map variant
 #
-# LiDAR:  /x500_lidar/scan/points  (gz-sim bridged PointCloud2, 720×16, 10 Hz)
+# Publishes BOTH map streams (RViz shows the accumulated map always + live
+# ikd-Tree deltas on top):
+#   map_en: true           → /Laser_map       (full accumulated map, 1 Hz timer)
+#   effect_map_en: true    → /cloud_effected  (points ikd-Tree added/updated this frame,
+#                                              per-scan — NOT a map, old regions vanish
+#                                              as the drone moves away)
+# Use with: src/utils/start_fastlio.sh (default config for swan_gamma_v2)
+#
+# LiDAR:  /swan_gamma_v2/scan/points  (gz-sim bridged PointCloud2, 720×16, 10 Hz)
 # IMU:    /livox/imu               (bridged from PX4 SensorCombined)
 #
-# The LiDAR sits 0.16 m above base_link (= IMU origin in x500_base).
+# The LiDAR sits 0.16 m above base_link (= IMU origin in swan_gamma_v2).
 
 /**:
     ros__parameters:
@@ -17,7 +25,7 @@
         map_file_path: "./test.pcd"
 
         common:
-            lid_topic:  "/x500_lidar/scan/points_timed"
+            lid_topic:  "/swan_gamma_v2/scan/points_timed"
             imu_topic:  "/livox/imu"
             time_sync_en: false
             time_offset_lidar_to_imu: 0.0
@@ -26,7 +34,7 @@
             lidar_type: 0             # default_handler: no ring/time assumptions,
                                       # best for Gazebo instantaneous scan
             scan_line: 16
-            scan_rate: 20
+            scan_rate: 10             # swan_gamma_v2 lidar update_rate = 10 Hz
             timestamp_unit: 2
             blind: 0.5
 
@@ -52,8 +60,8 @@
                                     # topic and makes RViz/planner alternate between two frames
             dense_publish_en: true
             scan_bodyframe_pub_en: false
-            effect_map_en: false
-            map_en: true               # publish accumulated map /Laser_map
+            effect_map_en: true       # ikd-Tree incremental map → /cloud_effected
+            map_en: true               # accumulated map /Laser_map (always visible in RViz)
 
         pcd_save:
             pcd_save_en: false

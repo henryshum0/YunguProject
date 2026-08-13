@@ -1,23 +1,32 @@
 #!/usr/bin/env bash
 #
-# start_all_fastlio.sh — GPU sim + FAST-LIO + PX4-EKF2 fusion + planner + offboard + RViz
+# start_fastlio.sh — GPU sim + FAST-LIO + PX4-EKF2 fusion + planner + offboard + RViz
 #
 # One-shot launcher aligned with src/utils/start_sim.sh (HEADLESS support etc.)
 # plus the FAST-LIO chain:
 #   - FAST-LIO odometry → PX4 EKF2 (fastlio_px4_bridge → /fmu/in/vehicle_visual_odometry)
 #   - PX4 fused odometry → super_bridge → /lidar_slam/odom + /cloud_registered → planner
+#   - RViz shows the ikd-Tree *incremental* map (effect_map_en) on top of the
+#     accumulated map — old regions fade as the drone moves away.
 #
 # Usage:
-#   ./temp/start_all_fastlio.sh                 # full stack with GUI
-#   HEADLESS=1 ./temp/start_all_fastlio.sh      # no Gazebo GUI
-#   NO_RVIZ=1 ./temp/start_all_fastlio.sh       # skip RViz
+#   ./src/utils/start_fastlio.sh              # full stack with GUI
+#   HEADLESS=1 ./src/utils/start_fastlio.sh   # no Gazebo GUI
+#   NO_RVIZ=1 ./src/utils/start_fastlio.sh    # skip RViz
 #
-# Model & lidar topics follow config/simulation.yaml (model / world), so the
-# script works for x500_lidar and swan_gamma_v2 alike. Override with env vars:
-#   SIM_MODEL=swan_gamma_v2 SIM_WORLD=yungu ./temp/start_all_fastlio.sh
-#   PX4_MODEL=gz_swan_gamma_v2_yungu ./temp/start_all_fastlio.sh  # full target
-#   LIDAR_TOPIC=/swan_gamma_v2/scan ./temp/start_all_fastlio.sh
-#   FASTLIO_CONFIG=temp/fastlio_swan_gamma.yaml ./temp/start_all_fastlio.sh
+# Model & lidar topics follow config/simulation.yaml (model / world). The
+# FAST-LIO config ships for swan_gamma_v2; for other models, override
+# FASTLIO_CONFIG. Other overrides:
+#   SIM_MODEL=swan_gamma_v2 SIM_WORLD=yungu ./src/utils/start_fastlio.sh
+#   PX4_MODEL=gz_swan_gamma_v2_yungu ./src/utils/start_fastlio.sh  # full target
+#   LIDAR_TOPIC=/swan_gamma_v2/scan ./src/utils/start_fastlio.sh
+#   FASTLIO_CONFIG=config/fastlio_swan_gamma_effect.yaml ./src/utils/start_fastlio.sh
+#   RVIZ_CONFIG=fastlio_ikdtree.rviz ./src/utils/start_fastlio.sh
+#   BIRDVIEW_CONFIG=birdview.rviz ./src/utils/start_fastlio.sh  # top-down window config
+#
+# Two RViz windows (same layout as main's start_sim.sh + offboard.launch.py):
+#   - top-down birdview planning window (BIRDVIEW_CONFIG, default birdview.rviz)
+#   - 3D window (RVIZ_CONFIG: accumulated map + ikd-Tree incremental map)
 #
 # Press Ctrl+C to stop everything.
 #
@@ -25,7 +34,7 @@
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+WORKSPACE="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PX4_DIR="${WORKSPACE}/VisionFlow-PX4"
 BRIDGE_SCRIPT="${WORKSPACE}/src/utils/gz_bridges/bridge.sh"
 OFFBOARD_LAUNCH="${WORKSPACE}/src/offboard/launch/offboard.launch.py"
@@ -45,9 +54,15 @@ PX4_MODEL="${PX4_MODEL:-gz_${SIM_MODEL}_${SIM_WORLD}}"
 LIDAR_TOPIC="${LIDAR_TOPIC:-/${SIM_MODEL}/scan}"
 LIDAR_POINTS_TOPIC="${LIDAR_POINTS_TOPIC:-${LIDAR_TOPIC}/points}"
 LIDAR_TIMED_TOPIC="${LIDAR_TIMED_TOPIC:-${LIDAR_POINTS_TOPIC}_timed}"
-FASTLIO_CONFIG="${FASTLIO_CONFIG:-${SCRIPT_DIR}/fastlio_gazebo.yaml}"
-[[ "${SIM_MODEL}" == "swan_gamma_v2" ]] && \
-    FASTLIO_CONFIG="${SCRIPT_DIR}/fastlio_swan_gamma.yaml"
+# ikd-Tree incremental-map config (effect_map_en: true → /cloud_effected,
+# map_en: true → /Laser_map still published). The yaml hardcodes
+# lid_topic: /swan_gamma_v2/scan/points_timed — for another model, override
+# FASTLIO_CONFIG with a matching config.
+FASTLIO_CONFIG="${FASTLIO_CONFIG:-${WORKSPACE}/config/fastlio_swan_gamma_effect.yaml}"
+# Bare file name → resolved via the offboard package share (same as main's
+# start_sim.sh + offboard.launch.py flow); needs a colcon build to install.
+RVIZ_CONFIG="${RVIZ_CONFIG:-fastlio_ikdtree.rviz}"
+BIRDVIEW_CONFIG="${BIRDVIEW_CONFIG:-birdview.rviz}"
 
 XRCE_PORT="${XRCE_PORT:-8888}"
 GZ_VERSION="${GZ_VERSION:-harmonic}"
@@ -228,10 +243,10 @@ else
 fi
 PIDS+=("$!")
 
-python3 "${SCRIPT_DIR}/gazebo_imu_bridge.py" --ros-args -p lidar_topic:="${LIDAR_POINTS_TOPIC}" &
+python3 "${SCRIPT_DIR}/fastlio/gazebo_imu_bridge.py" --ros-args -p lidar_topic:="${LIDAR_POINTS_TOPIC}" &
 PIDS+=("$!"); sleep 2
 
-python3 "${SCRIPT_DIR}/add_time_field.py" --ros-args \
+python3 "${SCRIPT_DIR}/fastlio/add_time_field.py" --ros-args \
     -p input_topic:="${LIDAR_POINTS_TOPIC}" -p output_topic:="${LIDAR_TIMED_TOPIC}" &
 PIDS+=("$!"); sleep 2
 
@@ -254,11 +269,11 @@ ros2 run fast_lio fastlio_mapping --ros-args --params-file "${FASTLIO_CONFIG}" \
 PIDS+=("$!"); sleep 5
 
 # FAST-LIO odometry → PX4 EKF2 external vision
-python3 "${SCRIPT_DIR}/fastlio_px4_bridge.py" &
+python3 "${SCRIPT_DIR}/fastlio/fastlio_px4_bridge.py" &
 PIDS+=("$!"); sleep 2
 
 # Ground-truth trajectory for RViz (truth vs FAST-LIO path comparison)
-python3 "${SCRIPT_DIR}/gt_path_node.py" &
+python3 "${SCRIPT_DIR}/fastlio/gt_path_node.py" &
 PIDS+=("$!"); sleep 1
 
 # NOTE: the world-frame cloud comes from super_bridge (in offboard.launch.py):
@@ -289,14 +304,18 @@ sleep 5
 echo ""
 echo "Phase 3/3 — Offboard + Planner + RViz"
 
-# Use main's gazebo.yaml: planner consumes PX4-fused odom via super_bridge
-# (/lidar_slam/odom + /cloud_registered) — mirrors real hardware (no Gazebo truth).
-# The model spawns at the world origin, so PX4's EKF local frame == world frame
-# and no spawn-pose offset is needed.
+# Same offboard.launch.py as main's start_sim.sh flow: planner consumes
+# PX4-fused odom via super_bridge (/lidar_slam/odom + /cloud_registered) —
+# mirrors real hardware (no Gazebo truth). The model spawns at the world
+# origin, so PX4's EKF local frame == world frame and no spawn-pose offset
+# is needed. Two RViz windows like main:
+#   rviz_config          → top-down birdview planning window (BIRDVIEW_CONFIG)
+#   rviz_freelook_config → 3D window (RVIZ_CONFIG: ikd-Tree map view)
 if [[ "${NO_RVIZ:-}" == "1" ]]; then
     ros2 launch "${OFFBOARD_LAUNCH}" rviz:=false &
 else
-    ros2 launch "${OFFBOARD_LAUNCH}" rviz_config:="${SCRIPT_DIR}/x500_fastlio.rviz" &
+    ros2 launch "${OFFBOARD_LAUNCH}" \
+        rviz_config:="${BIRDVIEW_CONFIG}" rviz_freelook_config:="${RVIZ_CONFIG}" &
 fi
 PIDS+=("$!")
 

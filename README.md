@@ -52,7 +52,7 @@ Notable behaviour:
 
 - `simulation.yaml` is the single source of truth for the sim: `model` +
   `world` combine into the PX4 make target `gz_<model>_<world>`
-  (e.g. `gz_x500_lidar_yungu`). `./src/utils/start_sim.sh --help` lists the
+  (e.g. `gz_swan_gamma_v2_yungu`). `./src/utils/start_sim.sh --help` lists the
   available models/maps.
 - `offboard.yaml` `visualization: false` runs headless — no RViz, no birdview
   overlay, and SUPER's marker publishing is turned off.
@@ -81,7 +81,7 @@ Every config value can be overridden on the command line for a one-off run
 
 | Variable     | Default                | Description                                          |
 |--------------|------------------------|------------------------------------------------------|
-| `PX4_MODEL`  | from config (`x500_lidar`) | Gazebo vehicle model / airframe for `make px4_sitl` |
+| `PX4_MODEL`  | from config (`swan_gamma_v2`) | Gazebo vehicle model / airframe for `make px4_sitl` |
 | `PX4_WORLD`  | from config (`yungu`)  | Gazebo map/world (.sdf in the worlds dir)            |
 | `XRCE_PORT`  | from config (`8888`)   | UDP port for the MicroXRCEAgent                      |
 | `GZ_VERSION` | from config (`harmonic`) | gz-transport version for `ros_gz_bridge` (gz-sim 8) |
@@ -92,7 +92,7 @@ Every config value can be overridden on the command line for a one-off run
 PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./src/utils/start_sim.sh
 
 # Legacy form: pass the full make target directly
-PX4_MODEL=gz_x500_lidar_yungu ./src/utils/start_sim.sh
+PX4_MODEL=gz_swan_gamma_v2_yungu ./src/utils/start_sim.sh
 
 # Use a non-default uXRCE-DDS port (must match PX4 UXRCE_DDS_PRT)
 XRCE_PORT=2018 ./src/utils/start_sim.sh
@@ -130,9 +130,10 @@ that PX4 detaches into its own session — run:
 - RViz shows the drone (TF), the lidar point cloud, and a "2D Goal Pose" tool
   that publishes goals to `/goal_pose` (default `rviz:=true`, disable with
   `rviz:=false`).
-- The SUPER planner is launched by `offboard.launch.py` using
-  `src/SUPER/super_planner/config/gazebo.yaml`, which subscribes to the bridged
-  topics (`/x500_lidar/scan/points`, `/odom`).
+- The SUPER planner is launched by `offboard.launch.py` using the config from
+  `config/offboard.yaml` (`planner_config`, resolved under
+  `config/super_planner/`), which subscribes to the super_bridge outputs
+  (`/cloud_registered`, `/lidar_slam/odom`).
 
 ## FAST-LIO mode (LiDAR-inertial odometry + PX4 EKF2 fusion)
 
@@ -151,32 +152,31 @@ FAST-LIO /Odometry ──→ fastlio_px4_bridge ──→ /fmu/in/vehicle_visual
 
 ```bash
 # Full stack: GPU-forced Gazebo + PX4 + FAST-LIO + EKF2 fusion + planner + RViz
-./temp/start_all_fastlio.sh
+./src/utils/start_fastlio.sh
 
 # Gazebo server-only (no GUI) — RViz still opens for planning visualization
-HEADLESS=1 ./temp/start_all_fastlio.sh
+HEADLESS=1 ./src/utils/start_fastlio.sh
 
 # Skip RViz entirely
-NO_RVIZ=1 ./temp/start_all_fastlio.sh
+NO_RVIZ=1 ./src/utils/start_fastlio.sh
 ```
 
-What `start_all_fastlio.sh` adds over `start_sim.sh`:
+What `src/utils/start_fastlio.sh` adds over `src/utils/start_sim.sh`:
 
 | # | Component | Notes |
 |---|---|---|
-| 1 | `temp/gazebo_imu_bridge.py` | PX4 `sensor_combined` (FRD) → `/livox/imu` (ENU): axis flip + rolling time sync |
-| 2 | `temp/add_time_field.py` | Adds `time` field to the Gazebo cloud (0 for instantaneous scans) |
-| 3 | `fast_lio` (`fastlio_mapping`) | LiDAR-inertial odometry, config: `temp/fastlio_gazebo.yaml` |
-| 4 | `temp/fastlio_px4_bridge.py` | FAST-LIO `/Odometry` (ENU) → `/fmu/in/vehicle_visual_odometry` (NED) for EKF2 |
+| 1 | `src/utils/fastlio/gazebo_imu_bridge.py` | PX4 `sensor_combined` (FRD) → `/livox/imu` (ENU): axis flip + rolling time sync |
+| 2 | `src/utils/fastlio/add_time_field.py` | Adds `time` field to the Gazebo cloud (0 for instantaneous scans) |
+| 3 | `fast_lio` (`fastlio_mapping`) | LiDAR-inertial odometry, config: `config/fastlio_swan_gamma_effect.yaml` (ikd-Tree incremental map → `/cloud_effected`) |
+| 4 | `src/utils/fastlio/fastlio_px4_bridge.py` | FAST-LIO `/Odometry` (ENU) → `/fmu/in/vehicle_visual_odometry` (NED) for EKF2 |
 | 5 | `super_bridge` | PX4 fused odom + raw cloud → `/lidar_slam/odom` + `/cloud_registered` |
 
-PX4 EKF2 external-vision params are set in the x500 airframe
-(`4008_gz_x500_lidar`): `EKF2_EV_CTRL 13` (HPOS+VEL+YAW fusion — **no VPOS**:
+PX4 EKF2 external-vision params are set in the swan_gamma_v2 airframe
+(`4007_gz_swan_gamma_v2`): `EKF2_EV_CTRL 13` (HPOS+VEL+YAW fusion — **no VPOS**:
 FAST-LIO has no absolute height reference, so the barometer keeps the
 vertical channel and the SLAM z drift is not propagated into altitude),
 `EKF2_EV_DELAY 5`, `EKF2_EVP_NOISE 0.1`, `EKF2_EVV_NOISE 0.1`,
-`EKF2_EVA_NOISE 0.05`, plus `COM_POWER_OVERRIDE 1` so SITL arming is not
-blocked by the power preflight check.
+`EKF2_EVA_NOISE 0.05`.
 
 **Verify the fusion pipeline is alive:**
 
@@ -185,6 +185,145 @@ ros2 topic echo /fmu/in/vehicle_visual_odometry --once --qos-reliability best_ef
 ros2 topic echo /lidar_slam/odom --once --qos-reliability best_effort
 ros2 topic echo /cloud_registered --once --qos-reliability best_effort
 ```
+
+## Point-to-point navigation (interface for search algorithms)
+
+This section is the **only** interface a search/planning algorithm needs.
+Once the FAST-LIO stack is up, the drone auto-takes-off to `default_height`
+and enters `IDLE`; any ROS 2 node can then command it to fly by publishing a
+`geometry_msgs/PoseStamped` — no launch changes, no code changes.
+
+### Quick start
+
+```bash
+# Terminal 1 — full FAST-LIO simulation stack (Gazebo + PX4 + FAST-LIO + EKF2)
+./src/utils/start_fastlio.sh
+
+# Terminal 2 — offboard state machine + SUPER planner + RViz
+source install/setup.bash
+ros2 launch offboard offboard.launch.py
+```
+
+Wait for the takeoff to complete (the offboard log shows
+`State: TAKEOFF → IDLE`), then publish waypoints. RViz's "2D Goal Pose" tool
+already publishes to `/waypoint_pose` (re-targeted in `birdview.rviz` /
+`freelook.rviz`), so hand-clicked goals and algorithmic goals go through the
+exact same path.
+
+### Goal input topics
+
+| Topic | Type | QoS | Purpose |
+|---|---|---|---|
+| `/waypoint_pose` | `geometry_msgs/PoseStamped` | sub: best_effort/volatile | **Batch waypoint input (recommended).** Each message is queued in the offboard waypoint buffer and flown one at a time. |
+| `/goal_pose` | `geometry_msgs/PoseStamped` | sub: best_effort/volatile | **Direct single goal.** Same topic SUPER's click-goal subscribes to; the offboard node also publishes here internally to hand the current waypoint to SUPER. |
+| `/waypoint_buffer` | `geometry_msgs/PoseStamped` | reliable | Internal channel (`goal_marker_node` → offboard node). Don't publish here directly. |
+| `/waypoint_markers` | `visualization_msgs/MarkerArray` | transient_local | Waypoint-buffer feedback: green = queued, yellow = currently pursued, cyan line = route. |
+
+Data flow:
+
+```
+    /waypoint_pose ──→ goal_marker_node ──→ /waypoint_buffer ──→ offboard node
+  (your algorithm)                              (FIFO queue)         │
+                                                                     ↓
+                                                       /goal_pose (one at a time)
+                                                                     ↓
+                                                          fsm_node (SUPER)
+                                                                     ↓
+                                                    /planning/pos_cmd ──→ offboard ──→ PX4
+```
+
+Example publisher (Python):
+
+```python
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import PoseStamped
+
+class GoalPublisher(Node):
+    def __init__(self):
+        super().__init__("goal_publisher")
+        self.pub = self.create_publisher(PoseStamped, "/waypoint_pose", 10)
+        self.timer = self.create_timer(1.0, self.publish_goal)
+
+    def publish_goal(self):
+        msg = PoseStamped()
+        msg.header.frame_id = "world"          # ENU world frame, z up
+        msg.pose.position.x = 10.0             # east
+        msg.pose.position.y = 5.0              # north
+        msg.pose.position.z = 5.0              # up [m]
+        msg.pose.orientation.w = 1.0           # yaw follows flight direction
+        self.pub.publish(msg)
+
+rclpy.init()
+rclpy.spin(GoalPublisher())
+```
+
+**QoS caveat:** the `/waypoint_pose` subscription is `best_effort` +
+`keep_last(1)` — publishing many waypoints faster than the node processes them
+drops messages. Publish at **≥ 0.5 s intervals** (as above) and confirm
+acceptance via the offboard log (`Waypoint buffered (#N)`) or
+`/waypoint_markers`.
+
+### State feedback topics
+
+| Topic | Type | Description |
+|---|---|---|
+| `/lidar_slam/odom` | `nav_msgs/Odometry` | **Fused odometry** (FAST-LIO → PX4 EKF2), world ENU — the state feedback for your algorithm |
+| `/cloud_registered` | `sensor_msgs/PointCloud2` | World-frame lidar cloud (ROG-Map input) |
+| `/planning/pos_cmd` | `mars_quadrotor_msgs/PositionCommand` | SUPER's commanded trajectory (position/velocity/acceleration/yaw/yaw_dot), ~100 Hz |
+| `/planning_cmd/poly_traj` | `mars_quadrotor_msgs/PolynomialTrajectory` | Polynomial trajectory (MPC heartbeat) |
+| `fsm/path` | `nav_msgs/Path` | Planned path (A* → optimization) |
+| `/fmu/out/vehicle_local_position_v1` | `px4_msgs/VehicleLocalPosition` | Raw PX4 local position (NED) |
+| `/fmu/out/vehicle_status_v4` | `px4_msgs/VehicleStatus` | Vehicle status (arming state, nav state) |
+
+### Coordinate frames
+
+- **Waypoints, goals and planner output are all ENU world frame**
+  (`frame_id: "world"`, x = east, y = north, z = up). Frame conversions
+  (ENU → PX4 NED, yaw included) happen automatically inside the offboard node.
+- Waypoint arrival is judged by **horizontal** distance to the waypoint
+  (`waypoint_reached_dist`); the drone holds `waypoint_hold_time` seconds
+  before the next buffered waypoint is handed to SUPER.
+- FAST-LIO's `camera_init` origin is the first LiDAR frame (= takeoff spot),
+  which is offset from the Gazebo world origin by a fixed amount. If your
+  algorithm works in map coordinates, treat the **takeoff spot as the
+  reference origin**.
+
+### Waypoint-following parameters (`config/offboard.yaml`)
+
+| Key | Default | Description |
+|---|---|---|
+| `waypoint_reached_dist` | `3.0` m | Horizontal distance below which a waypoint is considered reached |
+| `waypoint_hold_time` | `0.0` s | Hover time after reaching a waypoint before starting the next |
+| `goal_height` | `5.0` m | Goal altitude for planar goals (overrides SUPER `fsm.click_height`) |
+| `planner_cmd_hz` | `80.0` Hz | Cmd rate at which the offboard state machine hands over to the planner |
+| `default_height` | `5.0` m | Auto-takeoff altitude (NED) after OFFBOARD |
+
+All of these are launch arguments too, so they can be overridden per run, e.g.
+`ros2 launch offboard offboard.launch.py waypoint_reached_dist:=2.0
+waypoint_hold_time:=1.0`.
+
+### Landing
+
+```bash
+ros2 service call /offboard/land std_srvs/srv/Trigger
+```
+
+### Recording & evaluation
+
+`cmd_record` (see the section above) records each goal together with the
+commanded trajectory and the fused odometry:
+
+```bash
+# Terminal 3 — recorder + live plot (starts on the first goal)
+ros2 launch cmd_record record.launch.py
+
+# Plot a saved segment afterwards (defaults to the newest CSV in cmd_log/)
+ros2 run cmd_record plot_csv
+```
+
+Each goal click writes `cmd_log/goal_<NNN>_<timestamp>.csv` containing the
+goal position, the commanded trajectory, and the real odometry.
 
 ### FAST-LIO fusion — measured results (2026-08)
 

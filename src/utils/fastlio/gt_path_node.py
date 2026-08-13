@@ -8,7 +8,7 @@ Accumulates truth positions into a path for RViz so the ground-truth
 trajectory can be compared against FAST-LIO's /path during flight.
 
 Usage:
-  python3 temp/gt_path_node.py
+  python3 src/utils/fastlio/gt_path_node.py
 """
 
 import rclpy
