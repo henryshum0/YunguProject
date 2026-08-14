@@ -110,6 +110,14 @@ def generate_launch_description():
     cfg_waypoint_reached_dist = str(_offboard_cfg('waypoint_reached_dist', 0.5))
     cfg_waypoint_hold_time = str(_offboard_cfg('waypoint_hold_time', 2.0))
 
+    # PX4 local ENU -> world ENU translation (model spawn pose, from the
+    # airframe PX4_GZ_MODEL_POSE). super_bridge translates its odom/cloud
+    # output into the world frame; offboard_node applies the inverse when
+    # sending PX4 setpoints and compares waypoints in world coordinates.
+    cfg_world_offset_x = str(_offboard_cfg('world_offset_x', 0.0))
+    cfg_world_offset_y = str(_offboard_cfg('world_offset_y', 0.0))
+    cfg_world_offset_z = str(_offboard_cfg('world_offset_z', 0.0))
+
     # Planner-config overrides applied by the launch (SUPER reads these from
     # its YAML file, not ROS params). A temporary copy of the planner config is
     # generated and fsm_node is pointed at it, only when something changes.
@@ -264,6 +272,15 @@ def generate_launch_description():
                               description='Publish the aerial birdview overlay (/birdview_cloud)'),
         DeclareLaunchArgument('birdview_image', default_value=default_birdview_image,
                               description='Birdview PNG path (default: resources/yungu_birdview.png)'),
+        DeclareLaunchArgument('world_offset_x', default_value=cfg_world_offset_x,
+                              description='PX4 local ENU -> world ENU translation x '
+                                          '(model spawn pose) [m]'),
+        DeclareLaunchArgument('world_offset_y', default_value=cfg_world_offset_y,
+                              description='PX4 local ENU -> world ENU translation y '
+                                          '(model spawn pose) [m]'),
+        DeclareLaunchArgument('world_offset_z', default_value=cfg_world_offset_z,
+                              description='PX4 local ENU -> world ENU translation z '
+                                          '(model spawn pose) [m]'),
 
         # ------------------------------------------------------------------
         # PX4 offboard state machine
@@ -291,6 +308,9 @@ def generate_launch_description():
                 'waypoint_reached_dist': LaunchConfiguration('waypoint_reached_dist'),
                 'waypoint_hold_time': LaunchConfiguration('waypoint_hold_time'),
                 'waypoint_marker_topic': LaunchConfiguration('waypoint_marker_topic'),
+                'world_offset_x': LaunchConfiguration('world_offset_x'),
+                'world_offset_y': LaunchConfiguration('world_offset_y'),
+                'world_offset_z': LaunchConfiguration('world_offset_z'),
             }],
         ),
 
@@ -312,6 +332,9 @@ def generate_launch_description():
                 'odom_topic': LaunchConfiguration('odom_topic'),
                 'cloud_out_topic': LaunchConfiguration('cloud_registered_topic'),
                 'odom_out_topic': LaunchConfiguration('lidar_slam_odom_topic'),
+                'world_offset_x': LaunchConfiguration('world_offset_x'),
+                'world_offset_y': LaunchConfiguration('world_offset_y'),
+                'world_offset_z': LaunchConfiguration('world_offset_z'),
             }],
         ),
 
