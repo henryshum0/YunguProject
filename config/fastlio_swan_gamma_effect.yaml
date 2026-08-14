@@ -1,0 +1,70 @@
+# FAST-LIO config for Gazebo simulation (swan_gamma_v2_yungu) — ikd-Tree incremental map variant
+#
+# Publishes BOTH map streams (RViz shows the accumulated map always + live
+# ikd-Tree deltas on top):
+#   map_en: true           → /Laser_map       (full accumulated map, 1 Hz timer)
+#   effect_map_en: true    → /cloud_effected  (points ikd-Tree added/updated this frame,
+#                                              per-scan — NOT a map, old regions vanish
+#                                              as the drone moves away)
+# Use with: src/utils/start_fastlio.sh (default config for swan_gamma_v2)
+#
+# LiDAR:  /swan_gamma_v2/scan/points  (gz-sim bridged PointCloud2, 720×16, 10 Hz)
+# IMU:    /livox/imu               (bridged from PX4 SensorCombined)
+#
+# The LiDAR sits 0.16 m above base_link (= IMU origin in swan_gamma_v2).
+
+/**:
+    ros__parameters:
+        feature_extract_enable: false
+        point_filter_num: 2           # ~5760 pts/scan — half the matching input,
+                                      # cuts ICP load (0.09-0.11s was at the 0.1s
+                                      # real-time budget @10Hz → frame drops)
+        max_iteration: 3
+        filter_size_surf: 0.3
+        filter_size_map: 0.3
+        cube_side_length: 500.0
+        runtime_pos_log_enable: true
+        map_file_path: "./test.pcd"
+
+        common:
+            lid_topic:  "/swan_gamma_v2/scan/points_timed"
+            imu_topic:  "/livox/imu"
+            time_sync_en: false
+            time_offset_lidar_to_imu: 0.0
+
+        preprocess:
+            lidar_type: 0             # default_handler: no ring/time assumptions,
+                                      # best for Gazebo instantaneous scan
+            scan_line: 16
+            scan_rate: 10             # swan_gamma_v2 lidar update_rate = 10 Hz
+            timestamp_unit: 2
+            blind: 0.5
+
+        mapping:
+            acc_cov: 0.1              # default, works well
+            gyr_cov: 0.1
+            b_acc_cov: 0.0001
+            b_gyr_cov: 0.0001
+            fov_degree:    360.0
+            det_range:     35.0       # matches gz LiDAR max range
+            extrinsic_est_en: false   # fixed extrinsic for sim
+            extrinsic_T: [ 0.0, 0.0, 0.16 ]   # LiDAR 16 cm above IMU (base_link)
+            # Gazebo LiDAR and IMU are both ENU-aligned (base_link == world,
+            # no rotation in model.sdf) → identity rotation.
+            extrinsic_R: [ 1., 0., 0.,
+                           0., 1., 0.,
+                           0., 0., 1.]
+
+        publish:
+            path_en: true
+            scan_publish_en: false  # /cloud_registered is owned by super_bridge (world frame);
+                                    # FAST-LIO's own copy (camera_init frame) collides on the same
+                                    # topic and makes RViz/planner alternate between two frames
+            dense_publish_en: true
+            scan_bodyframe_pub_en: false
+            effect_map_en: true       # ikd-Tree incremental map → /cloud_effected
+            map_en: true               # accumulated map /Laser_map (always visible in RViz)
+
+        pcd_save:
+            pcd_save_en: false
+            interval: -1

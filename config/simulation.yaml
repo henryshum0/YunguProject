@@ -50,3 +50,12 @@ bridge:
       direction: GZ_TO_ROS
       subscriber_queue_size: 5
       publisher_queue_size: 5
+
+    # Gazebo ground truth odometry (for debug comparison vs FAST-LIO / PX4 fusion)
+    - ros_topic_name: "/odom"
+      gz_topic_name: "/odometry"
+      ros_type_name: "nav_msgs/msg/Odometry"
+      gz_type_name: "gz.msgs.Odometry"
+      direction: GZ_TO_ROS
+      subscriber_queue_size: 10
+      publisher_queue_size: 10
