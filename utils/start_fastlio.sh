@@ -2,7 +2,7 @@
 #
 # start_fastlio.sh — GPU sim + FAST-LIO + PX4-EKF2 fusion + planner + offboard + RViz
 #
-# One-shot launcher aligned with src/utils/start_sim.sh (HEADLESS support etc.)
+# One-shot launcher aligned with utils/start_sim.sh (HEADLESS support etc.)
 # plus the FAST-LIO chain:
 #   - FAST-LIO odometry → PX4 EKF2 (fastlio_px4_bridge → /fmu/in/vehicle_visual_odometry)
 #   - PX4 fused odometry → super_bridge → /lidar_slam/odom + /cloud_registered → planner
@@ -10,19 +10,19 @@
 #     accumulated map — old regions fade as the drone moves away.
 #
 # Usage:
-#   ./src/utils/start_fastlio.sh              # full stack with GUI
-#   HEADLESS=1 ./src/utils/start_fastlio.sh   # no Gazebo GUI
-#   NO_RVIZ=1 ./src/utils/start_fastlio.sh    # skip RViz
+#   ./utils/start_fastlio.sh              # full stack with GUI
+#   HEADLESS=1 ./utils/start_fastlio.sh   # no Gazebo GUI
+#   NO_RVIZ=1 ./utils/start_fastlio.sh    # skip RViz
 #
 # Model & lidar topics follow config/simulation.yaml (model / world). The
 # FAST-LIO config ships for swan_gamma_v2; for other models, override
 # FASTLIO_CONFIG. Other overrides:
-#   SIM_MODEL=swan_gamma_v2 SIM_WORLD=yungu ./src/utils/start_fastlio.sh
-#   PX4_MODEL=gz_swan_gamma_v2_yungu ./src/utils/start_fastlio.sh  # full target
-#   LIDAR_TOPIC=/swan_gamma_v2/scan ./src/utils/start_fastlio.sh
-#   FASTLIO_CONFIG=config/fastlio_swan_gamma_effect.yaml ./src/utils/start_fastlio.sh
-#   RVIZ_CONFIG=fastlio_ikdtree.rviz ./src/utils/start_fastlio.sh
-#   BIRDVIEW_CONFIG=birdview.rviz ./src/utils/start_fastlio.sh  # top-down window config
+#   SIM_MODEL=swan_gamma_v2 SIM_WORLD=yungu ./utils/start_fastlio.sh
+#   PX4_MODEL=gz_swan_gamma_v2_yungu ./utils/start_fastlio.sh  # full target
+#   LIDAR_TOPIC=/swan_gamma_v2/scan ./utils/start_fastlio.sh
+#   FASTLIO_CONFIG=config/fastlio_swan_gamma_effect.yaml ./utils/start_fastlio.sh
+#   RVIZ_CONFIG=fastlio_ikdtree.rviz ./utils/start_fastlio.sh
+#   BIRDVIEW_CONFIG=birdview.rviz ./utils/start_fastlio.sh  # top-down window config
 #
 # Two RViz windows (same layout as main's start_sim.sh + offboard.launch.py):
 #   - top-down birdview planning window (BIRDVIEW_CONFIG, default birdview.rviz)
@@ -34,9 +34,9 @@
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PX4_DIR="${WORKSPACE}/VisionFlow-PX4"
-BRIDGE_SCRIPT="${WORKSPACE}/src/utils/gz_bridges/bridge.sh"
+BRIDGE_SCRIPT="${WORKSPACE}/utils/gz_bridges/bridge.sh"
 OFFBOARD_LAUNCH="${WORKSPACE}/src/offboard/launch/offboard.launch.py"
 SIM_CONFIG="${WORKSPACE}/config/simulation.yaml"
 SIM_CONFIG_HELPER="${WORKSPACE}/config/sim_config.py"

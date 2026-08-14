@@ -6,7 +6,7 @@
 #   effect_map_en: true    → /cloud_effected  (points ikd-Tree added/updated this frame,
 #                                              per-scan — NOT a map, old regions vanish
 #                                              as the drone moves away)
-# Use with: src/utils/start_fastlio.sh (default config for swan_gamma_v2)
+# Use with: utils/start_fastlio.sh (default config for swan_gamma_v2)
 #
 # LiDAR:  /swan_gamma_v2/scan/points  (gz-sim bridged PointCloud2, 720×16, 10 Hz)
 # IMU:    /livox/imu               (bridged from PX4 SensorCombined)
