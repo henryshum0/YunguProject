@@ -88,6 +88,13 @@ public:
         lidar_offset_x_ = declare_parameter("lidar_offset_x", lidar_offset_x_);
         lidar_offset_y_ = declare_parameter("lidar_offset_y", lidar_offset_y_);
         lidar_offset_z_ = declare_parameter("lidar_offset_z", lidar_offset_z_);
+        // PX4's EKF local frame origin sits at the model spawn pose, while the
+        // Gazebo world frame starts at (0,0,0). These offsets translate the
+        // PX4-local ENU pose into the world frame (airframe
+        // PX4_GZ_MODEL_POSE, e.g. "-4.0,-2.0,1.15392,0,0,0").
+        world_offset_x_ = declare_parameter("world_offset_x", world_offset_x_);
+        world_offset_y_ = declare_parameter("world_offset_y", world_offset_y_);
+        world_offset_z_ = declare_parameter("world_offset_z", world_offset_z_);
 
         auto qos = rclcpp::QoS(5).best_effort().durability_volatile();
 
@@ -106,6 +113,11 @@ public:
                     cloud_in_topic_.c_str(), odom_topic_.c_str(),
                     cloud_out_topic_.c_str(), world_frame_.c_str(),
                     odom_out_topic_.c_str());
+        if (world_offset_x_ != 0.0 || world_offset_y_ != 0.0 || world_offset_z_ != 0.0) {
+            RCLCPP_INFO(get_logger(),
+                        "World offset (PX4 local -> world): (%.2f, %.2f, %.2f)",
+                        world_offset_x_, world_offset_y_, world_offset_z_);
+        }
     }
 
 private:
@@ -118,10 +130,13 @@ private:
                  msg->q[0], msg->q[1], msg->q[2], msg->q[3],
                  pxe, pye, pze, qew, qex, qey, qez);
 
+        // Translate the PX4-local ENU pose into the Gazebo world frame so the
+        // published odom, registered cloud and (via tf_bridge) TF tree all
+        // align with the world (spawn pose offset, e.g. (-4, -2, 1.15)).
         pose_valid_ = true;
-        px_ = pxe;
-        py_ = pye;
-        pz_ = pze;
+        px_ = pxe + world_offset_x_;
+        py_ = pye + world_offset_y_;
+        pz_ = pze + world_offset_z_;
         qw_ = qew;
         qx_ = qex;
         qy_ = qey;
@@ -132,9 +147,13 @@ private:
         out.header.stamp = now();
         out.header.frame_id = world_frame_;
         out.child_frame_id = base_frame_;
-        out.pose.pose.position.x = pxe;
-        out.pose.pose.position.y = pye;
-        out.pose.pose.position.z = pze;
+        // NOTE: publish the offset-translated pose (px_, py_, pz_), not the
+        // raw local ENU values (pxe, pye, pze) — the latter was a bug that
+        // left /lidar_slam/odom at the PX4-local origin while /cloud_registered
+        // moved with the offset.
+        out.pose.pose.position.x = px_;
+        out.pose.pose.position.y = py_;
+        out.pose.pose.position.z = pz_;
         out.pose.pose.orientation.w = qew;
         out.pose.pose.orientation.x = qex;
         out.pose.pose.orientation.y = qey;
@@ -210,6 +229,9 @@ private:
     double lidar_offset_x_{0.0};
     double lidar_offset_y_{0.0};
     double lidar_offset_z_{0.16};  // lidar_link is 0.16 m above base_link
+    double world_offset_x_{0.0};   // PX4 local ENU -> world ENU translation
+    double world_offset_y_{0.0};
+    double world_offset_z_{0.0};
 
     bool pose_valid_{false};
     double px_{0.0}, py_{0.0}, pz_{0.0};

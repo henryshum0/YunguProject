@@ -85,6 +85,13 @@ private:
     std::string waypoint_marker_topic_{"/waypoint_markers"};
     /// Rate [Hz] at which the waypoint buffer markers are (re)published.
     double waypoint_marker_rate_{10.0};
+    /// PX4 local ENU -> Gazebo world ENU translation. PX4's EKF local origin
+    /// sits at the model spawn pose (airframe PX4_GZ_MODEL_POSE); the planner
+    /// and waypoints work in the world frame, so the spawn offset must be
+    /// added when comparing positions and subtracted before PX4 setpoints.
+    double world_offset_x_{0.0};
+    double world_offset_y_{0.0};
+    double world_offset_z_{0.0};
 
     // ------------------------------------------------------------------
     //  Publishers / Subscribers / Services
