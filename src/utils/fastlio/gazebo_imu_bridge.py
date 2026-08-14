@@ -52,8 +52,8 @@ class GazeboImuBridge(Node):
         # initial 0 would make dt = (px4_us - 0)*1e-6 ≈ 1.78e9 s and blow the
         # IMU time onto the epoch scale (gz lidar stream comes up before the
         # first PX4 message, so this race is real on every startup).
-        if self._last_px4_us is None:
-            return
+        if self._last_px4_us is None or self._last_px4_us < 1e12:
+            return  # 零/启动期 PX4 时间戳不参与配对,防 dt 按 epoch 量级爆炸
         # Reject implausible stamps (wall-clock/epoch fallback, ~1.78e9 s);
         # sim stamps in this stack are always < 1e7 s.
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9

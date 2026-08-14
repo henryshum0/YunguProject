@@ -197,16 +197,14 @@ sleep 2
 echo "Starting GZ <-> ROS bridge + TF ..."
 GZ_VERSION="${GZ_VERSION}" setsid "${BRIDGE_SCRIPT}" >"${LOG_DIR}/bridge.log" 2>&1 &
 PIDS+=("$!")
-sleep 3
 
-# Wait for key topics
-for _ in $(seq 1 30); do
-    if ros2 topic list 2>/dev/null | grep -q "${LIDAR_POINTS_TOPIC}"; then
-        echo "Gazebo topics available."
-        break
-    fi
-    sleep 1
-done
+# Wait for key topics — one blocking "echo --once" instead of a poll loop:
+# each `ros2 topic list/info` spawn is a fresh DDS discovery round-trip,
+# which is slow on WSL2 where multicast discovery is broken.
+if ! timeout 30 ros2 topic echo "${LIDAR_POINTS_TOPIC}" --once --qos-reliability best-effort >/dev/null 2>&1; then
+    echo "WARNING: ${LIDAR_POINTS_TOPIC} not seen within 30s — continuing anyway" >&2
+fi
+echo "Gazebo topics available."
 
 # ===========================================================================
 #  Phase 2 — FAST-LIO chain + PX4 EKF2 fusion
@@ -222,7 +220,7 @@ PIDS+=("$!")
 
 # world → camera_init: FAST-LIO's camera_init is the first lidar frame's
 # position, i.e. the model spawn pose (PX4_GZ_MODEL_POSE, e.g. swan spawns at
-# "-4.0,-2.0,1.15392"). Publishing the real spawn offset keeps FAST-LIO's path
+# "0,0,1.15392,0,0,0"). Publishing the real spawn offset keeps FAST-LIO's path
 # (camera_init frame) aligned with the Gazebo truth path (/gt_path, world
 # frame) in RViz — otherwise the red/blue lines are offset by the spawn xy
 # (and z by spawn height + 0.16 m lidar offset).
@@ -243,38 +241,38 @@ else
 fi
 PIDS+=("$!")
 
+# Sensor nodes start in parallel (no serial sleeps); the readiness gate below
+# blocks until their data actually flows.
 python3 "${SCRIPT_DIR}/fastlio/gazebo_imu_bridge.py" --ros-args -p lidar_topic:="${LIDAR_POINTS_TOPIC}" &
-PIDS+=("$!"); sleep 2
-
+PIDS+=("$!")
 python3 "${SCRIPT_DIR}/fastlio/add_time_field.py" --ros-args \
     -p input_topic:="${LIDAR_POINTS_TOPIC}" -p output_topic:="${LIDAR_TIMED_TOPIC}" &
-PIDS+=("$!"); sleep 2
+PIDS+=("$!")
+# Ground-truth trajectory for RViz (truth vs FAST-LIO path comparison)
+python3 "${SCRIPT_DIR}/fastlio/gt_path_node.py" &
+PIDS+=("$!")
 
 # Wait for both sensor streams before starting FAST-LIO: if it comes up
 # before the LiDAR/IMU data is stable, it can crash on a regressing
-# timestamp ("cannot store a negative time point").
+# timestamp ("cannot store a negative time point"). Two blocking waits run
+# in parallel — "echo --once" exits on the first message, timeout bounds it.
 echo "Waiting for LiDAR + IMU streams (${LIDAR_TIMED_TOPIC})..."
-for _ in $(seq 1 30); do
-    if ros2 topic info "${LIDAR_TIMED_TOPIC}" 2>/dev/null | grep -q "Publisher count: 1" &&
-       ros2 topic info /livox/imu 2>/dev/null | grep -q "Publisher count: 1"; then
-        echo "Sensor streams ready."
-        break
-    fi
-    sleep 1
-done
-sleep 2
+timeout 30 ros2 topic echo "${LIDAR_TIMED_TOPIC}" --once --qos-reliability best-effort >/dev/null 2>&1 &
+LIDAR_WAIT=$!
+timeout 30 ros2 topic echo /livox/imu --once --qos-reliability best-effort >/dev/null 2>&1 &
+IMU_WAIT=$!
+wait "${LIDAR_WAIT}" || echo "WARNING: ${LIDAR_TIMED_TOPIC} not seen within 30s" >&2
+wait "${IMU_WAIT}" || echo "WARNING: /livox/imu not seen within 30s" >&2
+echo "Sensor streams ready."
 
 ros2 run fast_lio fastlio_mapping --ros-args --params-file "${FASTLIO_CONFIG}" \
     >"${LOG_DIR}/fastlio.log" 2>&1 &
-PIDS+=("$!"); sleep 5
+PIDS+=("$!")
 
-# FAST-LIO odometry → PX4 EKF2 external vision
+# FAST-LIO odometry → PX4 EKF2 external vision (subscribes best-effort and
+# waits for /Odometry — safe to start right away)
 python3 "${SCRIPT_DIR}/fastlio/fastlio_px4_bridge.py" &
-PIDS+=("$!"); sleep 2
-
-# Ground-truth trajectory for RViz (truth vs FAST-LIO path comparison)
-python3 "${SCRIPT_DIR}/fastlio/gt_path_node.py" &
-PIDS+=("$!"); sleep 1
+PIDS+=("$!")
 
 # NOTE: the world-frame cloud comes from super_bridge (in offboard.launch.py):
 # it reads the PX4 fused vehicle_odometry and transforms the raw lidar cloud
@@ -282,21 +280,20 @@ PIDS+=("$!"); sleep 1
 # real-hardware setup where there is no Gazebo ground-truth odom.
 
 echo "Waiting for FAST-LIO to initialize (up to 60s)..."
-STABLE=0
+# FAST-LIO logs "Initialize the map kdtree" once the first scan is accepted —
+# grepping the log is cheaper and discovery-free vs. echoing /Odometry.
+INIT=0
 for _ in $(seq 1 20); do
-    if ros2 topic echo /Odometry --once --qos-reliability reliable 2>/dev/null | grep -q "camera_init"; then
-        STABLE=$((STABLE + 1))
-        echo "FAST-LIO active (${STABLE}/3)"
-        [ "${STABLE}" -ge 3 ] && break
-    else
-        STABLE=0
+    if grep -q "Initialize the map kdtree" "${LOG_DIR}/fastlio.log" 2>/dev/null; then
+        INIT=1
+        echo "FAST-LIO initialized."
+        break
     fi
     sleep 3
 done
-if [ "${STABLE}" -lt 3 ]; then
+if [ "${INIT}" -ne 1 ]; then
     echo "WARNING: FAST-LIO may not be fully initialized. Proceeding anyway..."
 fi
-sleep 5
 
 # ===========================================================================
 #  Phase 3 — Offboard + Planner + RViz (main's super_bridge architecture)

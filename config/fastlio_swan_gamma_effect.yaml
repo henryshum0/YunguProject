@@ -16,7 +16,9 @@
 /**:
     ros__parameters:
         feature_extract_enable: false
-        point_filter_num: 1           # 11520 pts/scan — keep all
+        point_filter_num: 2           # ~5760 pts/scan — half the matching input,
+                                      # cuts ICP load (0.09-0.11s was at the 0.1s
+                                      # real-time budget @10Hz → frame drops)
         max_iteration: 3
         filter_size_surf: 0.3
         filter_size_map: 0.3
