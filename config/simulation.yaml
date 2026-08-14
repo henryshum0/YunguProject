@@ -3,8 +3,8 @@
 # ============================================================================
 # Central place to choose the Gazebo vehicle model, the map/world, and the GZ
 # topics bridged into ROS 2. This file is read by:
-#   - src/utils/start_sim.sh                 -> model, world, gz_version, xrce_port
-#   - src/utils/gz_bridges/bridge.sh         -> bridge.*
+#   - utils/start_sim.sh                 -> model, world, gz_version, xrce_port
+#   - utils/gz_bridges/bridge.sh         -> bridge.*
 #
 # Environment variables still override the file, e.g.:
 #   PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./start_sim.sh

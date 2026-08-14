@@ -8,7 +8,7 @@ compensation). This relay node adds a zero-filled 'time' field.
 
 Usage:
   source install/setup.bash
-  python3 src/utils/fastlio/add_time_field.py
+  python3 utils/fastlio/add_time_field.py
 """
 
 import numpy as np

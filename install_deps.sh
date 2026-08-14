@@ -12,7 +12,7 @@
 # no Conan is required.
 #
 # Usage:
-#   ./src/utils/install_deps.sh
+#   ./utils/install_deps.sh
 #
 # Idempotent — safe to run multiple times.
 

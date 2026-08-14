@@ -17,7 +17,7 @@ PX4 EKF2 requirements (all handled):
   - unit quaternion, finite variances, rate >= 5 Hz
 
 Usage:
-  python3 src/utils/fastlio/fastlio_px4_bridge.py
+  python3 utils/fastlio/fastlio_px4_bridge.py
 """
 
 import math
