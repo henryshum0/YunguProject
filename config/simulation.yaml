@@ -52,8 +52,12 @@ bridge:
       publisher_queue_size: 5
 
     # Gazebo ground truth odometry (for debug comparison vs FAST-LIO / PX4 fusion)
+    # NOTE: the yungudemo branch's swan_gamma_v2 model no longer carries its
+    # own OdometryPublisher plugin; the one in swan_uav_v2 publishes to the
+    # model-instance topic /model/<model>_0/odometry (gz appends "_0" to the
+    # first instance), so bridge that instead of the top-level /odometry.
     - ros_topic_name: "/odom"
-      gz_topic_name: "/odometry"
+      gz_topic_name: "/model/swan_gamma_v2_0/odometry"
       ros_type_name: "nav_msgs/msg/Odometry"
       gz_type_name: "gz.msgs.Odometry"
       direction: GZ_TO_ROS
