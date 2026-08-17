@@ -22,7 +22,8 @@
         max_iteration: 3
         filter_size_surf: 0.3
         filter_size_map: 0.3
-        cube_side_length: 500.0
+        cube_side_length: 200.0     # local map cube 500→200: smaller ikd-tree,
+                                    # faster queries; rebuild every ~50 m flown
         runtime_pos_log_enable: true
         map_file_path: "./test.pcd"
 
@@ -46,7 +47,8 @@
             b_acc_cov: 0.0001
             b_gyr_cov: 0.0001
             fov_degree:    360.0
-            det_range:     35.0       # matches gz LiDAR max range
+            det_range:     25.0       # ignore points beyond 25 m — fewer match
+                                      # points, faster frames during maneuvers
             extrinsic_est_en: false   # fixed extrinsic for sim
             extrinsic_T: [ 0.0, 0.0, 0.16 ]   # LiDAR 16 cm above IMU (base_link)
             # Gazebo LiDAR and IMU are both ENU-aligned (base_link == world,
