@@ -7,3 +7,4 @@ cmd_log/
 .venv
 __pycache__/
 *.pyc
+.claude
