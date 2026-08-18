@@ -29,8 +29,8 @@ super_planner:
   planning_horizon: 15.0
   sensing_horizon: -1
   receding_dis: 1.0
-  robot_r: 0.4
-  yaw_dot_max: 1.0
+  robot_r: 0.6
+  yaw_dot_max: 1
   # Yaw mode: 1 heading to velocity, 2 heading to goal
   yaw_mode: 1
   mpc_horizon: 15
@@ -78,7 +78,7 @@ traj_opt:
     integral_reso: 12
     smooth_eps: 0.01
     penna_t: 100.0
-    penna_ts: 1.0e+7
+    penna_ts: 1.0e+6
     penna_pos: 1.0e+10
     penna_vel: 1.0e+8
     penna_acc: 1.0e+8
