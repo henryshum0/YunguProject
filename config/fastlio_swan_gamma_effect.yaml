@@ -1,8 +1,8 @@
 # FAST-LIO config for Gazebo simulation (swan_gamma_v2_yungu) — ikd-Tree incremental map variant
 #
-# Publishes BOTH map streams (RViz shows the accumulated map always + live
-# ikd-Tree deltas on top):
-#   map_en: true           → /Laser_map       (full accumulated map, 1 Hz timer)
+# Publishes only the ikd-Tree deltas (RViz shows live incremental points):
+#   map_en: false          → /Laser_map disabled (saves the 1 Hz full-map flatten
+#                            + serialization + RViz rendering of 100k+ points)
 #   effect_map_en: true    → /cloud_effected  (points ikd-Tree added/updated this frame,
 #                                              per-scan — NOT a map, old regions vanish
 #                                              as the drone moves away)
@@ -16,12 +16,13 @@
 /**:
     ros__parameters:
         feature_extract_enable: false
-        point_filter_num: 2           # ~5760 pts/scan — half the matching input,
-                                      # cuts ICP load (0.09-0.11s was at the 0.1s
-                                      # real-time budget @10Hz → frame drops)
+        point_filter_num: 3           # one third of the fused scan (~7.7k pts
+                                      # of 23k) into matching — cuts ICP + map
+                                      # incremental update load
         max_iteration: 3
         filter_size_surf: 0.3
-        filter_size_map: 0.3
+        filter_size_map: 0.4          # sparser ikd-Tree map → cheaper map incre
+                                      # (the ~57 ms/frame growth hot spot)
         cube_side_length: 200.0     # local map cube 500→200: smaller ikd-tree,
                                     # faster queries; rebuild every ~50 m flown
         runtime_pos_log_enable: true
@@ -47,8 +48,8 @@
             b_acc_cov: 0.0001
             b_gyr_cov: 0.0001
             fov_degree:    360.0
-            det_range:     35.0       # ignore points beyond 35 m — fewer match
-                                      # points, faster frames during maneuvers
+            det_range:     25.0       # ignore points beyond 25 m — distant points
+                                      # add match + map load for little accuracy
             extrinsic_est_en: false   # fixed extrinsic for sim
             # Merged cloud is in base_link == IMU frame (lidar_merge applies
             # each lidar's mounting transform) → identity extrinsic.
@@ -65,7 +66,8 @@
             dense_publish_en: true
             scan_bodyframe_pub_en: false
             effect_map_en: true       # ikd-Tree incremental map → /cloud_effected
-            map_en: true               # accumulated map /Laser_map (always visible in RViz)
+            map_en: false              # /Laser_map disabled — saves 1 Hz full-map
+                                       # flatten/serialize + RViz render of 100k+ pts
 
         pcd_save:
             pcd_save_en: false
