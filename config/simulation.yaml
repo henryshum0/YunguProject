@@ -35,16 +35,18 @@ bridge:
 
   # GZ topics bridged into ROS 2 (ros_gz_bridge parameter_bridge config entries)
   topics:
-    - ros_topic_name: "/swan_gamma_v2/scan"
-      gz_topic_name: "/swan_gamma_v2/scan"
-      ros_type_name: "sensor_msgs/msg/LaserScan"
-      gz_type_name: "gz.msgs.LaserScan"
+    # Side LiDARs (mirror real hardware): left/right, fused by lidar_merge.
+    # The old top-mounted lidar_3d was removed from the model.
+    - ros_topic_name: "/swan_gamma_v2/scan_left/points"
+      gz_topic_name: "/swan_gamma_v2/scan_left/points"
+      ros_type_name: "sensor_msgs/msg/PointCloud2"
+      gz_type_name: "gz.msgs.PointCloudPacked"
       direction: GZ_TO_ROS
-      subscriber_queue_size: 10
-      publisher_queue_size: 10
+      subscriber_queue_size: 5
+      publisher_queue_size: 5
 
-    - ros_topic_name: "/swan_gamma_v2/scan/points"
-      gz_topic_name: "/swan_gamma_v2/scan/points"
+    - ros_topic_name: "/swan_gamma_v2/scan_right/points"
+      gz_topic_name: "/swan_gamma_v2/scan_right/points"
       ros_type_name: "sensor_msgs/msg/PointCloud2"
       gz_type_name: "gz.msgs.PointCloudPacked"
       direction: GZ_TO_ROS

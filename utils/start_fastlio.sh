@@ -51,9 +51,9 @@ SIM_MODEL="${SIM_MODEL:-swan_gamma_v2}"
 SIM_WORLD="${SIM_WORLD:-$(config_get world)}"
 SIM_WORLD="${SIM_WORLD:-yungu}"
 PX4_MODEL="${PX4_MODEL:-gz_${SIM_MODEL}_${SIM_WORLD}}"
-LIDAR_TOPIC="${LIDAR_TOPIC:-/${SIM_MODEL}/scan}"
-LIDAR_POINTS_TOPIC="${LIDAR_POINTS_TOPIC:-${LIDAR_TOPIC}/points}"
-LIDAR_TIMED_TOPIC="${LIDAR_TIMED_TOPIC:-${LIDAR_POINTS_TOPIC}_timed}"
+# Two side LiDARs (real-hardware mirror) are fused by lidar_merge into one
+# base_link cloud; FAST-LIO and super_bridge both consume the fused topic.
+LIDAR_FUSED_TOPIC="${LIDAR_FUSED_TOPIC:-/${SIM_MODEL}/scan/points_fused}"
 # ikd-Tree incremental-map config (effect_map_en: true → /cloud_effected,
 # map_en: true → /Laser_map still published). The yaml hardcodes
 # lid_topic: /swan_gamma_v2/scan/points_timed — for another model, override
@@ -146,6 +146,7 @@ cleanup() {
     pkill -9 -f "fastlio_px4_bridge" 2>/dev/null || true
     pkill -9 -f "gazebo_imu_bridge" 2>/dev/null || true
     pkill -9 -f "add_time_field" 2>/dev/null || true
+    pkill -9 -f "lidar_merge" 2>/dev/null || true
     pkill -9 -f "static_transform_publisher" 2>/dev/null || true
     echo "All stopped."
 }
@@ -201,8 +202,8 @@ PIDS+=("$!")
 # Wait for key topics — one blocking "echo --once" instead of a poll loop:
 # each `ros2 topic list/info` spawn is a fresh DDS discovery round-trip,
 # which is slow on WSL2 where multicast discovery is broken.
-if ! timeout 30 ros2 topic echo "${LIDAR_POINTS_TOPIC}" --once --qos-reliability best-effort >/dev/null 2>&1; then
-    echo "WARNING: ${LIDAR_POINTS_TOPIC} not seen within 30s — continuing anyway" >&2
+if ! timeout 30 ros2 topic echo "${LIDAR_FUSED_TOPIC}" --once --qos-reliability best_effort >/dev/null 2>&1; then
+    echo "WARNING: ${LIDAR_FUSED_TOPIC} not seen within 30s — continuing anyway" >&2
 fi
 echo "Gazebo topics available."
 
@@ -243,10 +244,19 @@ PIDS+=("$!")
 
 # Sensor nodes start in parallel (no serial sleeps); the readiness gate below
 # blocks until their data actually flows.
-python3 "${SCRIPT_DIR}/fastlio/gazebo_imu_bridge.py" --ros-args -p lidar_topic:="${LIDAR_POINTS_TOPIC}" &
+python3 "${SCRIPT_DIR}/fastlio/gazebo_imu_bridge.py" --ros-args -p lidar_topic:="${LIDAR_FUSED_TOPIC}" &
+PIDS+=("$!")
+# Side LiDARs (real-hardware mirror): time-field each side, then fuse into one
+# scan in base_link for FAST-LIO (lidar_merge applies the mounting extrinsics).
+python3 "${SCRIPT_DIR}/fastlio/add_time_field.py" --ros-args \
+    -p input_topic:="/swan_gamma_v2/scan_left/points" \
+    -p output_topic:="/swan_gamma_v2/scan_left/points_timed" &
 PIDS+=("$!")
 python3 "${SCRIPT_DIR}/fastlio/add_time_field.py" --ros-args \
-    -p input_topic:="${LIDAR_POINTS_TOPIC}" -p output_topic:="${LIDAR_TIMED_TOPIC}" &
+    -p input_topic:="/swan_gamma_v2/scan_right/points" \
+    -p output_topic:="/swan_gamma_v2/scan_right/points_timed" &
+PIDS+=("$!")
+python3 "${SCRIPT_DIR}/fastlio/lidar_merge.py" &
 PIDS+=("$!")
 # Ground-truth trajectory for RViz (truth vs FAST-LIO path comparison)
 python3 "${SCRIPT_DIR}/fastlio/gt_path_node.py" &
@@ -256,12 +266,12 @@ PIDS+=("$!")
 # before the LiDAR/IMU data is stable, it can crash on a regressing
 # timestamp ("cannot store a negative time point"). Two blocking waits run
 # in parallel — "echo --once" exits on the first message, timeout bounds it.
-echo "Waiting for LiDAR + IMU streams (${LIDAR_TIMED_TOPIC})..."
-timeout 30 ros2 topic echo "${LIDAR_TIMED_TOPIC}" --once --qos-reliability best-effort >/dev/null 2>&1 &
+echo "Waiting for LiDAR + IMU streams (${LIDAR_FUSED_TOPIC})..."
+timeout 30 ros2 topic echo "${LIDAR_FUSED_TOPIC}" --once --qos-reliability best_effort >/dev/null 2>&1 &
 LIDAR_WAIT=$!
-timeout 30 ros2 topic echo /livox/imu --once --qos-reliability best-effort >/dev/null 2>&1 &
+timeout 30 ros2 topic echo /livox/imu --once --qos-reliability best_effort >/dev/null 2>&1 &
 IMU_WAIT=$!
-wait "${LIDAR_WAIT}" || echo "WARNING: ${LIDAR_TIMED_TOPIC} not seen within 30s" >&2
+wait "${LIDAR_WAIT}" || echo "WARNING: ${LIDAR_FUSED_TOPIC} not seen within 30s" >&2
 wait "${IMU_WAIT}" || echo "WARNING: /livox/imu not seen within 30s" >&2
 echo "Sensor streams ready."
 

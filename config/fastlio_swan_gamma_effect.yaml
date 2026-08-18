@@ -28,7 +28,7 @@
         map_file_path: "./test.pcd"
 
         common:
-            lid_topic:  "/swan_gamma_v2/scan/points_timed"
+            lid_topic:  "/swan_gamma_v2/scan/points_fused"  # two side LiDARs merged in base_link
             imu_topic:  "/livox/imu"
             time_sync_en: false
             time_offset_lidar_to_imu: 0.0
@@ -47,12 +47,12 @@
             b_acc_cov: 0.0001
             b_gyr_cov: 0.0001
             fov_degree:    360.0
-            det_range:     25.0       # ignore points beyond 25 m — fewer match
+            det_range:     35.0       # ignore points beyond 35 m — fewer match
                                       # points, faster frames during maneuvers
             extrinsic_est_en: false   # fixed extrinsic for sim
-            extrinsic_T: [ 0.0, 0.0, 0.16 ]   # LiDAR 16 cm above IMU (base_link)
-            # Gazebo LiDAR and IMU are both ENU-aligned (base_link == world,
-            # no rotation in model.sdf) → identity rotation.
+            # Merged cloud is in base_link == IMU frame (lidar_merge applies
+            # each lidar's mounting transform) → identity extrinsic.
+            extrinsic_T: [ 0.0, 0.0, 0.0 ]
             extrinsic_R: [ 1., 0., 0.,
                            0., 1., 0.,
                            0., 0., 1.]
