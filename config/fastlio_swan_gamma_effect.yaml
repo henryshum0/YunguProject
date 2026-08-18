@@ -16,15 +16,17 @@
 /**:
     ros__parameters:
         feature_extract_enable: false
-        point_filter_num: 3           # one third of the fused scan (~7.7k pts
+        point_filter_num: 4           # one quarter of the fused scan (~5.8k pts
                                       # of 23k) into matching — cuts ICP + map
                                       # incremental update load
         max_iteration: 3
         filter_size_surf: 0.3
-        filter_size_map: 0.4          # sparser ikd-Tree map → cheaper map incre
-                                      # (the ~57 ms/frame growth hot spot)
-        cube_side_length: 200.0     # local map cube 500→200: smaller ikd-tree,
-                                    # faster queries; rebuild every ~50 m flown
+        filter_size_map: 0.5          # sparser ikd-Tree map → cheaper map incre
+                                      # (was 57 ms/frame and growing with map
+                                      # size — the frame-drop divergence chain)
+        cube_side_length: 100.0     # local map cube 200→100: map volume /8,
+                                    # ikd-Tree points /8 → map incre ~6 ms;
+                                    # rebase every ~50 m flown (yungu field)
         runtime_pos_log_enable: true
         map_file_path: "./test.pcd"
 
@@ -48,8 +50,9 @@
             b_acc_cov: 0.0001
             b_gyr_cov: 0.0001
             fov_degree:    360.0
-            det_range:     25.0       # ignore points beyond 25 m — distant points
-                                      # add match + map load for little accuracy
+            det_range:     25.0       # 30/35 overload matching (field-edge
+                                      # points pile up beyond ~25 m — ICP hit
+                                      # 476 ms at 35); 25 is the stable point
             extrinsic_est_en: false   # fixed extrinsic for sim
             # Merged cloud is in base_link == IMU frame (lidar_merge applies
             # each lidar's mounting transform) → identity extrinsic.

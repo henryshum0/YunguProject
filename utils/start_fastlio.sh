@@ -145,12 +145,66 @@ cleanup() {
     pkill -9 -f "fastlio_mapping" 2>/dev/null || true
     pkill -9 -f "fastlio_px4_bridge" 2>/dev/null || true
     pkill -9 -f "gazebo_imu_bridge" 2>/dev/null || true
+    pkill -9 -f "imu_relay" 2>/dev/null || true
     pkill -9 -f "add_time_field" 2>/dev/null || true
     pkill -9 -f "lidar_merge" 2>/dev/null || true
     pkill -9 -f "static_transform_publisher" 2>/dev/null || true
     echo "All stopped."
 }
 trap cleanup EXIT INT TERM
+
+# ---------------------------------------------------------------------------
+#  FAST-LIO watchdog — auto-restart when the lidar lock is lost
+# ---------------------------------------------------------------------------
+# FAST-LIO never recovers on its own once matching fails: "No Effective
+# Points!" every frame → no lidar correction (pure IMU drift) → the map
+# keeps being polluted with misaligned points → the run is dead until
+# restarted. Startup is nondeterministic (WSL2 DDS timing), so a fresh
+# start usually re-locks.
+# Counting: a dead run prints ~40/s (4 per frame @ 10 Hz); a healthy run
+# prints none. Any 2 s tick with zero new prints resets the window, so
+# isolated hiccups can never accumulate to a false restart.
+fastlio_watchdog() {
+    local threshold=60 max_restarts=3
+    local restarts=0 count=0 offset=0 inode=0 size=0 inode_now=0
+
+    # Arm only after FAST-LIO initialized (kdtree built, log exists).
+    until grep -q "Initialize the map kdtree" "${LOG_DIR}/fastlio.log" 2>/dev/null; do
+        sleep 2
+    done
+    offset=$(stat -c %s "${LOG_DIR}/fastlio.log")
+    inode=$(stat -c %i "${LOG_DIR}/fastlio.log")
+
+    while :; do
+        sleep 2
+        size=$(stat -c %s "${LOG_DIR}/fastlio.log")
+        inode_now=$(stat -c %i "${LOG_DIR}/fastlio.log")
+        if (( inode_now != inode || size < offset )); then
+            # Log recreated/truncated (a restart) — restart the accounting.
+            offset=$size; inode=$inode_now; count=0
+            continue
+        fi
+        if (( size > offset )); then
+            local new
+            new=$(tail -c +$((offset + 1)) "${LOG_DIR}/fastlio.log" | grep -c "No Effective Points!" || true)
+            offset=$size
+            if (( new > 0 )); then count=$((count + new)); else count=0; fi
+        fi
+        if (( count >= threshold )); then
+            restarts=$((restarts + 1))
+            if (( restarts > max_restarts )); then
+                echo "FAST-LIO watchdog: giving up after ${max_restarts} restarts (still losing lock)"
+                break
+            fi
+            echo "FAST-LIO watchdog: lost lidar lock (${count} 'No Effective Points!') — restart ${restarts}/${max_restarts}"
+            count=0
+            pkill -9 -f "fastlio_mapping" 2>/dev/null || true
+            sleep 2
+            ros2 run fast_lio fastlio_mapping --ros-args --params-file "${FASTLIO_CONFIG}" \
+                >"${LOG_DIR}/fastlio.log" 2>&1 &
+        fi
+    done
+}
 
 # ===========================================================================
 #  Phase 1 — PX4 SITL + Gazebo (GPU + HEADLESS-aware, mirrors start_sim.sh)
@@ -244,8 +298,15 @@ PIDS+=("$!")
 
 # Sensor nodes start in parallel (no serial sleeps); the readiness gate below
 # blocks until their data actually flows.
-python3 "${SCRIPT_DIR}/fastlio/gazebo_imu_bridge.py" --ros-args -p lidar_topic:="${LIDAR_FUSED_TOPIC}" &
+# IMU comes DIRECTLY from gz (bridged in simulation.yaml → /livox/imu_raw,
+# same sim clock as the lidar clouds). imu_relay monotonicizes the stamps
+# (250 Hz DDS jitter once made FAST-LIO diverge) → /livox/imu.
+# gazebo_imu_bridge.py (PX4-anchored IMU) is DISABLED. To revert: re-enable
+# the line below, drop imu_relay, and remove the /livox/imu_raw bridge entry.
+python3 "${SCRIPT_DIR}/fastlio/imu_relay.py" &
 PIDS+=("$!")
+# python3 "${SCRIPT_DIR}/fastlio/gazebo_imu_bridge.py" --ros-args -p lidar_topic:="${LIDAR_FUSED_TOPIC}" &
+# PIDS+=("$!")
 # Side LiDARs (real-hardware mirror): time-field each side, then fuse into one
 # scan in base_link for FAST-LIO (lidar_merge applies the mounting extrinsics).
 python3 "${SCRIPT_DIR}/fastlio/add_time_field.py" --ros-args \
@@ -304,6 +365,12 @@ done
 if [ "${INIT}" -ne 1 ]; then
     echo "WARNING: FAST-LIO may not be fully initialized. Proceeding anyway..."
 fi
+
+# Watchdog: auto-restart FAST-LIO if the lidar lock is lost (a dead run
+# never recovers on its own — see fastlio_watchdog above). Killed by the
+# shared cleanup (PIDS) / by-name pkill.
+fastlio_watchdog &
+PIDS+=("$!")
 
 # ===========================================================================
 #  Phase 3 — Offboard + Planner + RViz (main's super_bridge architecture)
