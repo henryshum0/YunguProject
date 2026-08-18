@@ -1,4 +1,4 @@
-#include "offboard/offboard_node.hpp"
+#include "offboard/offboard.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -38,39 +38,9 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
 
     const auto update_period = std::chrono::milliseconds(static_cast<int>(1000.0 / update_rate_));
 
-    // --- QoS ---
-    auto qos_px4 = rclcpp::QoS(10)
-        .best_effort()
-        .transient_local();
-    // SUPER publishes best_effort/volatile/keep_last(1) — must match exactly
-    auto qos_super = rclcpp::QoS(1)
-        .best_effort()
-        .keep_last(1)
-        .durability_volatile();
-
-    // --- Publishers (to PX4) ---
-    offboard_mode_pub_ = create_publisher<px4_msgs::msg::OffboardControlMode>(
-        "/fmu/in/offboard_control_mode", qos_px4);
-    trajectory_pub_ = create_publisher<px4_msgs::msg::TrajectorySetpoint>(
-        "/fmu/in/trajectory_setpoint", qos_px4);
-    cmd_pub_ = create_publisher<px4_msgs::msg::VehicleCommand>(
-        "/fmu/in/vehicle_command", qos_px4);
-
-    // --- Subscribers ---
-    cmd_sub_ = create_subscription<mars_quadrotor_msgs::msg::PositionCommand>(
-        cmd_topic_, qos_super,
-        std::bind(&OffboardNode::cmdCallback, this, std::placeholders::_1));
-    local_pos_sub_ = create_subscription<px4_msgs::msg::VehicleLocalPosition>(
-        local_pos_topic_, qos_px4,
-        std::bind(&OffboardNode::localPosCallback, this, std::placeholders::_1));
-    status_sub_ = create_subscription<px4_msgs::msg::VehicleStatus>(
-        status_topic_, qos_px4,
-        std::bind(&OffboardNode::statusCallback, this, std::placeholders::_1));
-
-    // --- Waypoint goal publisher (current waypoint -> SUPER, one at a time) ---
-    // SUPER subscribes with best_effort/volatile, so match that QoS exactly.
-    goal_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>(
-        goal_topic_, qos_super);
+    // --- Topic I/O handlers (PX4 and SUPER) ---
+    px4_ = std::make_unique<Px4Handler>(*this, local_pos_topic_, status_topic_);
+    super_ = std::make_unique<SuperHandler>(*this, cmd_topic_, goal_topic_);
 
     // --- Waypoint buffer (buffered waypoints forwarded by the goal marker node) ---
     waypoint_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -78,12 +48,13 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
         std::bind(&OffboardNode::waypointCallback, this, std::placeholders::_1));
 
     // --- Waypoint buffer visualization (MarkerArray, latched + regular) ---
-    waypoint_marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
-        waypoint_marker_topic_, rclcpp::QoS(1).transient_local());
-    const auto marker_period = std::chrono::milliseconds(
-        static_cast<int>(1000.0 / std::max(waypoint_marker_rate_, 1.0)));
-    marker_timer_ = create_wall_timer(marker_period,
-                                      std::bind(&OffboardNode::publishWaypointMarkers, this));
+    vis_ = std::make_unique<VisualizationHandler>(
+        *this, waypoint_marker_topic_, waypoint_marker_rate_,
+        [this](std::deque<geometry_msgs::msg::PoseStamped> &buffered,
+               std::optional<geometry_msgs::msg::PoseStamped> &current) {
+            buffered = waypoint_buffer_;
+            current = current_wp_;
+        });
 
     // --- Landing service ---
     land_srv_ = create_service<std_srvs::srv::Trigger>(
@@ -143,23 +114,6 @@ double OffboardNode::stateElapsedSec() const
 //  Callbacks
 // ======================================================================
 
-void OffboardNode::cmdCallback(const mars_quadrotor_msgs::msg::PositionCommand::SharedPtr msg)
-{
-    latest_cmd_ = msg;
-    last_cmd_stamp_ = now();
-    cmd_stamps_.push_back(now());
-}
-
-void OffboardNode::localPosCallback(const px4_msgs::msg::VehicleLocalPosition::SharedPtr msg)
-{
-    local_pos_ = msg;
-}
-
-void OffboardNode::statusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr msg)
-{
-    status_ = msg;
-}
-
 void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
                                 std::shared_ptr<std_srvs::srv::Trigger::Response> res)
 {
@@ -169,9 +123,9 @@ void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Re
         return;
     }
     // Remember the current hold point (or last cmd) so landing keeps xy
-    if (local_pos_) {
-        hold_x_ = local_pos_->x;
-        hold_y_ = local_pos_->y;
+    if (auto local_pos = px4_->getLocalPosition()) {
+        hold_x_ = local_pos->x;
+        hold_y_ = local_pos->y;
         have_hold_ = true;
     }
     RCLCPP_INFO(get_logger(), "Landing requested");
@@ -210,7 +164,7 @@ void OffboardNode::publishNextWaypoint()
     goal.header.frame_id = current_wp_->header.frame_id.empty()
                                ? "world" : current_wp_->header.frame_id;
     goal.pose = current_wp_->pose;
-    goal_pub_->publish(goal);
+    super_->publishGoal(goal);
 
     RCLCPP_INFO(get_logger(), "Waypoint #%zu sent to SUPER: (%.2f, %.2f, %.2f), "
                 "%zu still buffered",
@@ -230,12 +184,12 @@ void OffboardNode::waypointTick()
 
     // A waypoint is being pursued (already sent to SUPER).
     if (current_wp_) {
+        const auto local_pos = px4_->getLocalPosition();
         // Wait for the drone to reach the waypoint (horizontal distance).
-        if (!wp_reached_ && local_pos_ && local_pos_->xy_valid) {
-            // PX4 local position is NED, origin at the spawn pose; convert to
-            // world ENU (planner convention) by adding the spawn offset.
-            const double enu_x = local_pos_->y + world_offset_x_;
-            const double enu_y = local_pos_->x + world_offset_y_;
+        if (!wp_reached_ && local_pos && local_pos->xy_valid) {
+            // PX4 local position is NED; convert to ENU (planner convention).
+            const double enu_x = local_pos->y;
+            const double enu_y = local_pos->x;
             const double dx = enu_x - current_wp_->pose.position.x;
             const double dy = enu_y - current_wp_->pose.position.y;
             const double dist = std::hypot(dx, dy);
@@ -265,127 +219,13 @@ void OffboardNode::waypointTick()
     }
 }
 
-void OffboardNode::publishWaypointMarkers()
-{
-    visualization_msgs::msg::MarkerArray markers;
-
-    // Clear stale markers from the previous publish.
-    visualization_msgs::msg::Marker clear;
-    clear.header.stamp = now();
-    clear.header.frame_id = "world";
-    clear.ns = "";
-    clear.id = 0;
-    clear.action = visualization_msgs::msg::Marker::DELETEALL;
-    markers.markers.push_back(clear);
-
-    // Green spheres for the buffered (pending) waypoints.
-    int i = 0;
-    for (const auto &wp : waypoint_buffer_) {
-        visualization_msgs::msg::Marker m;
-        m.header.stamp = now();
-        m.header.frame_id = "world";
-        m.ns = "waypoint";
-        m.id = i++;
-        m.type = visualization_msgs::msg::Marker::SPHERE;
-        m.action = visualization_msgs::msg::Marker::ADD;
-        m.pose.position = wp.pose.position;
-        m.scale.x = 2.0f;
-        m.scale.y = 2.0f;
-        m.scale.z = 2.0f;
-        m.color.r = 0.0f;
-        m.color.g = 1.0f;
-        m.color.b = 0.0f;
-        m.color.a = 1.0f;
-        markers.markers.push_back(m);
-    }
-
-    // Yellow sphere for the waypoint currently being pursued.
-    if (current_wp_) {
-        visualization_msgs::msg::Marker m;
-        m.header.stamp = now();
-        m.header.frame_id = "world";
-        m.ns = "active";
-        m.id = 0;
-        m.type = visualization_msgs::msg::Marker::SPHERE;
-        m.action = visualization_msgs::msg::Marker::ADD;
-        m.pose.position = current_wp_->pose.position;
-        m.scale.x = 2.0f;
-        m.scale.y = 2.0f;
-        m.scale.z = 2.0f;
-        m.color.r = 1.0f;
-        m.color.g = 1.0f;
-        m.color.b = 0.0f;
-        m.color.a = 1.0f;
-        markers.markers.push_back(m);
-    }
-
-    // Cyan line connecting the route: the active waypoint (if any) then the
-    // buffered waypoints, in order. Only drawn with >= 2 points.
-    {
-        visualization_msgs::msg::Marker line;
-        line.header.stamp = now();
-        line.header.frame_id = "world";
-        line.ns = "route";
-        line.id = 0;
-        line.type = visualization_msgs::msg::Marker::LINE_STRIP;
-        line.action = visualization_msgs::msg::Marker::ADD;
-        line.scale.x = 1.0f;  // line width [m]
-        line.color.r = 0.0f;
-        line.color.g = 1.0f;
-        line.color.b = 1.0f;
-        line.color.a = 1.0f;
-        if (current_wp_) {
-            line.points.push_back(current_wp_->pose.position);
-        }
-        for (const auto &wp : waypoint_buffer_) {
-            line.points.push_back(wp.pose.position);
-        }
-        if (line.points.size() >= 2) {
-            markers.markers.push_back(line);
-        }
-    }
-
-    waypoint_marker_pub_->publish(markers);
-}
-
 // ======================================================================
-//  PX4 helpers
+//  Setpoint helpers (built on Px4Handler::publishSetpoint)
 // ======================================================================
-
-void OffboardNode::publishOffboardMode(bool position, bool velocity, bool acceleration)
-{
-    px4_msgs::msg::OffboardControlMode m;
-    m.position = position;
-    m.velocity = velocity;
-    m.acceleration = acceleration;
-    m.attitude = false;
-    m.body_rate = false;
-    m.thrust_and_torque = false;
-    m.direct_actuator = false;
-    m.timestamp = now().nanoseconds() / 1000;
-    offboard_mode_pub_->publish(m);
-}
-
-void OffboardNode::publishSetpoint(float x, float y, float z,
-                                   float vx, float vy, float vz,
-                                   float yaw, float yawspeed,
-                                   float ax, float ay, float az)
-{
-    px4_msgs::msg::TrajectorySetpoint sp;
-    sp.position = {x, y, z};
-    sp.velocity = {vx, vy, vz};
-    // Provide the trajectory's acceleration (NED) as feedforward; defaults to
-    // NaN (not controlled) for hover/takeoff/landing setpoints.
-    sp.acceleration = {ax, ay, az};
-    sp.jerk = {NAN, NAN, NAN};
-    sp.yaw = yaw;
-    sp.yawspeed = yawspeed;
-    trajectory_pub_->publish(sp);
-}
 
 void OffboardNode::publishHold()
 {
-    publishSetpoint(hold_x_, hold_y_, hold_z_, 0.0f, 0.0f, 0.0f);
+    px4_->publishSetpoint(hold_x_, hold_y_, hold_z_, 0.0f, 0.0f, 0.0f);
 }
 
 void OffboardNode::publishTakeoffSetpoint()
@@ -409,8 +249,8 @@ void OffboardNode::publishTakeoffSetpoint()
     const float vz = static_cast<float>(dz * blend_dot);
     const float az = static_cast<float>(dz * blend_ddot);
 
-    publishSetpoint(takeoff_start_x_, takeoff_start_y_, z,
-                    0.0f, 0.0f, vz, NAN, 0.0f, NAN, NAN, az);
+    px4_->publishSetpoint(takeoff_start_x_, takeoff_start_y_, z,
+                          0.0f, 0.0f, vz, NAN, 0.0f, NAN, NAN, az);
 
     if (s >= 1.0) {
         RCLCPP_INFO(get_logger(), "Smooth takeoff complete at z=%.2f m", hold_z_);
@@ -418,89 +258,15 @@ void OffboardNode::publishTakeoffSetpoint()
     }
 }
 
-void OffboardNode::sendCommand(uint16_t command, float param1, float param2)
-{
-    px4_msgs::msg::VehicleCommand msg;
-    msg.command = command;
-    msg.param1 = param1;
-    msg.param2 = param2;
-    msg.target_system = 1;
-    msg.target_component = 1;
-    msg.source_system = 1;
-    msg.source_component = 1;
-    msg.from_external = true;
-    msg.timestamp = now().nanoseconds() / 1000;
-    cmd_pub_->publish(msg);
-}
-
-void OffboardNode::arm()
-{
-    RCLCPP_INFO(get_logger(), "Sending ARM command");
-    sendCommand(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 1.0f);
-}
-
-void OffboardNode::disarm()
-{
-    RCLCPP_INFO(get_logger(), "Sending DISARM command");
-    sendCommand(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0f);
-}
-
-void OffboardNode::setOffboardMode()
-{
-    RCLCPP_INFO(get_logger(), "Requesting OFFBOARD mode");
-    sendCommand(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1.0f, 6.0f);
-}
-
-// ======================================================================
-//  vehicle_status confirmation helpers
-// ======================================================================
-
-bool OffboardNode::isArmed() const
-{
-    return status_ != nullptr &&
-           status_->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED;
-}
-
-bool OffboardNode::isOffboard() const
-{
-    return status_ != nullptr &&
-           status_->nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD;
-}
-
-bool OffboardNode::isDisarmed() const
-{
-    return status_ != nullptr &&
-           status_->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_DISARMED;
-}
-
 // ======================================================================
 //  Planner rate measurement (hysteresis)
 // ======================================================================
 
-double OffboardNode::cmdRateHz() const
-{
-    // Remove stamps older than 1 s, then count what's left.
-    const rclcpp::Time cutoff = now() - rclcpp::Duration(1, 0);
-    // deque is const here; count without mutating
-    size_t n = 0;
-    for (auto it = cmd_stamps_.rbegin(); it != cmd_stamps_.rend(); ++it) {
-        if (*it < cutoff) {
-            break;
-        }
-        n++;
-    }
-    return static_cast<double>(n);
-}
-
 void OffboardNode::updatePlannerActivity()
 {
-    // Prune stale stamps once in a while (cheap enough every tick)
-    const rclcpp::Time cutoff = now() - rclcpp::Duration(1, 0);
-    while (!cmd_stamps_.empty() && cmd_stamps_.front() < cutoff) {
-        cmd_stamps_.pop_front();
-    }
-
-    const bool cond = cmdRateHz() >= planner_cmd_hz_;
+    // Drop stale stamps from the 1 s window, then measure the current rate.
+    super_->pruneCmdStamps();
+    const bool cond = super_->cmdRateHz() >= planner_cmd_hz_;
     if (cond != planner_cond_val_) {
         planner_cond_val_ = cond;
         planner_cond_t_ = now();
@@ -553,14 +319,14 @@ void OffboardNode::enuToNedAcc(double ex, double ey, double ez,
 
 void OffboardNode::timerCallback()
 {
-    if (state_==State::PLANNER) publishOffboardMode(true, true, true);
-    else publishOffboardMode(true, false, false);
+    if (state_ == State::PLANNER) px4_->publishOffboardControlMode(true, true, true);
+    else px4_->publishOffboardControlMode(true, false, false);
 
     switch (state_) {
         // --------------------------------------------------------------
         case State::INIT: {
             // Stream origin so PX4 sees the offboard stream before arming.
-            publishSetpoint(0.0f, 0.0f, 0.0f);
+            px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
             if (stateElapsedSec() > arm_wait_) {
                 setState(State::ARMING);
             }
@@ -568,33 +334,34 @@ void OffboardNode::timerCallback()
         }
         // --------------------------------------------------------------
         case State::ARMING: {
-            publishSetpoint(0.0f, 0.0f, 0.0f);
+            px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
             // if (stateElapsedSec() < 0.1) {
             //     arm();
             // }
             // Confirm arming from vehicle_status instead of a fixed wait.
-            if (isArmed()) {
+            if (px4_->isArmed()) {
                 RCLCPP_INFO(get_logger(), "Vehicle confirmed ARMED");
                 setState(State::SET_OFFBOARD);
             }
-            else arm();
+            else px4_->arm();
             break;
         }
         // --------------------------------------------------------------
         case State::SET_OFFBOARD: {
-            publishSetpoint(0.0f, 0.0f, 0.0f);
+            px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
             if (stateElapsedSec() < 0.1) {
-                setOffboardMode();
+                px4_->setOffboardMode();
             }
-            if (isOffboard()) {
+            if (px4_->isOffboard()) {
                 RCLCPP_INFO(get_logger(), "Vehicle confirmed OFFBOARD mode");
 
-                if (local_pos_ && local_pos_->xy_valid && local_pos_->z_valid
-                    && std::isfinite(local_pos_->x) && std::isfinite(local_pos_->y)
-                    && std::isfinite(local_pos_->z)) {
-                    takeoff_start_x_ = local_pos_->x;
-                    takeoff_start_y_ = local_pos_->y;
-                    takeoff_start_z_ = local_pos_->z;
+                const auto local_pos = px4_->getLocalPosition();
+                if (local_pos && local_pos->xy_valid && local_pos->z_valid
+                    && std::isfinite(local_pos->x) && std::isfinite(local_pos->y)
+                    && std::isfinite(local_pos->z)) {
+                    takeoff_start_x_ = local_pos->x;
+                    takeoff_start_y_ = local_pos->y;
+                    takeoff_start_z_ = local_pos->z;
                 } else {
                     takeoff_start_x_ = 0.0f;
                     takeoff_start_y_ = 0.0f;
@@ -624,10 +391,10 @@ void OffboardNode::timerCallback()
 
             if (planner_active_) {
                 // Remember the current hold so we can return to it later.
-                if (local_pos_) {
-                    hold_x_ = local_pos_->x;
-                    hold_y_ = local_pos_->y;
-                    hold_z_ = local_pos_->z;
+                if (auto local_pos = px4_->getLocalPosition()) {
+                    hold_x_ = local_pos->x;
+                    hold_y_ = local_pos->y;
+                    hold_z_ = local_pos->z;
                 }
                 setState(State::PLANNER);
             }
@@ -638,12 +405,10 @@ void OffboardNode::timerCallback()
             updatePlannerActivity();
             if (!planner_active_) {
                 // Planner stopped → freeze at last commanded position.
-                if (latest_cmd_) {
-                    // Planner cmd is world ENU; PX4 hold setpoint needs local
-                    // (spawn-relative) ENU, so subtract the world offset.
-                    enuToNedPos(latest_cmd_->position.x - world_offset_x_,
-                                latest_cmd_->position.y - world_offset_y_,
-                                latest_cmd_->position.z - world_offset_z_,
+                if (auto cmd = super_->getLatestCommand()) {
+                    enuToNedPos(cmd->position.x,
+                                cmd->position.y,
+                                cmd->position.z,
                                 hold_x_, hold_y_, hold_z_);
                     have_hold_ = true;
                 }
@@ -664,45 +429,49 @@ void OffboardNode::timerCallback()
                 break;
             }
 
-            if (!latest_cmd_) {
+            auto cmd = super_->getLatestCommand();
+            if (!cmd) {
                 publishHold();
                 break;
             }
 
             // Forward the planner command (ENU → NED), including the
-            // trajectory'x`xs acceleration as feedforward. The planner cmd is
-            // world ENU, but PX4 setpoints are in the local frame (origin at
-            // the spawn pose), so subtract the world offset first.
-            const auto &cmd = *latest_cmd_;
+            // trajectory's acceleration as feedforward.
+            const auto &c = *cmd;
             float nx, ny, nz, vx, vy, vz, ax, ay, az;
-            enuToNedPos(cmd.position.x - world_offset_x_,
-                        cmd.position.y - world_offset_y_,
-                        cmd.position.z - world_offset_z_, nx, ny, nz);
-            enuToNedVel(cmd.velocity.x, cmd.velocity.y, cmd.velocity.z, vx, vy, vz);
-            enuToNedAcc(cmd.acceleration.x, cmd.acceleration.y, cmd.acceleration.z, ax, ay, az);
+            enuToNedPos(c.position.x, c.position.y, c.position.z, nx, ny, nz);
+            enuToNedVel(c.velocity.x, c.velocity.y, c.velocity.z, vx, vy, vz);
+            enuToNedAcc(c.acceleration.x, c.acceleration.y, c.acceleration.z, ax, ay, az);
 
             // SUPER yaw is ENU (0 = East, CCW+); PX4 is NED (0 = North, CW+).
             constexpr float PI_HALF = 1.57079632679f;
-            const float yaw_ned = PI_HALF - static_cast<float>(cmd.yaw);
-            const float yawspeed_ned = -static_cast<float>(cmd.yaw_dot);
+            constexpr double TWO_PI = 6.28318530717958647692;
+            // SUPER's yaw command is an unwrapped (continuous) angle and can
+            // exceed [-pi, pi]; wrap the NED yaw into [-pi, pi] (equivalent
+            // angle) so PX4 always gets a heading in range and tracks the
+            // shortest path.
+            const float yaw_ned = static_cast<float>(
+                std::remainder(PI_HALF - static_cast<double>(c.yaw), TWO_PI));
+            const float yawspeed_ned = -static_cast<float>(c.yaw_dot);
 
-            publishSetpoint(nx, ny, nz, vx, vy, vz, yaw_ned, yawspeed_ned, ax, ay, az);
+            px4_->publishSetpoint(nx, ny, nz, vx, vy, vz, NAN, yawspeed_ned, ax, ay, az);
             break;
         }
         // --------------------------------------------------------------
         case State::LANDING: {
             const float target_z = static_cast<float>(landing_z_);
             if (have_hold_) {
-                publishSetpoint(hold_x_, hold_y_, target_z,
-                                0.0f, 0.0f, static_cast<float>(-landing_vel_));
+                px4_->publishSetpoint(hold_x_, hold_y_, target_z,
+                                      0.0f, 0.0f, static_cast<float>(-landing_vel_));
             } else {
-                publishSetpoint(0.0f, 0.0f, target_z,
-                                0.0f, 0.0f, static_cast<float>(-landing_vel_));
+                px4_->publishSetpoint(0.0f, 0.0f, target_z,
+                                      0.0f, 0.0f, static_cast<float>(-landing_vel_));
             }
 
-            const bool on_ground = local_pos_ && local_pos_->z > target_z;
+            const auto local_pos = px4_->getLocalPosition();
+            const bool on_ground = local_pos && local_pos->z > target_z;
             if (on_ground || stateElapsedSec() > 20.0) {
-                disarm();
+                px4_->disarm();
                 setState(State::LANDED);
             }
             break;

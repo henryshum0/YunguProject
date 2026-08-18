@@ -3,17 +3,17 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <deque>
+#include <memory>
 #include <optional>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
-#include <px4_msgs/msg/offboard_control_mode.hpp>
-#include <px4_msgs/msg/trajectory_setpoint.hpp>
-#include <px4_msgs/msg/vehicle_command.hpp>
-#include <px4_msgs/msg/vehicle_local_position.hpp>
-#include <px4_msgs/msg/vehicle_status.hpp>
 #include <mars_quadrotor_msgs/msg/position_command.hpp>
+#include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <std_srvs/srv/trigger.hpp>
-#include <visualization_msgs/msg/marker_array.hpp>
+
+#include "offboard/px4_handler.hpp"
+#include "offboard/super_handler.hpp"
+#include "offboard/visualization_handler.hpp"
 
 namespace offboard
 {
@@ -34,6 +34,10 @@ namespace offboard
  *
  *  The planner only publishes /planning/pos_cmd after it receives a goal,
  *  so this node detects "hand-over to planner" by measuring the command rate.
+ *
+ *  Topic I/O is delegated to Px4Handler (PX4 stack), SuperHandler (SUPER
+ *  planner) and VisualizationHandler (waypoint-route markers); this class
+ *  keeps the state machine, waypoint following and the ENU→NED conversions.
  */
 class OffboardNode : public rclcpp::Node
 {
@@ -94,33 +98,24 @@ private:
     double world_offset_z_{0.0};
 
     // ------------------------------------------------------------------
-    //  Publishers / Subscribers / Services
+    //  Topic I/O handlers
     // ------------------------------------------------------------------
-    rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr offboard_mode_pub_;
-    rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr trajectory_pub_;
-    rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr cmd_pub_;
-    rclcpp::Subscription<mars_quadrotor_msgs::msg::PositionCommand>::SharedPtr cmd_sub_;
-    rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr local_pos_sub_;
-    rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr status_sub_;
+    std::unique_ptr<Px4Handler> px4_;
+    std::unique_ptr<SuperHandler> super_;
+    std::unique_ptr<VisualizationHandler> vis_;
+
+    // ------------------------------------------------------------------
+    //  Publishers / Subscribers / Services (node-local, not PX4/SUPER)
+    // ------------------------------------------------------------------
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_srv_;
     rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::TimerBase::SharedPtr marker_timer_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr waypoint_marker_pub_;
 
     // ------------------------------------------------------------------
     //  Internal state
     // ------------------------------------------------------------------
     State state_{State::INIT};
     rclcpp::Time state_enter_t_;
-
-    mars_quadrotor_msgs::msg::PositionCommand::SharedPtr latest_cmd_{nullptr};
-    rclcpp::Time last_cmd_stamp_;
-    std::deque<rclcpp::Time> cmd_stamps_;   ///< recent cmd stamps (1 s window)
-
-    px4_msgs::msg::VehicleLocalPosition::SharedPtr local_pos_{nullptr};
-    px4_msgs::msg::VehicleStatus::SharedPtr status_{nullptr};
 
     /// current NED hold position for IDLE / LANDING
     float hold_x_{0.0f};
@@ -149,9 +144,6 @@ private:
     //  Callbacks
     // ------------------------------------------------------------------
     void timerCallback();
-    void cmdCallback(const mars_quadrotor_msgs::msg::PositionCommand::SharedPtr msg);
-    void localPosCallback(const px4_msgs::msg::VehicleLocalPosition::SharedPtr msg);
-    void statusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr msg);
     void landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
                       std::shared_ptr<std_srvs::srv::Trigger::Response> res);
     void waypointCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
@@ -165,37 +157,21 @@ private:
     double stateElapsedSec() const;
 
     // ------------------------------------------------------------------
-    //  PX4 helpers
+    //  Setpoint helpers (built on Px4Handler::publishSetpoint)
     // ------------------------------------------------------------------
-    void publishOffboardMode(bool position, bool velocity, bool acceleration);
-    void publishSetpoint(float x, float y, float z,
-                         float vx = 0.0f, float vy = 0.0f, float vz = 0.0f,
-                         float yaw = NAN, float yawspeed = 0.0f,
-                         float ax = NAN, float ay = NAN, float az = NAN);
     void publishHold();
     void publishTakeoffSetpoint();
-    void sendCommand(uint16_t command, float param1 = 0.0f, float param2 = 0.0f);
-    void arm();
-    void disarm();
-    void setOffboardMode();
-
-    // vehicle_status confirmation helpers
-    bool isArmed() const;
-    bool isOffboard() const;
-    bool isDisarmed() const;
 
     // ------------------------------------------------------------------
-    //  Planner rate measurement
+    //  Planner rate measurement (uses SuperHandler::cmdRateHz)
     // ------------------------------------------------------------------
     void updatePlannerActivity();
-    double cmdRateHz() const;
 
     // ------------------------------------------------------------------
     //  Waypoint following
     // ------------------------------------------------------------------
     void waypointTick();
     void publishNextWaypoint();
-    void publishWaypointMarkers();
 
     // ------------------------------------------------------------------
     //  Conversion (ENU → NED)

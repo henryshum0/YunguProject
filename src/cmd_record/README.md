@@ -24,7 +24,18 @@ planner is commanding.
   goal and data stay together.
 - **Live sliding-window view**: realtime `window_sec`-long scrolling plot with
   **cmd vs real odometry per axis** (X/Y/Z rows; Position/Velocity/Accel/
-  Attitude/Body-rate columns).
+  Attitude/Body-rate columns). The Body-rate cells show the **commanded vs real
+  (odom) body rate**; the Z-row Attitude/Body-rate cells additionally show the
+  **yaw command**, the **yaw-rate command** and the **real drone yaw** (from
+  odometry), so the yaw tracking response is visible live.
+- **Body-rate tracking**: every row records the commanded body rate
+  (`/planning/pos_cmd.angular_velocity`) and the **real body rate** (`owx owy
+  owz`, from the odometry twist), so the body-rate tracking response is visible
+  in the CSV and overlaid in the Body-rate plot cells.
+- **Yaw-command tracking**: every row records the commanded yaw
+  (`/planning/pos_cmd.yaw`, **wrapped into [-π, π]** so it is directly
+  comparable with the real drone yaw), commanded yaw rate (`yaw_dot`) and the
+  **real drone yaw** (`oyaw`, extracted from the odometry quaternion).
 - **Post-hoc plot**: `plot_csv` replays any saved CSV.
 
 ## CSV format
@@ -40,8 +51,11 @@ Files: `<project>/cmd_log/goal_<NNN>_<timestamp>.csv`
 | 11–13 | `ax ay az` | commanded acceleration [m/s²] |
 | 14–16 | `roll pitch yaw` | commanded attitude [rad] |
 | 17–19 | `wx wy wz` | commanded body rate [rad/s] |
-| 20–22 | `opx opy opz` | real odometry position [m] |
-| 23–25 | `ovx ovy ovz` | real odometry velocity [m/s] |
+| 20–22 | `owx owy owz` | real (odom) body rate [rad/s] |
+| 23–24 | `yaw_cmd yaw_dot_cmd` | commanded yaw (wrapped to [-π, π]) + yaw rate [rad, rad/s] |
+| 25 | `oyaw` | real drone yaw from odometry [rad] |
+| 26–28 | `opx opy opz` | real odometry position [m] |
+| 29–31 | `ovx ovy ovz` | real odometry velocity [m/s] |
 
 ## Build
 

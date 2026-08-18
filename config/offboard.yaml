@@ -20,7 +20,7 @@ offboard:
   planner_cmd_hz: 80.0
 
   # Delay before/after switching to the planner [s]
-  planner_enter_delay: 0.5
+  planner_enter_delay: 0.2
   planner_exit_delay: 1.0
 
   # Wait after ARM before switching to OFFBOARD [s]

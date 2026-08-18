@@ -13,14 +13,20 @@
 #   - A segment is stopped and saved when the commanded-trajectory publish rate
 #     drops below min_cmd_rate (default 10 Hz), i.e. the planner stopped.
 #   - Each CSV row carries the current goal position, so goal + trajectory
-#     (position, velocity, acceleration, attitude, body rate) + the real
-#     odometry (position/velocity) live in one file.
+#     (position, velocity, acceleration, attitude, body rate, yaw command,
+#     yaw-rate command) + the real drone yaw and odometry (position/velocity/
+#     body rate) live in one file. The yaw command (pos_cmd.yaw) is wrapped
+#     into [-pi, pi] so it is directly comparable with the real drone yaw.
 #   - CSVs are written to <project>/cmd_log/ (override with log_dir=).
 #   - A live matplotlib window shows cmd vs real odometry per axis (X/Y/Z rows;
 #     Position/Velocity/Accel/Attitude/Body-rate columns) with a sliding window
-#     (window_sec), updated in realtime.
+#     (window_sec), updated in realtime. The Body-rate cells show the commanded
+#     vs the real (odom) body rate; the Z-row Attitude/Body-rate cells
+#     additionally show the yaw command, the yaw-rate command and the real
+#     drone yaw.
 
 import csv
+import math
 import os
 import signal
 import threading
@@ -48,7 +54,8 @@ except Exception:  # pragma: no cover - matplotlib may not be installed
 CSV_HEADER = [
     "t", "gx", "gy", "gz",
     "px", "py", "pz", "vx", "vy", "vz", "ax", "ay", "az",
-    "roll", "pitch", "yaw", "wx", "wy", "wz",
+    "roll", "pitch", "yaw", "wx", "wy", "wz", "owx", "owy", "owz",
+    "yaw_cmd", "yaw_dot_cmd", "oyaw",
     "opx", "opy", "opz", "ovx", "ovy", "ovz",
 ]
 
@@ -73,8 +80,21 @@ def _cell_specs(c, axis):
     if c == 2:
         return [(a, "cmd", "tab:blue", "-")]
     if c == 3:
-        return [(att, "cmd", "tab:blue", "-")]
-    return [(br, "cmd", "tab:blue", "-")]
+        # Attitude: commanded roll/pitch/yaw; on Z also plot the yaw command
+        # and the real drone yaw (from odometry).
+        specs = [(att, "cmd", "tab:blue", "-")]
+        if axis[0] == "Z":
+            specs.append(("yaw_cmd", "yaw cmd", "tab:green", "-"))
+            specs.append(("oyaw", "odom yaw", "tab:red", "--"))
+        return specs
+    # Body rate: commanded vs real (odom) body rates; on Z also plot the
+    # yaw-rate command.
+    _br_map = {"wx": "owx", "wy": "owy", "wz": "owz"}
+    specs = [(br, "cmd", "tab:blue", "-"),
+             (_br_map[br], "odom", "tab:red", "--")]
+    if axis[0] == "Z":
+        specs.append(("yaw_dot_cmd", "yaw_dot cmd", "tab:green", "-"))
+    return specs
 
 
 class CmdRecordNode(Node):
@@ -121,6 +141,8 @@ class CmdRecordNode(Node):
         self._last_cmd = None      # node-clock time of the last cmd
         self._cmd_times = deque(maxlen=500)
         self._last_odom = None     # latest nav_msgs/Odometry
+        self._last_odom_yaw = None # drone yaw [rad] from the latest odom quaternion
+        self._last_odom_ang = None # (wx, wy, wz) body rate from the latest odom twist
         self._odom_count = 0
         self._lock = threading.Lock()
 
@@ -217,6 +239,20 @@ class CmdRecordNode(Node):
                 "roll": msg.attitude.x, "pitch": msg.attitude.y, "yaw": msg.attitude.z,
                 "wx": msg.angular_velocity.x, "wy": msg.angular_velocity.y,
                 "wz": msg.angular_velocity.z,
+                # real (odom) body rate from the latest /lidar_slam/odom twist
+                "owx": self._last_odom_ang[0] if self._last_odom_ang is not None
+                       else float("nan"),
+                "owy": self._last_odom_ang[1] if self._last_odom_ang is not None
+                       else float("nan"),
+                "owz": self._last_odom_ang[2] if self._last_odom_ang is not None
+                       else float("nan"),
+                # SUPER's yaw command is an unwrapped (continuous) angle that
+                # can exceed [-pi, pi]; wrap it into [-pi, pi] so it is directly
+                # comparable with the real drone yaw (oyaw).
+                "yaw_cmd": math.remainder(msg.yaw, 2.0 * math.pi),
+                "yaw_dot_cmd": msg.yaw_dot,
+                "oyaw": self._last_odom_yaw if self._last_odom_yaw is not None
+                        else float("nan"),
             }
             if od is not None:
                 row["opx"] = od.pose.pose.position.x
@@ -241,6 +277,9 @@ class CmdRecordNode(Node):
     def _odom_cb(self, msg):
         with self._lock:
             self._last_odom = msg
+            self._last_odom_yaw = self._quat_to_yaw(msg.pose.pose.orientation)
+            av = msg.twist.twist.angular
+            self._last_odom_ang = (av.x, av.y, av.z)
             self._odom_count += 1
 
     # ======================================================================
@@ -320,6 +359,9 @@ class CmdRecordNode(Node):
                 "%.6f" % r["ax"], "%.6f" % r["ay"], "%.6f" % r["az"],
                 "%.6f" % r["roll"], "%.6f" % r["pitch"], "%.6f" % r["yaw"],
                 "%.6f" % r["wx"], "%.6f" % r["wy"], "%.6f" % r["wz"],
+                "%.6f" % r["owx"], "%.6f" % r["owy"], "%.6f" % r["owz"],
+                "%.6f" % r["yaw_cmd"], "%.6f" % r["yaw_dot_cmd"],
+                "%.6f" % r["oyaw"],
                 "%.6f" % r["opx"], "%.6f" % r["opy"], "%.6f" % r["opz"],
                 "%.6f" % r["ovx"], "%.6f" % r["ovy"], "%.6f" % r["ovz"],
             ])
@@ -450,6 +492,12 @@ class CmdRecordNode(Node):
         if isinstance(v, bool):
             return v
         return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+    @staticmethod
+    def _quat_to_yaw(q):
+        """Yaw [rad] about Z from a quaternion (w, x, y, z)."""
+        return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
     @staticmethod
     def _find_workspace_root():

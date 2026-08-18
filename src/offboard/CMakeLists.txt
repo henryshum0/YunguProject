@@ -25,7 +25,10 @@ find_package(nav_msgs REQUIRED)
 # --- Standalone executable ---
 add_executable(offboard_node
   src/main.cpp
-  src/offboard_node.cpp
+  src/offboard.cpp
+  src/px4_handler.cpp
+  src/super_handler.cpp
+  src/visualization_handler.cpp
 )
 
 target_include_directories(offboard_node PUBLIC
@@ -68,7 +71,10 @@ ament_target_dependencies(super_bridge
 
 # --- Composable component ---
 add_library(offboard_component SHARED
-  src/offboard_node.cpp
+  src/offboard.cpp
+  src/px4_handler.cpp
+  src/super_handler.cpp
+  src/visualization_handler.cpp
 )
 
 target_include_directories(offboard_component PUBLIC
