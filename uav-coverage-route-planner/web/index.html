@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>无人机全覆盖航道生成与路径优化器</title><link rel="stylesheet" href="/styles.css?v=16"></head>
+<body><header><strong>无人机全覆盖航道生成与路径优化器</strong><span id="coords">ENU 东向 0.0，北向 0.0</span><button id="plan">生成并优化两架无人机航线</button></header>
+<main><aside>
+  <section><h2>责任区与起点</h2>
+    <p class="hint">两架无人机的责任区不能重叠；绕行时可以短暂离开责任区。点击绘制按钮后，在地图上依次点击矩形的两个对角。</p>
+    <button class="draw-region drone-1" data-drone="0">绘制无人机 1 责任区</button>
+    <label>无人机 1 起点 ENU 东向 / 北向（米）<div><input id="home1-x" type="number" step=".1" value="153.4"><input id="home1-y" type="number" step=".1" value="67.2"></div></label>
+    <button class="draw-region drone-2" data-drone="1">绘制无人机 2 责任区</button>
+    <label>无人机 2 起点 ENU 东向 / 北向（米）<div><input id="home2-x" type="number" step=".1" value="153.4"><input id="home2-y" type="number" step=".1" value="67.2"></div></label>
+  </section>
+  <section><h2>Coverage Generation</h2><label>飞行高度（米）<input id="alt" type="number" value="30"></label><label>覆盖航道生成方法<select id="generator"><option value="global_scanline">Global Scanline（全局扫描线）</option><option value="bcd">Cellular Decomposition（BCD）</option></select></label><p id="generator-help" class="hint">直接在整个有效区域铺设扫描线，经边界与障碍裁剪后得到 coverage lanes。</p><p class="hint">扫描方向自动在南北（0°）与东西（90°）之间选择。</p><label>水平 / 垂直安全距离（米）<div><input id="hc" type="number" value="3"><input id="vc" type="number" value="2"></div></label></section>
+  <section><h2>Route Optimization</h2><p class="hint">自动优化：不超过 12 条航线时使用 Exact；更大任务使用 Greedy + 2-opt + Or-opt。</p><label>覆盖补全策略<select id="completion-strategy"><option value="local_insertion">Local insertion（默认）</option><option value="full_greedy">Full Greedy（对照）</option></select></label><p class="hint">默认固定主航线顺序，只在航线之间按最小增量插入补全点；Full Greedy 会在补全后重新组织整条路线。</p></section>
+  <section><h2>相机与目标模型</h2><label>水平 / 垂直视场角（度）<div><input id="hfov" type="number" value="60"><input id="vfov" type="number" value="45"></div></label><label>航向 / 旁向视野重叠率<div><input id="fo" type="number" step=".05" value=".3"><input id="so" type="number" step=".05" value=".3"></div></label><label>目标包络宽 / 长 / 高（米）<div class="three"><input id="target-width" type="number" step=".1" value="2.5"><input id="target-length" type="number" step=".1" value="6"><input id="target-height" type="number" step=".1" value="2.5"></div></label><label>画面边缘安全比例<input id="image-margin" type="number" step=".01" value=".05"></label></section>
+  <section><h2>飞行设置</h2><label>视频分析采样率（赫兹）<input id="frequency" type="number" step=".5" value="2"></label><label>飞控途径点最大间距（米）<input id="control-spacing" type="number" min="1" step="1" value="10"></label><label>检测航线 / 连接航线速度（米/秒）<div><input id="lane-speed" type="number" step=".5" value="5"><input id="connector-speed" type="number" step=".5" value="4"></div></label><label>避障速度（米/秒）<input id="obstacle-speed" type="number" step=".5" value="2.5"></label></section>
+  <section><h2>地图图层</h2><label><input type="checkbox" data-layer="background" checked> 航拍底图</label><label><input type="checkbox" data-layer="buildings" checked> 建筑及墙体</label><label><input type="checkbox" data-layer="coverage" checked> 有效检测视野</label><label><input type="checkbox" data-layer="cells"> BCD cell 边界与编号</label><label><input type="checkbox" data-layer="lanes" checked> 初始覆盖 lane（实线）</label><label><input type="checkbox" data-layer="transitions" checked> lane 间切换航线（虚线）</label><label><input type="checkbox" data-layer="patches"> 覆盖验收 patch（调试）</label><label><input type="checkbox" data-layer="waypoints"> 飞控途径点</label></section>
+  <section><h2>同步回放</h2><button id="replay" disabled>逐步生成检测视野</button><label>回放速度<input id="speed" type="range" min="1" max="10" value="5"></label><p class="hint">回放时，有效 viewpoint 会沿航线依次出现并逐步覆盖责任区；建筑墙体遮挡部分不会显示。</p></section>
+  <section><h2>规划计时</h2><div id="planning-timer" class="planning-timer">0.0 秒</div></section>
+  <section><h2>本次 Web 规划记录</h2><div id="planning-history"><p>暂无记录</p></div></section>
+  <section id="summary"><h2>规划结果</h2><p>等待规划</p></section><section><h2>导出文件</h2><div id="exports"></div></section>
+</aside><div id="map"><svg id="canvas"></svg><div id="draw-tip"></div><div id="error"></div></div></main><script src="/app.js?v=32"></script></body></html>

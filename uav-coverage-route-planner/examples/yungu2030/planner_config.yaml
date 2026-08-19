@@ -1,0 +1,30 @@
+flight_altitude_m: 25.0
+ground_elevation_m: 0.0
+start: [153.4, 67.2, 25.0]
+horizontal_clearance_m: 3.0
+vertical_clearance_m: 2.0
+allow_overflight_above_buildings: true
+scan_direction_deg: null
+coverage_generation_method: global_scanline
+route_optimization_method: auto
+completion_strategy: local_insertion
+minimum_coverage_ratio: 0.9999
+video_analysis_rate_hz: 2.0
+control_point_spacing_m: 10.0
+coverage_speed_mps: 5.0
+connector_speed_mps: 4.0
+obstacle_speed_mps: 2.5
+return_speed_mps: 4.0
+camera:
+  image_width_px: 1920
+  image_height_px: 1080
+  horizontal_fov_deg: 60.0
+  vertical_fov_deg: 45.0
+  pitch_deg: -90.0
+  yaw_mode: follow_path
+  forward_overlap: 0.30
+  side_overlap: 0.30
+  target_width_m: 2.5
+  target_length_m: 6.0
+  target_height_m: 2.5
+  image_boundary_margin_ratio: 0.05

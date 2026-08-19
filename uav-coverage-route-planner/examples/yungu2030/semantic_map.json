@@ -1,0 +1,1055 @@
+{
+  "schema_version": "1.0",
+  "world_name": "yungu2030_local_origin",
+  "coordinate_frame": "ENU",
+  "units": "meters",
+  "search_area": {
+    "kind": "rectangle",
+    "coords": [
+      [
+        -4.835386753082275,
+        -10.610369682312012
+      ],
+      [
+        324.72998046875,
+        -10.610369682312012
+      ],
+      [
+        324.72998046875,
+        210.56312561035156
+      ],
+      [
+        -4.835386753082275,
+        210.56312561035156
+      ]
+    ]
+  },
+  "nodes": [
+    {
+      "id": "collider_building1",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building1",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -0.3473472595214844,
+        "elevation_max_m": 54.73069381713867
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          265.93353271484375,
+          -1.4496781826019287
+        ],
+        "max_corner": [
+          305.05157470703125,
+          47.00836181640625
+        ]
+      }
+    },
+    {
+      "id": "collider_building4",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building4",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -4.964199066162109,
+        "elevation_max_m": 50.11384201049805
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          265.92608642578125,
+          150.96011352539062
+        ],
+        "max_corner": [
+          305.04412841796875,
+          200.59814453125
+        ]
+      }
+    },
+    {
+      "id": "collider_building8",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building8",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 1.8347358703613281,
+        "elevation_max_m": 53.63273239135742
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          158.84915161132812,
+          150.9185028076172
+        ],
+        "max_corner": [
+          190.52716064453125,
+          191.9965057373047
+        ]
+      }
+    },
+    {
+      "id": "collider_building10",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building10",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 2.090381622314453,
+        "elevation_max_m": 53.88837814331055
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          105.67807006835938,
+          133.17710876464844
+        ],
+        "max_corner": [
+          137.3560791015625,
+          174.25511169433594
+        ]
+      }
+    },
+    {
+      "id": "collider_building13",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building13",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -0.4703102111816406,
+        "elevation_max_m": 54.607730865478516
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          0.49656668305397034,
+          0.8536209464073181
+        ],
+        "max_corner": [
+          34.49461364746094,
+          46.39166259765625
+        ]
+      }
+    },
+    {
+      "id": "collider_building2",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building2",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 1.218918800354004,
+        "elevation_max_m": 32.71696472167969
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          266.669189453125,
+          59.4443359375
+        ],
+        "max_corner": [
+          298.2672119140625,
+          90.74234008789062
+        ]
+      }
+    },
+    {
+      "id": "collider_building18",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building18",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -1.708716869354248,
+        "elevation_max_m": 9.229328155517578
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          221.29904174804688,
+          6.581619739532471
+        ],
+        "max_corner": [
+          297.5570373535156,
+          59.97962951660156
+        ]
+      }
+    },
+    {
+      "id": "collider_building3",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building3",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 0.6496438980102539,
+        "elevation_max_m": 32.14768981933594
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          266.10888671875,
+          107.21455383300781
+        ],
+        "max_corner": [
+          297.7069091796875,
+          138.51255798339844
+        ]
+      }
+    },
+    {
+      "id": "collider_building19",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building19",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -1.377202033996582,
+        "elevation_max_m": 9.560843467712402
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          221.26901245117188,
+          136.7748565673828
+        ],
+        "max_corner": [
+          297.5270080566406,
+          190.17286682128906
+        ]
+      }
+    },
+    {
+      "id": "collider_building6",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building6",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -9.085222244262695,
+        "elevation_max_m": 38.57282257080078
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          213.38967895507812,
+          135.05641174316406
+        ],
+        "max_corner": [
+          244.98773193359375,
+          175.87440490722656
+        ]
+      }
+    },
+    {
+      "id": "collider_building5",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building5",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -1.2447586059570312,
+        "elevation_max_m": 41.55328369140625
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          212.6254119873047,
+          21.86594581604004
+        ],
+        "max_corner": [
+          245.1234588623047,
+          62.6839485168457
+        ]
+      }
+    },
+    {
+      "id": "collider_building7",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building7",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -0.7167282104492188,
+        "elevation_max_m": 44.08131408691406
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          159.7322540283203,
+          11.102364540100098
+        ],
+        "max_corner": [
+          192.2303009033203,
+          57.480369567871094
+        ]
+      }
+    },
+    {
+      "id": "collider_building9",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building9",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -7.188432693481445,
+        "elevation_max_m": 46.16960906982422
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          105.87579345703125,
+          4.872349262237549
+        ],
+        "max_corner": [
+          139.03384399414062,
+          53.430355072021484
+        ]
+      }
+    },
+    {
+      "id": "collider_building9.001",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building9.001",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 0.0,
+        "elevation_max_m": 17.89052391052246,
+        "ground_contact": true
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          136.83290100097656,
+          6.969698429107666
+        ],
+        "max_corner": [
+          192.7108917236328,
+          37.74770736694336
+        ]
+      }
+    },
+    {
+      "id": "collider_building9.002",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building9.002",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 0.0,
+        "elevation_max_m": 42.171607971191406,
+        "ground_contact": true
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          114.92925262451172,
+          40.15995788574219
+        ],
+        "max_corner": [
+          178.8872528076172,
+          56.05796813964844
+        ]
+      }
+    },
+    {
+      "id": "collider_building11",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building11",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -10.743158340454102,
+        "elevation_max_m": 32.05488586425781
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          48.93648147583008,
+          7.443796634674072
+        ],
+        "max_corner": [
+          81.43452453613281,
+          48.26179885864258
+        ]
+      }
+    },
+    {
+      "id": "collider_building12",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building12",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -9.10389518737793,
+        "elevation_max_m": 33.69414520263672
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          45.905799865722656,
+          143.52407836914062
+        ],
+        "max_corner": [
+          84.00383758544922,
+          173.94207763671875
+        ]
+      }
+    },
+    {
+      "id": "collider_building14",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building14",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 0.12272834777832031,
+        "elevation_max_m": 53.580726623535156
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          0.3079851567745209,
+          118.3240966796875
+        ],
+        "max_corner": [
+          31.985990524291992,
+          165.24209594726562
+        ]
+      }
+    },
+    {
+      "id": "collider_building15",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building15",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -9.344562530517578,
+        "elevation_max_m": 22.15348243713379
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          2.099321126937866,
+          59.183441162109375
+        ],
+        "max_corner": [
+          33.37736511230469,
+          85.20144653320312
+        ]
+      }
+    },
+    {
+      "id": "collider_building16",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building16",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -1.8470458984375,
+        "elevation_max_m": 19.05099868774414
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          53.928741455078125,
+          100.77351379394531
+        ],
+        "max_corner": [
+          85.206787109375,
+          126.79151916503906
+        ]
+      }
+    },
+    {
+      "id": "collider_building17",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building17",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 0.9330921173095703,
+        "elevation_max_m": 17.511137008666992
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          156.4406280517578,
+          109.83873748779297
+        ],
+        "max_corner": [
+          183.25868225097656,
+          135.05674743652344
+        ]
+      }
+    },
+    {
+      "id": "collider_building20",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building20",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": 2.3147292137145996,
+        "elevation_max_m": 13.252775192260742
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          133.52622985839844,
+          123.28112030029297
+        ],
+        "max_corner": [
+          190.98423767089844,
+          171.13912963867188
+        ]
+      }
+    },
+    {
+      "id": "collider_building21",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building21",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -0.9536943435668945,
+        "elevation_max_m": 9.98435115814209
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          12.373849868774414,
+          125.5202407836914
+        ],
+        "max_corner": [
+          84.53185272216797,
+          173.3782501220703
+        ]
+      }
+    },
+    {
+      "id": "collider_building22",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building22",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -0.7358570098876953,
+        "elevation_max_m": 10.202188491821289
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          30.982120513916016,
+          12.083134651184082
+        ],
+        "max_corner": [
+          52.60012435913086,
+          48.58114242553711
+        ]
+      }
+    },
+    {
+      "id": "collider_building23",
+      "properties": {
+        "category": "building",
+        "type": "campus_building",
+        "label": "collider_building23",
+        "passability": "restricted",
+        "visibility": "public",
+        "elevation_min_m": -0.5779476165771484,
+        "elevation_max_m": 10.360097885131836
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          0.9898883104324341,
+          42.80282211303711
+        ],
+        "max_corner": [
+          33.88788986206055,
+          61.780826568603516
+        ]
+      }
+    },
+    {
+      "id": "SEM_BUILDING_FRONTAGE_WEST",
+      "properties": {
+        "category": "area",
+        "type": "building_frontage",
+        "label": "SEM_BUILDING_FRONTAGE_WEST",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.15453630685806274,
+        "elevation_max_m": 0.4134637713432312
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          139.37844848632812,
+          33.699153900146484
+        ],
+        "max_corner": [
+          160.0926513671875,
+          72.53827667236328
+        ]
+      }
+    },
+    {
+      "id": "SEM_ROAD_CONNECTOR_SOUTH",
+      "properties": {
+        "category": "trans_facility",
+        "type": "road",
+        "label": "SEM_ROAD_CONNECTOR_SOUTH",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.271053671836853,
+        "elevation_max_m": 0.2969464063644409
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          159.87850952148438,
+          57.350887298583984
+        ],
+        "max_corner": [
+          209.59259033203125,
+          72.88653564453125
+        ]
+      }
+    },
+    {
+      "id": "SEM_PLAZA_SOUTH",
+      "properties": {
+        "category": "area",
+        "type": "plaza",
+        "label": "SEM_PLAZA_SOUTH",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.271053671836853,
+        "elevation_max_m": 0.2969464063644409
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          189.37269592285156,
+          66.4511489868164
+        ],
+        "max_corner": [
+          261.87237548828125,
+          136.361572265625
+        ]
+      }
+    },
+    {
+      "id": "SEM_BUILDING_FRONTAGE_CENTER",
+      "properties": {
+        "category": "area",
+        "type": "building_frontage",
+        "label": "SEM_BUILDING_FRONTAGE_CENTER",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.27300527691841125,
+        "elevation_max_m": 0.2949948012828827
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          108.38682556152344,
+          100.63827514648438
+        ],
+        "max_corner": [
+          195.38645935058594,
+          117.13040161132812
+        ]
+      }
+    },
+    {
+      "id": "SEM_SUNKEN_PLAZA_ENTRANCE_CENTER",
+      "properties": {
+        "category": "area",
+        "type": "plaza",
+        "label": "SEM_SUNKEN_PLAZA_ENTRANCE_CENTER",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.271053671836853,
+        "elevation_max_m": 0.2969464063644409
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          91.08585357666016,
+          70.45539093017578
+        ],
+        "max_corner": [
+          107.65721893310547,
+          117.06233978271484
+        ]
+      }
+    },
+    {
+      "id": "SEM_ROAD_CONNECTOR_NORTH",
+      "properties": {
+        "category": "trans_facility",
+        "type": "road",
+        "label": "SEM_ROAD_CONNECTOR_NORTH",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.271053671836853,
+        "elevation_max_m": 0.2969464063644409
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          90.05374145507812,
+          56.911739349365234
+        ],
+        "max_corner": [
+          139.767822265625,
+          72.4473876953125
+        ]
+      }
+    },
+    {
+      "id": "SEM_SUNKEN_PLAZA_CENTER",
+      "properties": {
+        "category": "area",
+        "type": "plaza",
+        "label": "SEM_SUNKEN_PLAZA_CENTER",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": -8.738557815551758,
+        "elevation_max_m": -8.693441390991211
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          108.19434356689453,
+          73.95587921142578
+        ],
+        "max_corner": [
+          194.81881713867188,
+          101.0260238647461
+        ]
+      }
+    },
+    {
+      "id": "SEM_BIKE_PARKING_WEST",
+      "properties": {
+        "category": "area",
+        "type": "parking",
+        "label": "SEM_BIKE_PARKING_WEST",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.2695453464984894,
+        "elevation_max_m": 0.29845473170280457
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          3.3938896656036377,
+          -10.610369682312012
+        ],
+        "max_corner": [
+          301.6783447265625,
+          6.735292911529541
+        ]
+      }
+    },
+    {
+      "id": "SEM_STREET_EDGE_ROAD_SOUTH",
+      "properties": {
+        "category": "trans_facility",
+        "type": "road",
+        "label": "SEM_STREET_EDGE_ROAD_SOUTH",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.2695453464984894,
+        "elevation_max_m": 0.29845473170280457
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          304.8443603515625,
+          -2.069291114807129
+        ],
+        "max_corner": [
+          324.72998046875,
+          206.07835388183594
+        ]
+      }
+    },
+    {
+      "id": "SEM_WOODLAND_EDGE_ROAD_EAST",
+      "properties": {
+        "category": "trans_facility",
+        "type": "road",
+        "label": "SEM_WOODLAND_EDGE_ROAD_EAST",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.2695453464984894,
+        "elevation_max_m": 0.29845473170280457
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          18.445899963378906,
+          193.2174835205078
+        ],
+        "max_corner": [
+          257.073486328125,
+          210.56312561035156
+        ]
+      }
+    },
+    {
+      "id": "SEM_BUILDING_PASSAGE_SOUTHWEST",
+      "properties": {
+        "category": "area",
+        "type": "passage",
+        "label": "SEM_BUILDING_PASSAGE_SOUTHWEST",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.271053671836853,
+        "elevation_max_m": 0.2969464063644409
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          193.8577117919922,
+          7.33622932434082
+        ],
+        "max_corner": [
+          209.3933563232422,
+          57.05030822753906
+        ]
+      }
+    },
+    {
+      "id": "SEM_BUILDING_PASSAGE_NORTHWEST",
+      "properties": {
+        "category": "area",
+        "type": "passage",
+        "label": "SEM_BUILDING_PASSAGE_NORTHWEST",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.271053671836853,
+        "elevation_max_m": 0.2969464063644409
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          89.19125366210938,
+          6.611894607543945
+        ],
+        "max_corner": [
+          104.72689819335938,
+          56.32597351074219
+        ]
+      }
+    },
+    {
+      "id": "SEM_BUILDING_PASSAGE_SOUTHEAST",
+      "properties": {
+        "category": "area",
+        "type": "passage",
+        "label": "SEM_BUILDING_PASSAGE_SOUTHEAST",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.26967284083366394,
+        "elevation_max_m": 0.29832723736763
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          193.75355529785156,
+          136.1519317626953
+        ],
+        "max_corner": [
+          210.94618225097656,
+          191.16835021972656
+        ]
+      }
+    },
+    {
+      "id": "SEM_BUILDING_PASSAGE_NORTHEAST",
+      "properties": {
+        "category": "area",
+        "type": "passage",
+        "label": "SEM_BUILDING_PASSAGE_NORTHEAST",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.2692832350730896,
+        "elevation_max_m": 0.29871684312820435
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          86.31816864013672,
+          117.68256378173828
+        ],
+        "max_corner": [
+          103.97830963134766,
+          192.25367736816406
+        ]
+      }
+    },
+    {
+      "id": "SEM_BUILDING_FRONTAGE_EAST",
+      "properties": {
+        "category": "area",
+        "type": "building_frontage",
+        "label": "SEM_BUILDING_FRONTAGE_EAST",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.2130175232887268,
+        "elevation_max_m": 0.35498255491256714
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          137.769775390625,
+          171.64024353027344
+        ],
+        "max_corner": [
+          158.48397827148438,
+          192.9349822998047
+        ]
+      }
+    },
+    {
+      "id": "SEM_ACCESS_POINT_SOUTH",
+      "properties": {
+        "category": "area",
+        "type": "access_point",
+        "label": "SEM_ACCESS_POINT_SOUTH",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.271053671836853,
+        "elevation_max_m": 0.2969464063644409
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          263.06982421875,
+          91.68440246582031
+        ],
+        "max_corner": [
+          302.841064453125,
+          107.22004699707031
+        ]
+      }
+    },
+    {
+      "id": "SEM_ACCESS_POINT_NORTH",
+      "properties": {
+        "category": "area",
+        "type": "access_point",
+        "label": "SEM_ACCESS_POINT_NORTH",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.271053671836853,
+        "elevation_max_m": 0.2969464063644409
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          -4.835386753082275,
+          94.29200744628906
+        ],
+        "max_corner": [
+          44.878692626953125,
+          109.82765197753906
+        ]
+      }
+    },
+    {
+      "id": "SEM_PLAZA_NORTH",
+      "properties": {
+        "category": "area",
+        "type": "plaza",
+        "label": "SEM_PLAZA_NORTH",
+        "passability": "open",
+        "visibility": "public",
+        "elevation_min_m": 0.27438783645629883,
+        "elevation_max_m": 0.2936122417449951
+      },
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [
+          36.03463363647461,
+          51.610660552978516
+        ],
+        "max_corner": [
+          89.863037109375,
+          103.5166244506836
+        ]
+      }
+    }
+  ],
+  "building_safety_overrides": {
+    "collider_building1": {"min_corner": [263.9355, -3.8908], "max_corner": [306.2860, 48.4970], "elevation_min_m": -7.9611, "elevation_max_m": 53.8259},
+    "collider_building2": {"min_corner": [263.5890, 57.1460], "max_corner": [299.3960, 92.8430], "elevation_min_m": -7.6730, "elevation_max_m": 34.2895},
+    "collider_building3": {"min_corner": [264.0790, 106.4050], "max_corner": [299.4950, 142.5020], "elevation_min_m": -7.4833, "elevation_max_m": 34.4363},
+    "collider_building4": {"min_corner": [264.0150, 150.1270], "max_corner": [308.1320, 203.9880], "elevation_min_m": -7.3170, "elevation_max_m": 54.4358},
+    "collider_building5": {"min_corner": [211.0360, 21.8890], "max_corner": [247.0410, 64.8950], "elevation_min_m": -2.4433, "elevation_max_m": 42.4187},
+    "collider_building6": {"min_corner": [211.5750, 134.1740], "max_corner": [247.0690, 177.3120], "elevation_min_m": -7.6653, "elevation_max_m": 39.0638},
+    "collider_building7": {"min_corner": [159.7060, 10.1700], "max_corner": [192.8850, 58.7900], "elevation_min_m": -1.0428, "elevation_max_m": 46.7677},
+    "collider_building8": {"min_corner": [157.3010, 148.4630], "max_corner": [192.1820, 194.2300], "elevation_min_m": -8.1130, "elevation_max_m": 55.2104},
+    "collider_building9": {"min_corner": [100.5660, 0.5920], "max_corner": [141.5400, 61.1770], "elevation_min_m": -9.0877, "elevation_max_m": 50.5558},
+    "collider_building10": {"min_corner": [104.6590, 131.2290], "max_corner": [139.0790, 175.4160], "elevation_min_m": -8.4319, "elevation_max_m": 55.3562},
+    "collider_building11": {"min_corner": [47.2660, 7.0470], "max_corner": [83.0340, 50.8240], "elevation_min_m": -9.3799, "elevation_max_m": 33.9086},
+    "collider_building12": {"min_corner": [44.8540, 142.1010], "max_corner": [86.0920, 175.2910], "elevation_min_m": -8.8356, "elevation_max_m": 38.6896},
+    "collider_building13": {"min_corner": [-0.4800, -0.5630], "max_corner": [36.7950, 49.1650], "elevation_min_m": -9.9625, "elevation_max_m": 54.7452},
+    "collider_building14": {"min_corner": [0.5520, 116.5920], "max_corner": [33.3360, 166.5240], "elevation_min_m": -9.3661, "elevation_max_m": 54.2756},
+    "collider_building15": {"min_corner": [0.4490, 59.9130], "max_corner": [35.2960, 87.1650], "elevation_min_m": -9.8261, "elevation_max_m": 22.7319},
+    "collider_building16": {"min_corner": [53.3820, 99.0850], "max_corner": [85.6940, 127.8480], "elevation_min_m": 0.1002, "elevation_max_m": 17.2925},
+    "collider_building17": {"min_corner": [156.7110, 108.5900], "max_corner": [183.1710, 137.1220], "elevation_min_m": -0.3161, "elevation_max_m": 17.3676}
+  },
+  "excluded_search_regions": [
+    {
+      "id": "no_search_between_building9_connectors",
+      "label": "建筑9两连接体之间不可达区域",
+      "reason": "人工指定为不可达且无需检测，不计入任务覆盖率",
+      "shape": {
+        "type": "rectangle",
+        "min_corner": [136.83290100097656, 37.74770736694336],
+        "max_corner": [178.8872528076172, 40.15995788574219]
+      }
+    }
+  ],
+  "metadata": {
+    "ground_truth_excluded": true,
+    "source": "yungu_map_local_origin.blend"
+  }
+}
