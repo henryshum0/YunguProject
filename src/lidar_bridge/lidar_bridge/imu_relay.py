@@ -13,7 +13,7 @@ sequence and logs how often it had to (throttled), so we can see whether
 jitter is real or the divergence had another cause.
 
 Usage (started by start_fastlio.sh):
-  python3 utils/fastlio/imu_relay.py
+  ros2 run lidar_bridge imu_relay
 """
 
 import rclpy
