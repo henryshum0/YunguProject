@@ -28,11 +28,11 @@ pkill -9 -x MicroXRCEAgent      2>/dev/null
 
 # GZ <-> ROS bridges
 pkill -9 -f "parameter_bridge"  2>/dev/null
-pkill -9 -f "tf_bridge.py"      2>/dev/null
+pkill -9 -f "tf_bridge"         2>/dev/null
 
 # Report anything that is still alive.
 sleep 1
-leftover="$(pgrep -af 'px4|gz sim|gz-server|MicroXRCEAgent|parameter_bridge|tf_bridge.py|PX4 SITL' 2>/dev/null | grep -v 'grep' || true)"
+leftover="$(pgrep -af 'px4|gz sim|gz-server|MicroXRCEAgent|parameter_bridge|tf_bridge|PX4 SITL' 2>/dev/null | grep -v 'grep' || true)"
 if [[ -n "${leftover}" ]]; then
   echo "WARNING: these processes are still running:" >&2
   echo "${leftover}" >&2

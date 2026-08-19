@@ -46,5 +46,5 @@ offboard:
   # are flown one at a time. A waypoint is "reached" when the drone is within
   # waypoint_reached_dist [m] horizontally; it then holds for
   # waypoint_hold_time [s] before the next waypoint is sent to SUPER.
-  waypoint_reached_dist: 0.5
-  waypoint_hold_time: 1.0
+  waypoint_reached_dist: 3.0
+  waypoint_hold_time: 0.0

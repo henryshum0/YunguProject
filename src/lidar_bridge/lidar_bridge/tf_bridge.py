@@ -57,10 +57,13 @@ class TfBridge(Node):
         static.transform.rotation.w = 1.0
         self._static_broadcaster.sendTransform(static)
 
-        # Dynamic world -> base_link from odometry
+        # Dynamic world -> base_link from odometry. /lidar_slam/odom is
+        # published best_effort/volatile by super_bridge; subscribing RELIABLE
+        # would make discovery log an incompatible-QoS warning and the TF
+        # would never update.
         qos = QoSProfile(
             depth=10,
-            reliability=ReliabilityPolicy.RELIABLE,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
         )
         self._odom_sub = self.create_subscription(

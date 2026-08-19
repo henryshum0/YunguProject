@@ -62,7 +62,9 @@ def generate_launch_description():
             sys.path.insert(0, str(sim_config_path.parent))
             sim_config = importlib.import_module('sim_config')
             model = sim_config.get_value(sim_config_path, 'model', default='x500_lidar')
-            default_cloud_in = f'/{model}/scan/points'
+            # The two side LiDARs are fused by lidar_merge into a base_link
+            # cloud; super_bridge consumes that fused cloud now.
+            default_cloud_in = f'/{model}/scan/points_fused'
         except Exception as exc:  # noqa: BLE001 - keep the launch working
             print(f'[offboard.launch] WARNING: could not read {sim_config_path}: '
                   f'{exc}; falling back to {default_cloud_in}', file=sys.stderr)
@@ -214,9 +216,9 @@ def generate_launch_description():
                               description='Final landing height [m]'),
         DeclareLaunchArgument('cmd_topic', default_value='/planning/pos_cmd'),
         DeclareLaunchArgument('cloud_in_topic', default_value=default_cloud_in,
-                              description='Raw gz lidar cloud (lidar_link frame); '
-                                          'defaults to /<model>/scan/points from '
-                                          'config/simulation.yaml'),
+                              description='Lidar cloud for super_bridge (base_link '
+                                          'frame, both side LiDARs fused); defaults '
+                                          'to /<model>/scan/points_fused'),
         DeclareLaunchArgument('odom_topic', default_value='/fmu/out/vehicle_odometry',
                               description='PX4 odometry topic (NED, converted to ENU by the bridge)'),
         DeclareLaunchArgument('cloud_registered_topic', default_value='/cloud_registered',

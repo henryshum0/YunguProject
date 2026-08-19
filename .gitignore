@@ -6,3 +6,5 @@ cmd_log/
 .vscode
 .venv
 __pycache__/
+*.pyc
+.claude

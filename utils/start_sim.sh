@@ -3,7 +3,7 @@
 # One-shot launcher for the Yungu simulation stack:
 #   1. PX4 SITL + Gazebo (gz-sim)       make px4_sitl gz_x500_lidar_yungu
 #   2. MicroXRCEAgent                   uXRCE-DDS agent on UDP 8888
-#   3. GZ <-> ROS bridge + TF           src/utils/gz_bridges/bridge.sh
+#   3. GZ <-> ROS bridge + TF           utils/bridge.sh
 #
 # PX4 SITL runs in its own xterm window (so you can watch its output and
 # interact with it). When this script is interrupted (Ctrl+C), that window and
@@ -29,9 +29,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PX4_DIR="${WORKSPACE}/VisionFlow-PX4"
-BRIDGE_SCRIPT="${SCRIPT_DIR}/gz_bridges/bridge.sh"
+BRIDGE_SCRIPT="${SCRIPT_DIR}/bridge.sh"
 STOP_SCRIPT="${SCRIPT_DIR}/stop_sim.sh"
 SIM_CONFIG="${WORKSPACE}/config/simulation.yaml"
 SIM_CONFIG_HELPER="${WORKSPACE}/config/sim_config.py"
