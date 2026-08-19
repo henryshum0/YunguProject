@@ -1,42 +1,45 @@
 #!/usr/bin/env bash
 #
-# start_fastlio.sh — GPU sim + FAST-LIO + PX4-EKF2 fusion + planner + offboard + RViz
+# start_fastlio.sh — FAST-LIO + PX4-EKF2 fusion + planner + offboard + RViz
 #
-# One-shot launcher aligned with utils/start_sim.sh (HEADLESS support etc.)
-# plus the FAST-LIO chain:
+# Launches only the perception/planning layer. The simulation stack (PX4 SITL
+# + Gazebo + MicroXRCEAgent + GZ<->ROS bridge) must already be running — start
+# it first with utils/start_sim.sh, then run this script in another terminal.
+#
+# Data flow:
 #   - FAST-LIO odometry → PX4 EKF2 (fastlio_px4_bridge → /fmu/in/vehicle_visual_odometry)
 #   - PX4 fused odometry → super_bridge → /lidar_slam/odom + /cloud_registered → planner
 #   - RViz shows the ikd-Tree *incremental* map (effect_map_en) on top of the
 #     accumulated map — old regions fade as the drone moves away.
 #
-# Usage:
-#   ./utils/start_fastlio.sh              # full stack with GUI
-#   HEADLESS=1 ./utils/start_fastlio.sh   # no Gazebo GUI
+# Usage (start_sim.sh first, then this in a second terminal):
+#   ./utils/start_sim.sh                  # terminal 1: simulation stack
+#   ./utils/start_fastlio.sh              # terminal 2: FAST-LIO + planner (with GUI)
 #   NO_RVIZ=1 ./utils/start_fastlio.sh    # skip RViz
 #
 # Model & lidar topics follow config/simulation.yaml (model / world). The
 # FAST-LIO config ships for swan_gamma_v2; for other models, override
 # FASTLIO_CONFIG. Other overrides:
 #   SIM_MODEL=swan_gamma_v2 SIM_WORLD=yungu ./utils/start_fastlio.sh
-#   PX4_MODEL=gz_swan_gamma_v2_yungu ./utils/start_fastlio.sh  # full target
 #   LIDAR_TOPIC=/swan_gamma_v2/scan ./utils/start_fastlio.sh
 #   FASTLIO_CONFIG=config/fastlio_swan_gamma_effect.yaml ./utils/start_fastlio.sh
 #   RVIZ_CONFIG=fastlio_ikdtree.rviz ./utils/start_fastlio.sh
 #   BIRDVIEW_CONFIG=birdview.rviz ./utils/start_fastlio.sh  # top-down window config
 #
-# Two RViz windows (same layout as main's start_sim.sh + offboard.launch.py):
+# Two RViz windows (same layout as start_sim.sh + offboard.launch.py):
 #   - top-down birdview planning window (BIRDVIEW_CONFIG, default birdview.rviz)
 #   - 3D window (RVIZ_CONFIG: accumulated map + ikd-Tree incremental map)
 #
-# Press Ctrl+C to stop everything.
+# Press Ctrl+C to stop the FAST-LIO layer only — the simulation stack keeps
+# running (stop it with Ctrl+C in its terminal or utils/stop_sim.sh).
 #
 
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# Used only to read the spawn pose from the airframe for the world→camera_init TF.
 PX4_DIR="${WORKSPACE}/VisionFlow-PX4"
-BRIDGE_SCRIPT="${WORKSPACE}/utils/gz_bridges/bridge.sh"
 OFFBOARD_LAUNCH="${WORKSPACE}/src/offboard/launch/offboard.launch.py"
 SIM_CONFIG="${WORKSPACE}/config/simulation.yaml"
 SIM_CONFIG_HELPER="${WORKSPACE}/config/sim_config.py"
@@ -50,7 +53,6 @@ SIM_MODEL="${SIM_MODEL:-$(config_get model)}"
 SIM_MODEL="${SIM_MODEL:-swan_gamma_v2}"
 SIM_WORLD="${SIM_WORLD:-$(config_get world)}"
 SIM_WORLD="${SIM_WORLD:-yungu}"
-PX4_MODEL="${PX4_MODEL:-gz_${SIM_MODEL}_${SIM_WORLD}}"
 # Two side LiDARs (real-hardware mirror) are fused by lidar_merge into one
 # base_link cloud; FAST-LIO and super_bridge both consume the fused topic.
 LIDAR_FUSED_TOPIC="${LIDAR_FUSED_TOPIC:-/${SIM_MODEL}/scan/points_fused}"
@@ -59,17 +61,10 @@ LIDAR_FUSED_TOPIC="${LIDAR_FUSED_TOPIC:-/${SIM_MODEL}/scan/points_fused}"
 # lid_topic: /swan_gamma_v2/scan/points_timed — for another model, override
 # FASTLIO_CONFIG with a matching config.
 FASTLIO_CONFIG="${FASTLIO_CONFIG:-${WORKSPACE}/config/fastlio_swan_gamma_effect.yaml}"
-# Bare file name → resolved via the offboard package share (same as main's
+# Bare file name → resolved via the offboard package share (same as
 # start_sim.sh + offboard.launch.py flow); needs a colcon build to install.
 RVIZ_CONFIG="${RVIZ_CONFIG:-fastlio_ikdtree.rviz}"
 BIRDVIEW_CONFIG="${BIRDVIEW_CONFIG:-birdview.rviz}"
-
-XRCE_PORT="${XRCE_PORT:-8888}"
-GZ_VERSION="${GZ_VERSION:-harmonic}"
-
-# HEADLESS: non-empty → Gazebo runs server-only (no GUI). Mirrors start_sim.sh.
-HEADLESS="${HEADLESS:-}"
-export HEADLESS
 
 LOG_DIR="/tmp/yungu_sim"
 mkdir -p "${LOG_DIR}"
@@ -91,18 +86,6 @@ echo "================="
 #  Sanity checks
 # ---------------------------------------------------------------------------
 [[ -d "${PX4_DIR}" ]] || { echo "ERROR: PX4 directory not found: ${PX4_DIR}" >&2; exit 1; }
-[[ -f "${BRIDGE_SCRIPT}" ]] || { echo "ERROR: bridge script not found: ${BRIDGE_SCRIPT}" >&2; exit 1; }
-command -v MicroXRCEAgent >/dev/null 2>&1 || { echo "ERROR: MicroXRCEAgent not found on PATH" >&2; exit 1; }
-
-# Terminal emulator for PX4 SITL window
-if [[ "${NO_XTERM:-}" == "1" ]]; then
-    TERMINAL=""
-elif command -v xterm >/dev/null 2>&1; then
-    TERMINAL="xterm"
-else
-    TERMINAL=""
-    echo "WARNING: 'xterm' not found — PX4 runs in background" >&2
-fi
 
 # ---------------------------------------------------------------------------
 #  Source ROS (system underlay first, then workspace overlay)
@@ -115,41 +98,35 @@ if [[ -f "${WORKSPACE}/install/setup.bash" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-#  Cleanup — kill everything on exit
+#  Cleanup — kill only the FAST-LIO layer; the simulation stack (start_sim.sh)
+#  keeps running and is stopped separately (Ctrl+C there or utils/stop_sim.sh).
 # ---------------------------------------------------------------------------
 PIDS=()
 cleaned=0
 cleanup() {
     [[ "${cleaned}" -eq 1 ]] && return
     cleaned=1
-    echo ""; echo "=== Stopping everything ... ==="
+    echo ""; echo "=== Stopping FAST-LIO layer (simulation keeps running) ... ==="
 
-    # 1. Graceful SIGTERM to process groups
+    # 1. Graceful SIGTERM to process groups we spawned
     for p in "${PIDS[@]:-}"; do kill -- "-${p}" 2>/dev/null || kill "${p}" 2>/dev/null || true; done
     sleep 2
 
     # 2. SIGKILL stragglers
     for p in "${PIDS[@]:-}"; do kill -9 -- "-${p}" 2>/dev/null || kill -9 "${p}" 2>/dev/null || true; done
 
-    # 3. Safety net — kill by name
-    pkill -9 -x px4 2>/dev/null || true
-    pkill -9 -f "gz sim" 2>/dev/null || true
-    pkill -9 -x gz-server 2>/dev/null || true
-    pkill -9 -x MicroXRCEAgent 2>/dev/null || true
-    pkill -9 -f "parameter_bridge" 2>/dev/null || true
-    pkill -9 -f "tf_bridge.py" 2>/dev/null || true
+    # 3. Safety net — kill our layer by name (no px4 / gz / agent / bridge!)
+    pkill -9 -f "fastlio_mapping" 2>/dev/null || true
+    pkill -9 -f "fastlio_px4_bridge" 2>/dev/null || true
     pkill -9 -f "offboard_node" 2>/dev/null || true
     pkill -9 -f "super_bridge" 2>/dev/null || true
     pkill -9 -f "fsm_node" 2>/dev/null || true
     pkill -9 -f "rviz2" 2>/dev/null || true
-    pkill -9 -f "fastlio_mapping" 2>/dev/null || true
-    pkill -9 -f "fastlio_px4_bridge" 2>/dev/null || true
-    pkill -9 -f "gazebo_imu_bridge" 2>/dev/null || true
     pkill -9 -f "imu_relay" 2>/dev/null || true
     pkill -9 -f "add_time_field" 2>/dev/null || true
     pkill -9 -f "lidar_merge" 2>/dev/null || true
     pkill -9 -f "static_transform_publisher" 2>/dev/null || true
-    echo "All stopped."
+    echo "FAST-LIO layer stopped (simulation untouched)."
 }
 trap cleanup EXIT INT TERM
 
@@ -207,65 +184,28 @@ fastlio_watchdog() {
 }
 
 # ===========================================================================
-#  Phase 1 — PX4 SITL + Gazebo (GPU + HEADLESS-aware, mirrors start_sim.sh)
+#  Phase 1 — wait for the simulation stack (started by utils/start_sim.sh)
 # ===========================================================================
+# The sim stack (PX4 + Gazebo + agent + bridge) is launched by start_sim.sh;
+# here we only wait until its bridged ground-truth /odom shows up. One
+# blocking "echo --once" instead of a poll loop: each `ros2 topic list/info`
+# spawn is a fresh DDS discovery round-trip, which is slow on WSL2 where
+# multicast discovery is broken.
 echo ""
-echo "Phase 1/3 — PX4 SITL + Gazebo"
+echo "Phase 1/2 — waiting for simulation stack (start_sim.sh) ..."
 
-if [[ -n "${HEADLESS}" ]]; then
-    echo "Starting PX4 SITL + Gazebo (model: ${PX4_MODEL}, HEADLESS: no GUI) ..."
-else
-    echo "Starting PX4 SITL + Gazebo (model: ${PX4_MODEL}) ..."
+if ! timeout 60 ros2 topic echo /odom --once --qos-reliability best_effort >/dev/null 2>&1; then
+    echo "ERROR: /odom not seen within 60s — is the simulation running?" >&2
+    echo "       Start it first in another terminal: ./utils/start_sim.sh" >&2
+    exit 1
 fi
-
-if [[ -n "${TERMINAL}" ]]; then
-    export PX4_DIR PX4_MODEL LOG_DIR HEADLESS
-    setsid xterm -T "PX4 SITL (${PX4_MODEL})" -hold \
-        -e bash -c 'cd "$PX4_DIR" && make px4_sitl "$PX4_MODEL" 2>&1 | tee "$LOG_DIR/px4_sitl.log"' &
-    PIDS+=("$!")
-else
-    (cd "${PX4_DIR}" && make px4_sitl "${PX4_MODEL}") >"${LOG_DIR}/px4_sitl.log" 2>&1 &
-    PIDS+=("$!")
-fi
-
-echo "Waiting for PX4 SITL to come up ..."
-for _ in $(seq 1 120); do
-    if grep -qE "Ready for takeoff|INFO *\[commander\]" "${LOG_DIR}/px4_sitl.log" 2>/dev/null; then
-        echo "PX4 SITL is up."
-        break
-    fi
-    sleep 2
-done
-sleep 2
-
-# ===========================================================================
-#  Phase 1b — MicroXRCEAgent
-# ===========================================================================
-echo "Starting MicroXRCEAgent (udp4, port ${XRCE_PORT}) ..."
-setsid MicroXRCEAgent udp4 -p "${XRCE_PORT}" >"${LOG_DIR}/xrce_agent.log" 2>&1 &
-PIDS+=("$!")
-sleep 2
-
-# ===========================================================================
-#  Phase 1c — GZ <-> ROS bridge + TF (use the standard bridge.sh)
-# ===========================================================================
-echo "Starting GZ <-> ROS bridge + TF ..."
-GZ_VERSION="${GZ_VERSION}" setsid "${BRIDGE_SCRIPT}" >"${LOG_DIR}/bridge.log" 2>&1 &
-PIDS+=("$!")
-
-# Wait for key topics — one blocking "echo --once" instead of a poll loop:
-# each `ros2 topic list/info` spawn is a fresh DDS discovery round-trip,
-# which is slow on WSL2 where multicast discovery is broken.
-if ! timeout 30 ros2 topic echo "${LIDAR_FUSED_TOPIC}" --once --qos-reliability best_effort >/dev/null 2>&1; then
-    echo "WARNING: ${LIDAR_FUSED_TOPIC} not seen within 30s — continuing anyway" >&2
-fi
-echo "Gazebo topics available."
+echo "Simulation stack ready (/odom flowing)."
 
 # ===========================================================================
 #  Phase 2 — FAST-LIO chain + PX4 EKF2 fusion
 # ===========================================================================
 echo ""
-echo "Phase 2/3 — FAST-LIO chain + EKF2 fusion"
+echo "Phase 2/2 — FAST-LIO chain + EKF2 fusion"
 
 # Static TFs (no conflict with FAST-LIO's camera_init → body)
 ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 1 body base_link &
@@ -301,26 +241,27 @@ PIDS+=("$!")
 # IMU comes DIRECTLY from gz (bridged in simulation.yaml → /livox/imu_raw,
 # same sim clock as the lidar clouds). imu_relay monotonicizes the stamps
 # (250 Hz DDS jitter once made FAST-LIO diverge) → /livox/imu.
-# gazebo_imu_bridge.py (PX4-anchored IMU) is DISABLED. To revert: re-enable
-# the line below, drop imu_relay, and remove the /livox/imu_raw bridge entry.
-python3 "${SCRIPT_DIR}/fastlio/imu_relay.py" &
+ros2 run lidar_bridge imu_relay &
 PIDS+=("$!")
-# python3 "${SCRIPT_DIR}/fastlio/gazebo_imu_bridge.py" --ros-args -p lidar_topic:="${LIDAR_FUSED_TOPIC}" &
-# PIDS+=("$!")
 # Side LiDARs (real-hardware mirror): time-field each side, then fuse into one
 # scan in base_link for FAST-LIO (lidar_merge applies the mounting extrinsics).
-python3 "${SCRIPT_DIR}/fastlio/add_time_field.py" --ros-args \
+ros2 run lidar_bridge add_time_field --ros-args \
     -p input_topic:="/swan_gamma_v2/scan_left/points" \
     -p output_topic:="/swan_gamma_v2/scan_left/points_timed" &
 PIDS+=("$!")
-python3 "${SCRIPT_DIR}/fastlio/add_time_field.py" --ros-args \
+ros2 run lidar_bridge add_time_field --ros-args \
     -p input_topic:="/swan_gamma_v2/scan_right/points" \
     -p output_topic:="/swan_gamma_v2/scan_right/points_timed" &
 PIDS+=("$!")
-python3 "${SCRIPT_DIR}/fastlio/lidar_merge.py" &
+ros2 run lidar_bridge lidar_merge &
 PIDS+=("$!")
-# Ground-truth trajectory for RViz (truth vs FAST-LIO path comparison)
-python3 "${SCRIPT_DIR}/fastlio/gt_path_node.py" &
+
+# Ground-truth trajectory (gt_path_node) + FAST-LIO→PX4 bridge
+# (fastlio_px4_bridge) launched directly via python3 from
+# src/offboard/scripts/ (kept out of offboard.launch.py on purpose).
+python3 "${WORKSPACE}/src/offboard/scripts/gt_path_node.py" &
+PIDS+=("$!")
+python3 "${WORKSPACE}/src/offboard/scripts/fastlio_px4_bridge.py" &
 PIDS+=("$!")
 
 # Wait for both sensor streams before starting FAST-LIO: if it comes up
@@ -340,10 +281,8 @@ ros2 run fast_lio fastlio_mapping --ros-args --params-file "${FASTLIO_CONFIG}" \
     >"${LOG_DIR}/fastlio.log" 2>&1 &
 PIDS+=("$!")
 
-# FAST-LIO odometry → PX4 EKF2 external vision (subscribes best-effort and
-# waits for /Odometry — safe to start right away)
-python3 "${SCRIPT_DIR}/fastlio/fastlio_px4_bridge.py" &
-PIDS+=("$!")
+# FAST-LIO odometry → PX4 EKF2 external vision (fastlio_px4_bridge above:
+# subscribes best-effort, waits for /Odometry — safe to start right away).
 
 # NOTE: the world-frame cloud comes from super_bridge (in offboard.launch.py):
 # it reads the PX4 fused vehicle_odometry and transforms the raw lidar cloud
@@ -373,16 +312,15 @@ fastlio_watchdog &
 PIDS+=("$!")
 
 # ===========================================================================
-#  Phase 3 — Offboard + Planner + RViz (main's super_bridge architecture)
+#  Phase 3 — Offboard + Planner + RViz
 # ===========================================================================
 echo ""
-echo "Phase 3/3 — Offboard + Planner + RViz"
+echo "Phase 2/2 — Offboard + Planner + RViz"
 
-# Same offboard.launch.py as main's start_sim.sh flow: planner consumes
-# PX4-fused odom via super_bridge (/lidar_slam/odom + /cloud_registered) —
-# mirrors real hardware (no Gazebo truth). The model spawns at the world
-# origin, so PX4's EKF local frame == world frame and no spawn-pose offset
-# is needed. Two RViz windows like main:
+# offboard.launch.py: planner consumes PX4-fused odom via super_bridge
+# (/lidar_slam/odom + /cloud_registered) — mirrors real hardware (no Gazebo
+# truth). The model spawns at the world origin, so PX4's EKF local frame ==
+# world frame and no spawn-pose offset is needed. Two RViz windows:
 #   rviz_config          → top-down birdview planning window (BIRDVIEW_CONFIG)
 #   rviz_freelook_config → 3D window (RVIZ_CONFIG: ikd-Tree map view)
 if [[ "${NO_RVIZ:-}" == "1" ]]; then
@@ -402,7 +340,7 @@ echo ""
 echo " In PX4 xterm: commander takeoff"
 echo "                commander mode offboard"
 echo " In RViz:      use '2D Goal Pose' to send goals"
-echo " Ctrl+C to stop."
+echo " Ctrl+C to stop the FAST-LIO layer (simulation keeps running)."
 echo "======================================================"
 
 wait || true

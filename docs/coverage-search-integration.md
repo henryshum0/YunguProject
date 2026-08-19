@@ -89,7 +89,7 @@ coverage-search-planner (离线)          YunguProject (在线)
 | 系统 | 坐标系 | 原点 |
 |---|---|---|
 | coverage-search-planner | 本地 ENU（`map_id: "yungu2030_local_origin"`） | 语义地图自定义原点，示例 `start: [153.4, 67.2, 25.0]` 为起降点 |
-| YunguProject | world ENU（`frame_id: "world"`） | Gazebo world 原点 (0,0,0)；PX4 EKF local 原点在 spawn 点，已由 `world_offset_*`（`config/offboard.yaml`）自动平移对齐 |
+| YunguProject | world ENU（`frame_id: "world"`） | Gazebo world 原点 (0,0,0)；PX4 `vehicle_odometry` 实测已是 world 系（无需平移） |
 
 只要两边的轴方向一致（x 东、y 北、z 上），变换就是一个**常数平移**：
 
@@ -107,9 +107,9 @@ p_world = p_planner + T,   T = (t_x, t_y, t_z)
 4. `T = p_world - p_planner`，写入适配器配置
 
 方法 B（无地标时）：`start` 起降点即无人机 spawn 后起飞的位置，直接用起飞瞬间
-`/lidar_slam/odom` 的读数近似 `T + start`。注意 spawn 点由 airframe
-`PX4_GZ_MODEL_POSE` 决定（当前 swan_gamma_v2 为 `-4,-2,1.15392`），
-`world_offset_*` 已把它对齐到 world 系，所以起飞点读数 ≈ `(-4, -2, z)`。
+`/lidar_slam/odom` 的读数近似 `T + start`。PX4 `vehicle_odometry` 已是
+world 系（2026-08-19 实测），所以起飞点读数直接 ≈ 模型 spawn 位置
+`(-4, -2, z)`。
 
 > 若语义地图的 y 轴与 world 不一致（如地图旋转过），还需一个绕 z 的旋转矩阵；
 > 先在地图上选两个已知 world 坐标的点解算。

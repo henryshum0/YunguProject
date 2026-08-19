@@ -4,7 +4,7 @@
 # Central place to choose the Gazebo vehicle model, the map/world, and the GZ
 # topics bridged into ROS 2. This file is read by:
 #   - utils/start_sim.sh                 -> model, world, gz_version, xrce_port
-#   - utils/gz_bridges/bridge.sh         -> bridge.*
+#   - utils/bridge.sh                    -> bridge.*
 #
 # Environment variables still override the file, e.g.:
 #   PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./start_sim.sh
@@ -55,7 +55,7 @@ bridge:
 
     # IMU direct from gz (same sim clock as the lidar clouds — no PX4
     # timestamp anchoring). /livox/imu_raw is monotonicized by imu_relay
-    # (utils/fastlio/imu_relay.py) before FAST-LIO consumes /livox/imu.
+    # (ros2 run lidar_bridge imu_relay) before FAST-LIO consumes /livox/imu.
     - ros_topic_name: "/livox/imu_raw"
       gz_topic_name: "/world/yungu/model/swan_gamma_v2_0/link/base_link/sensor/imu_sensor/imu"
       ros_type_name: "sensor_msgs/msg/Imu"

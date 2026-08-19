@@ -23,6 +23,7 @@ Start everything with two terminals:
 ./utils/start_sim.sh
 
 # Terminal 2 — offboard state machine + SUPER planner + RViz
+#   (or ./utils/start_fastlio.sh to also bring up the FAST-LIO localization layer)
 source install/setup.bash
 ros2 launch offboard offboard.launch.py
 ```
@@ -44,7 +45,7 @@ edits take effect on the next launch (no rebuild needed).
 | File | Purpose | Key parameters |
 |------|---------|----------------|
 | [`config/simulation.yaml`](config/simulation.yaml) | Simulator: Gazebo vehicle model, map/world, uXRCE-DDS port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
-| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner tuning + waypoint following | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `landing_vel`, `landing_z`, `goal_height`, `planner_config`, `waypoint_reached_dist`, `waypoint_hold_time`, `world_offset_x/y/z` |
+| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner tuning + waypoint following | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `landing_vel`, `landing_z`, `goal_height`, `planner_config`, `waypoint_reached_dist`, `waypoint_hold_time` |
 | [`config/birdview.yaml`](config/birdview.yaml) | Aerial birdview overlay on the ground plane (top-down map reference in RViz) | `extent_x`, `extent_y`, `z`, `offset_x`, `offset_y`, `yaw`, `max_points` |
 | [`config/super_planner/gazebo-smooth.yaml`](config/super_planner/gazebo-smooth.yaml) | SUPER planner behaviour (frontend, trajectory optimization, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
 
@@ -108,7 +109,7 @@ HEADLESS=1 ./utils/start_sim.sh
 |---|---|---|
 | 1 | PX4 SITL + Gazebo | `make px4_sitl gz_<model>_<world>` (from config) |
 | 2 | MicroXRCEAgent | `MicroXRCEAgent udp4 -p <xrce_port>` (from config) |
-| 3 | GZ ↔ ROS bridge + TF | `utils/gz_bridges/bridge.sh` (topics from config) |
+| 3 | GZ ↔ ROS bridge + TF | `utils/bridge.sh` (topics from config) |
 
 `start_sim.sh` waits for PX4 to report "Ready for takeoff", then starts the
 agent and the bridge. Logs go to `/tmp/yungu_sim/` (`px4_sitl.log`,
@@ -124,7 +125,7 @@ that PX4 detaches into its own session — run:
 
 ### Bridging and visualization
 
-- The gz bridge is independent of RViz: run `utils/gz_bridges/bridge.sh`
+- The gz bridge is independent of RViz: run `utils/bridge.sh`
   alone (it reads the topics from `config/simulation.yaml`), and launch RViz
   separately via the offboard launch file.
 - RViz shows the drone (TF), the lidar point cloud, and a "2D Goal Pose" tool
@@ -138,7 +139,7 @@ that PX4 detaches into its own session — run:
   swan_gamma_v2 carries no top-level `OdometryPublisher`, so the bridge points
   at the model-instance topic `/model/swan_gamma_v2_0/odometry` (see
   `config/simulation.yaml`). The truth path `/gt_path` and the 
-  `cmd_record` comparison scripts depend on it.
+  `flight_monitor` comparison scripts depend on it.
 - **TF bridge QoS**: `tf_bridge.py` subscribes `/lidar_slam/odom` with
   `BEST_EFFORT` to match super_bridge's publisher — a RELIABLE subscription
   silently never receives anything and the `world → base_link` TF stays stale.
@@ -159,11 +160,13 @@ FAST-LIO /Odometry ──→ fastlio_px4_bridge ──→ /fmu/in/vehicle_visual
 ```
 
 ```bash
-# Full stack: GPU-forced Gazebo + PX4 + FAST-LIO + EKF2 fusion + planner + RViz
-./utils/start_fastlio.sh
+# Terminal 1 — simulation stack: PX4 SITL + Gazebo + agent + bridge
+./utils/start_sim.sh
+#   (Gazebo server-only, no GUI: HEADLESS=1 ./utils/start_sim.sh)
 
-# Gazebo server-only (no GUI) — RViz still opens for planning visualization
-HEADLESS=1 ./utils/start_fastlio.sh
+# Terminal 2 — FAST-LIO + EKF2 fusion + planner + offboard + RViz
+#   (waits for the sim stack, then starts its own layer)
+./utils/start_fastlio.sh
 
 # Skip RViz entirely
 NO_RVIZ=1 ./utils/start_fastlio.sh
@@ -173,10 +176,10 @@ What `utils/start_fastlio.sh` adds over `utils/start_sim.sh`:
 
 | # | Component | Notes |
 |---|---|---|
-| 1 | `utils/fastlio/gazebo_imu_bridge.py` | PX4 `sensor_combined` (FRD) → `/livox/imu` (ENU): axis flip + rolling time sync |
-| 2 | `utils/fastlio/add_time_field.py` | Adds `time` field to the Gazebo cloud (0 for instantaneous scans) |
+| 1 | `lidar_bridge` (`imu_relay`) | gz `/livox/imu_raw` → `/livox/imu` (stamp monotonicization) |
+| 2 | `lidar_bridge` (`add_time_field`) | Adds `time` field to the Gazebo cloud (0 for instantaneous scans) |
 | 3 | `fast_lio` (`fastlio_mapping`) | LiDAR-inertial odometry, config: `config/fastlio_swan_gamma_effect.yaml` (ikd-Tree incremental map → `/cloud_effected`) |
-| 4 | `utils/fastlio/fastlio_px4_bridge.py` | FAST-LIO `/Odometry` (ENU) → `/fmu/in/vehicle_visual_odometry` (NED) for EKF2 |
+| 4 | `offboard` (`fastlio_px4_bridge`) | FAST-LIO `/Odometry` (ENU) → `/fmu/in/vehicle_visual_odometry` (NED) for EKF2 |
 | 5 | `super_bridge` | PX4 fused odom + raw cloud → `/lidar_slam/odom` + `/cloud_registered` |
 
 PX4 EKF2 external-vision params are set in the swan_gamma_v2 airframe
@@ -204,12 +207,10 @@ and enters `IDLE`; any ROS 2 node can then command it to fly by publishing a
 ### Quick start
 
 ```bash
-# Terminal 1 — full FAST-LIO simulation stack (Gazebo + PX4 + FAST-LIO + EKF2)
+# Terminal 1 — simulation stack (Gazebo + PX4 + agent + bridge)
+./utils/start_sim.sh
+# Terminal 2 — FAST-LIO + EKF2 fusion + planner + offboard + RViz
 ./utils/start_fastlio.sh
-
-# Terminal 2 — offboard state machine + SUPER planner + RViz
-source install/setup.bash
-ros2 launch offboard offboard.launch.py
 ```
 
 Wait for the takeoff to complete (the offboard log shows
@@ -289,14 +290,12 @@ acceptance via the offboard log (`Waypoint buffered (#N)`) or
 - **Waypoints, goals and planner output are all ENU world frame**
   (`frame_id: "world"`, x = east, y = north, z = up). Frame conversions
   (ENU → PX4 NED, yaw included) happen automatically inside the offboard node.
-- PX4's EKF local frame origin sits at the model spawn pose, which differs
-  from the Gazebo world origin when the airframe sets a non-zero
-  `PX4_GZ_MODEL_POSE` (swan_gamma_v2 currently spawns at `-4,-2,1.15392`).
-  `super_bridge` and the offboard node compensate this automatically via the
-  `world_offset_x/y/z` parameters in `config/offboard.yaml` — **keep them in
-  sync with the airframe's spawn pose** (all zero when the model spawns at the
-  world origin). With the offset applied, `/lidar_slam/odom`,
-  `/cloud_registered`, the TF tree and waypoints all agree in the world frame.
+- PX4's `vehicle_odometry` is already in the Gazebo world frame in this sim
+  (measured 2026-08-19: EKF local origin == world origin, even though the
+  airframe spawns at `PX4_GZ_MODEL_POSE="-4,-2,1.15392"`). No spawn-pose
+  compensation is needed — `/lidar_slam/odom`, `/cloud_registered`, the TF
+  tree and waypoints all agree in the world frame. If the PX4 frame behavior
+  changes, verify with `ros2 topic echo /lidar_slam/odom --once` vs `/odom`.
 - Waypoint arrival is judged by **horizontal** distance to the waypoint
   (`waypoint_reached_dist`); the drone holds `waypoint_hold_time` seconds
   before the next buffered waypoint is handed to SUPER.
@@ -323,15 +322,15 @@ ros2 service call /offboard/land std_srvs/srv/Trigger
 
 ### Recording & evaluation
 
-`cmd_record` (see the section above) records each goal together with the
+`cmd_record` (in `flight_monitor`, see the section above) records each goal together with the
 commanded trajectory and the fused odometry:
 
 ```bash
 # Terminal 3 — recorder + live plot (starts on the first goal)
-ros2 launch cmd_record record.launch.py
+ros2 launch flight_monitor record.launch.py
 
 # Plot a saved segment afterwards (defaults to the newest CSV in cmd_log/)
-ros2 run cmd_record plot_csv
+ros2 run flight_monitor plot_csv
 ```
 
 Each goal click writes `cmd_log/goal_<NNN>_<timestamp>.csv` containing the
@@ -357,8 +356,8 @@ Known bias sources (all accounted for, none a FAST-LIO algorithm bug):
 
 1. **Static/hover z bias (+0.42–0.52 m, constant)** — residual frame-origin
    offset between FAST-LIO's `camera_init` (first-frame LiDAR pose) and the
-   world frame. The spawn-pose offset is compensated by `world_offset_*`, but
-   a small residual (a few cm, vertical only) remains from the EKF/camera_init
+   world frame. The PX4 odom is already world-frame, so this is purely a
+   small residual (a few cm, vertical only) from the EKF/camera_init
    initialization. Horizontal is unaffected (≤ 0.04 m).
 2. **In-flight horizontal lag (~0.4–0.7 s, ∝ speed)** — flight bias ≈ speed ×
    0.5–0.6 s; time-shifting the FAST-LIO output by −0.7 s removes ~75 % of the
@@ -369,19 +368,19 @@ Known bias sources (all accounted for, none a FAST-LIO algorithm bug):
    height reference; the z offset gets absorbed into the map and stays locked.
    Use a barometer/height source to constrain z on real hardware.
 
-### Recording & plotting (`cmd_record`)
+### Recording & plotting (`cmd_record`, in `flight_monitor`)
 
-The [`cmd_record`](src/cmd_record) package records the commanded trajectory
+The [`cmd_record`](src/flight_monitor) (in the `flight_monitor` package) records the commanded trajectory
 together with the real drone odometry — one CSV per goal click — and shows a
 live matplotlib plot (plus post-hoc plotting). Run it in a third terminal:
 
 ```bash
 # Terminal 3 — recorder + live plot (click a goal in RViz to start recording)
 source install/setup.bash
-ros2 launch cmd_record record.launch.py
+ros2 launch flight_monitor record.launch.py
 
 # Plot a saved segment afterwards (defaults to the newest CSV in cmd_log/)
-ros2 run cmd_record plot_csv
+ros2 run flight_monitor plot_csv
 ```
 
 Each goal click writes `cmd_log/goal_<NNN>_<timestamp>.csv` containing the goal
