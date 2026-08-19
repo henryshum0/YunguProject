@@ -6,9 +6,10 @@ Gazebo's gpu_lidar outputs PointCloud2 with fields (x, y, z, intensity) but
 FAST-LIO requires a 'time' field for each point (used in deskewing/motion
 compensation). This relay node adds a zero-filled 'time' field.
 
-Usage:
-  source install/setup.bash
-  python3 utils/fastlio/add_time_field.py
+Usage (two instances, one per side; started by start_fastlio.sh):
+  ros2 run lidar_bridge add_time_field --ros-args \
+    -p input_topic:=/swan_gamma_v2/scan_left/points \
+    -p output_topic:=/swan_gamma_v2/scan_left/points_timed
 """
 
 import numpy as np

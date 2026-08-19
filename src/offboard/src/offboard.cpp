@@ -32,9 +32,6 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     waypoint_hold_time_ = declare_parameter("waypoint_hold_time", waypoint_hold_time_);
     waypoint_marker_topic_ = declare_parameter("waypoint_marker_topic", waypoint_marker_topic_);
     waypoint_marker_rate_ = declare_parameter("waypoint_marker_rate", waypoint_marker_rate_);
-    world_offset_x_ = declare_parameter("world_offset_x", world_offset_x_);
-    world_offset_y_ = declare_parameter("world_offset_y", world_offset_y_);
-    world_offset_z_ = declare_parameter("world_offset_z", world_offset_z_);
 
     const auto update_period = std::chrono::milliseconds(static_cast<int>(1000.0 / update_rate_));
 

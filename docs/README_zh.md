@@ -29,6 +29,7 @@ colcon build --symlink-install
 ./utils/start_sim.sh
 
 # 终端 2 — offboard 状态机 + SUPER 规划器 + RViz
+#   （或使用 ./utils/start_fastlio.sh 一并拉起 FAST-LIO 定位层）
 source install/setup.bash
 ros2 launch offboard offboard.launch.py
 ```
@@ -88,7 +89,7 @@ HEADLESS=1 ./utils/start_sim.sh
 |---|---|---|
 | 1 | PX4 SITL + Gazebo | `make px4_sitl gz_<model>_<world>`（来自配置）|
 | 2 | MicroXRCEAgent | `MicroXRCEAgent udp4 -p <xrce_port>`（来自配置）|
-| 3 | GZ ↔ ROS bridge + TF | `utils/gz_bridges/bridge.sh`（话题来自配置）|
+| 3 | GZ ↔ ROS bridge + TF | `utils/bridge.sh`（话题来自配置）|
 
 `start_sim.sh` 等待 PX4 报告 "Ready for takeoff"，然后启动 agent 和 bridge。
 日志位于 `/tmp/yungu_sim/`（`px4_sitl.log`、`xrce_agent.log`、`bridge.log`）。
@@ -102,7 +103,7 @@ HEADLESS=1 ./utils/start_sim.sh
 
 ### 桥接与可视化
 
-- gz bridge 与 RViz 相互独立：可单独运行 `utils/gz_bridges/bridge.sh`
+- gz bridge 与 RViz 相互独立：可单独运行 `utils/bridge.sh`
   （读取 `config/simulation.yaml` 中的话题），再通过 offboard launch 文件单独启动 RViz。
 - RViz 显示无人机（TF）、激光点云，以及 "2D Goal Pose" 工具——
   该工具向 `/goal_pose` 发布目标点（默认 `rviz:=true`，可用 `rviz:=false` 关闭）。
@@ -112,7 +113,7 @@ HEADLESS=1 ./utils/start_sim.sh
 - **地面真值里程计**（`/odom`，world 系）：yungudemo 分支的 swan_gamma_v2
   不再自带顶层 `OdometryPublisher`，桥接指向模型实例话题
   `/model/swan_gamma_v2_0/odometry`（见 `config/simulation.yaml`）。真值路径
-  `/gt_path` 与 `cmd_record` 对比脚本依赖它。
+  `/gt_path` 与 `flight_monitor` 对比脚本依赖它。
 - **TF 桥 QoS**：`tf_bridge.py` 以 `BEST_EFFORT` 订阅 `/lidar_slam/odom`
   以匹配 super_bridge 的发布端——RELIABLE 订阅会静默收不到任何消息，
   `world → base_link` TF 会一直停留在旧位置。
@@ -132,11 +133,13 @@ FAST-LIO /Odometry ──→ fastlio_px4_bridge ──→ /fmu/in/vehicle_visual
 ```
 
 ```bash
-# 完整栈：GPU 强制 Gazebo + PX4 + FAST-LIO + EKF2 融合 + 规划器 + RViz
-./utils/start_fastlio.sh
+# 终端 1 — 仿真栈：PX4 SITL + Gazebo + agent + bridge
+./utils/start_sim.sh
+#   （Gazebo 仅服务器、无 GUI：HEADLESS=1 ./utils/start_sim.sh）
 
-# Gazebo 仅服务器（无 GUI）——RViz 仍会打开以查看规划可视化
-HEADLESS=1 ./utils/start_fastlio.sh
+# 终端 2 — FAST-LIO + EKF2 融合 + 规划器 + offboard + RViz
+#   （等待仿真栈就绪后启动自己的这一层）
+./utils/start_fastlio.sh
 
 # 完全跳过 RViz
 NO_RVIZ=1 ./utils/start_fastlio.sh
@@ -146,10 +149,10 @@ NO_RVIZ=1 ./utils/start_fastlio.sh
 
 | # | 组件 | 说明 |
 |---|---|---|
-| 1 | `utils/fastlio/gazebo_imu_bridge.py` | PX4 `sensor_combined`（FRD）→ `/livox/imu`（ENU）：轴翻转 + 滚动时间同步 |
-| 2 | `utils/fastlio/add_time_field.py` | 为 Gazebo 点云补充 `time` 字段（瞬时扫描填 0）|
+| 1 | `lidar_bridge`（`imu_relay`）| gz `/livox/imu_raw` → `/livox/imu`（时间戳单调化）|
+| 2 | `lidar_bridge`（`add_time_field`）| 为 Gazebo 点云补充 `time` 字段（瞬时扫描填 0）|
 | 3 | `fast_lio`（`fastlio_mapping`）| 激光惯性里程计，配置：`config/fastlio_swan_gamma_effect.yaml`（ikd-Tree 增量地图 → `/cloud_effected`）|
-| 4 | `utils/fastlio/fastlio_px4_bridge.py` | FAST-LIO `/Odometry`（ENU）→ `/fmu/in/vehicle_visual_odometry`（NED）供 EKF2 使用 |
+| 4 | `offboard`（`fastlio_px4_bridge`）| FAST-LIO `/Odometry`（ENU）→ `/fmu/in/vehicle_visual_odometry`（NED）供 EKF2 使用 |
 | 5 | `super_bridge` | PX4 融合里程计 + 原始点云 → `/lidar_slam/odom` + `/cloud_registered` |
 
 PX4 EKF2 外部视觉参数在 swan_gamma_v2 机型中设置（`4007_gz_swan_gamma_v2`）：
@@ -180,12 +183,10 @@ HEADLESS=1 ./utils/start_fastlio.sh
 ### 快速开始
 
 ```bash
-# 终端 1 — 完整 FAST-LIO 仿真栈（Gazebo + PX4 + FAST-LIO + EKF2）
+# 终端 1 — 仿真栈（Gazebo + PX4 + agent + bridge）
+./utils/start_sim.sh
+# 终端 2 — FAST-LIO + EKF2 融合 + 规划器 + offboard + RViz
 ./utils/start_fastlio.sh
-
-# 终端 2 — offboard 状态机 + SUPER 规划器 + RViz
-source install/setup.bash
-ros2 launch offboard offboard.launch.py
 ```
 
 等待起飞完成（offboard 日志出现 `State: TAKEOFF → IDLE`），即可发布航点。
@@ -262,13 +263,12 @@ offboard 日志（`Waypoint buffered (#N)`）或 `/waypoint_markers` 确认入�
 - **航点、目标与规划器输出均为 ENU 世界系**（`frame_id: "world"`，
   x 东、y 北、z 上）。坐标系转换（ENU → PX4 NED，含偏航）由 offboard 节点
   内部自动完成。
-- PX4 的 EKF 局部坐标系原点位于模型 spawn 位置，当 airframe 设置了非零
-  `PX4_GZ_MODEL_POSE`（swan_gamma_v2 当前 spawn 在 `-4,-2,1.15392`）时，
-  它与 Gazebo world 原点不一致。`super_bridge` 与 offboard 节点通过
-  `config/offboard.yaml` 的 `world_offset_x/y/z` 参数自动补偿——
-  **务必与 airframe 的 spawn 位置保持一致**（模型 spawn 在原点时全部置 0）。
-  加上偏移后，`/lidar_slam/odom`、`/cloud_registered`、TF 树与航点在世界系
-  下完全对齐。
+- PX4 的 `vehicle_odometry` 在本 sim 中已是 Gazebo world 系（2026-08-19
+  实测：EKF 局部原点 == world 原点，即使 airframe 的 spawn 配置为
+  `PX4_GZ_MODEL_POSE="-4,-2,1.15392"`）。因此**无需任何 spawn 偏移补偿**，
+  `/lidar_slam/odom`、`/cloud_registered`、TF 树与航点在世界系下直接对齐。
+  若 PX4 行为有变，用 `ros2 topic echo /lidar_slam/odom --once` 与 `/odom`
+  对比验证。
 - 航点到达按**水平**距离判断（`waypoint_reached_dist`）；到达后悬停
   `waypoint_hold_time` 秒，再开始执行缓冲队列中的下一个航点。
 
@@ -294,14 +294,14 @@ ros2 service call /offboard/land std_srvs/srv/Trigger
 
 ### 记录与评估
 
-`cmd_record`（见上文）把每个目标连同指令轨迹与融合里程计一并记录：
+`cmd_record`（`flight_monitor` 包内，见上文）把每个目标连同指令轨迹与融合里程计一并记录：
 
 ```bash
 # 终端 3 — 记录器 + 实时曲线（收到第一个目标后开始）
-ros2 launch cmd_record record.launch.py
+ros2 launch flight_monitor record.launch.py
 
 # 事后绘制某段记录（默认最新 CSV）
-ros2 run cmd_record plot_csv
+ros2 run flight_monitor plot_csv
 ```
 
 每次目标写入 `cmd_log/goal_<NNN>_<timestamp>.csv`，包含目标位置、指令轨迹与
@@ -324,8 +324,8 @@ EKF2 完全采纳视觉里程计，融合链路按预期工作。
 已定位的三个偏差来源（均有明确归属，均非 FAST-LIO 算法缺陷）：
 
 1. **静止/悬停垂直基准差（+0.42–0.52 m，恒定）** — FAST-LIO 的 `camera_init`
-   原点（第一帧 LiDAR 位置）与 world 系之间的残余原点差。spawn 偏移已由
-   `world_offset_*` 补偿，但 EKF/camera_init 初始化留下的厘米级残余仍在
+   原点（第一帧 LiDAR 位置）与 world 系之间的残余原点差。PX4 odom 本身已是
+   world 系，这部分纯粹是 EKF/camera_init 初始化留下的厘米级残余
    （仅垂直方向）。水平方向不受影响（≤ 0.04 m）。
 2. **飞行水平滞后（约 0.4–0.7 s，∝速度）** — 飞行偏差 ≈ 速度 × 0.5–0.6 s；
    将 FAST-LIO 输出按时间平移 −0.7 s 可消除约 75% 偏差。由**仿真管道**造成

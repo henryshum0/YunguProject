@@ -3,7 +3,7 @@ from glob import glob
 
 from setuptools import setup
 
-package_name = 'cmd_record'
+package_name = 'flight_monitor'
 
 setup(
     name=package_name,
@@ -20,12 +20,13 @@ setup(
     zip_safe=True,
     maintainer='windshape',
     maintainer_email='windshape@example.com',
-    description='Goal-triggered recorder for SUPER command trajectory + real odometry',
+    description='Flight observability: fusion monitor + command-trajectory recorder/plotter',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
-            'cmd_record_node = cmd_record.cmd_record_node:main',
-            'plot_csv = cmd_record.plot_csv:main',
+            'monitor = flight_monitor.monitor:main',
+            'cmd_record_node = flight_monitor.cmd_record_node:main',
+            'plot_csv = flight_monitor.plot_csv:main',
         ],
     },
 )

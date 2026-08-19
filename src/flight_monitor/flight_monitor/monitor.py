@@ -25,7 +25,7 @@ world -> camera_init published by utils/start_fastlio.sh (spawn pose
 
 Run it while the stack is up (start_fastlio.sh), in any terminal:
 
-  python3 monitor/monitor.py
+  ros2 run flight_monitor monitor
 
 Deps (already installed by ./install_deps.sh + the matplotlib fix):
 numpy, matplotlib>=3.9, python3-tk.
@@ -62,7 +62,7 @@ LABELS = {"gt": "GT", "px4": "PX4 fused", "fastlio": "FAST-LIO"}
 # ------------------------------------------------------------------ process
 # htop-like process tracking: name substrings to watch, sample interval.
 PROC_NAMES = ("px4", "gz sim", "fastlio_mapping", "fastlio_px4_bridge",
-              "gazebo_imu_bridge", "add_time_field", "super_bridge",
+              "add_time_field", "super_bridge",
               "offboard_node", "MicroXRCEAgent", "monitor.py")
 CPU_TICKS = 20        # refresh CPU panel every 20 frames (2 s at 100 ms)
 CLK_TCK = os.sysconf(os.sysconf_names["SC_CLK_TCK"])

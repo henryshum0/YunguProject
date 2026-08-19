@@ -1,15 +1,30 @@
-# cmd_record
+# flight_monitor
 
-Goal-triggered recorder for SUPER's command trajectory plus the real drone
-odometry. Each time you click a goal, it starts recording the commanded
-trajectory (`/planning/pos_cmd`) together with the real odometry
-(`/lidar_slam/odom`); when a new goal arrives it saves the previous segment and
-starts a new one. Each segment is written to its own CSV under
-`<project>/cmd_log/`.
+Flight observability tools (merged from `monitor/` and `cmd_record`):
+
+- **monitor** — realtime fusion monitor: Gazebo GT vs FAST-LIO vs PX4 fused
+  trajectories (XY, z, horizontal/vertical error panels) plus a CPU/mem panel.
+- **cmd_record** — goal-triggered recorder for SUPER's command trajectory plus
+  the real drone odometry. Each time you click a goal, it starts recording the
+  commanded trajectory (`/planning/pos_cmd`) together with the real odometry
+  (`/lidar_slam/odom`); when a new goal arrives it saves the previous segment
+  and starts a new one. Each segment is written to its own CSV under
+  `<project>/cmd_log/`.
 
 It also runs a **realtime sliding-window plot** (position, velocity,
 acceleration, attitude, body rate, real odometry) that refreshes live while the
 planner is commanding.
+
+## Run the realtime monitor
+
+```bash
+ros2 run flight_monitor monitor
+```
+
+One window, four 2D panels: XY top-down (follows the drone), z vs time,
+horizontal/vertical error vs GT, and a process CPU/mem panel. Topics:
+`/odom` (GT), `/Odometry` (FAST-LIO), `/lidar_slam/odom` (PX4 fused) — all
+best-effort.
 
 ## Features
 
@@ -62,7 +77,7 @@ Files: `<project>/cmd_log/goal_<NNN>_<timestamp>.csv`
 ```bash
 cd <workspace root, e.g. /home/windshape/YunguProject>
 source /opt/ros/humble/setup.bash
-colcon build --packages-select cmd_record --symlink-install
+colcon build --packages-select flight_monitor --symlink-install
 source install/setup.bash
 ```
 
@@ -70,10 +85,10 @@ source install/setup.bash
 
 ```bash
 # direct
-ros2 run cmd_record cmd_record_node
+ros2 run flight_monitor cmd_record_node
 
 # or via launch
-ros2 launch cmd_record record.launch.py
+ros2 launch flight_monitor record.launch.py
 ```
 
 Then click a goal (RViz 2D Nav Goal → `/goal_pose`). The node starts recording;
@@ -97,26 +112,26 @@ the segment is saved automatically. `Ctrl-C` saves the active segment and exits.
 Example overrides:
 
 ```bash
-ros2 run cmd_record cmd_record_node --ros-args \
+ros2 run flight_monitor cmd_record_node --ros-args \
   -p window_sec:=30.0 -p min_cmd_rate:=10.0 -p viz_en:=false
 
-ros2 launch cmd_record record.launch.py window_sec:=30.0 min_cmd_rate:=10.0
+ros2 launch flight_monitor record.launch.py window_sec:=30.0 min_cmd_rate:=10.0
 ```
 
 ## Visualize a recorded CSV
 
 ```bash
 # newest goal_*.csv in cmd_log
-ros2 run cmd_record plot_csv
+ros2 run flight_monitor plot_csv
 
 # specific file
-ros2 run cmd_record plot_csv cmd_log/goal_002_20260805_163854.csv
+ros2 run flight_monitor plot_csv cmd_log/goal_002_20260805_163854.csv
 
 # zoom into a window and export a PNG (headless-friendly)
-ros2 run cmd_record plot_csv <file> --start 0.5 --end 1.5 --save out.png
+ros2 run flight_monitor plot_csv <file> --start 0.5 --end 1.5 --save out.png
 
 # or run without ROS
-python3 src/cmd_record/cmd_record/plot_csv.py <file>
+python3 src/flight_monitor/flight_monitor/plot_csv.py <file>
 ```
 
 The plot is organized per axis for response comparison: **3 rows = X / Y / Z**
@@ -162,12 +177,13 @@ pandas, or Matlab for custom analysis.
 ## Package layout
 
 ```
-src/cmd_record/
+src/flight_monitor/
 ├── package.xml
 ├── setup.py
-├── cmd_record/
-│   ├── cmd_record_node.py   # recorder node
+├── flight_monitor/
+│   ├── monitor.py           # realtime fusion monitor (GT/FAST-LIO/PX4 + CPU)
+│   ├── cmd_record_node.py   # goal-triggered recorder node
 │   └── plot_csv.py          # post-hoc CSV visualizer
 └── launch/
-    └── record.launch.py     # launch file for the node
+    └── record.launch.py     # launch file for the recorder node
 ```

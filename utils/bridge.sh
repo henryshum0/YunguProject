@@ -13,14 +13,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SIM_CONFIG="${WORKSPACE}/config/simulation.yaml"
 SIM_CONFIG_HELPER="${WORKSPACE}/config/sim_config.py"
-TF_NODE="${SCRIPT_DIR}/tf_bridge.py"
 BRIDGE_YAML=""
 
-if [[ ! -f "${SIM_CONFIG}" || ! -f "${SIM_CONFIG_HELPER}" || ! -f "${TF_NODE}" ]]; then
-  echo "ERROR: missing files for the bridge (simulation config, config helper, TF node)." >&2
+if [[ ! -f "${SIM_CONFIG}" || ! -f "${SIM_CONFIG_HELPER}" ]]; then
+  echo "ERROR: missing files for the bridge (simulation config, config helper)." >&2
   exit 1
 fi
 
@@ -39,6 +38,17 @@ if ! command -v ros2 >/dev/null 2>&1; then
     echo "ERROR: 'ros2' not found and /opt/ros/humble/setup.bash is missing." >&2
     exit 1
   fi
+fi
+
+# Also source the workspace overlay so `ros2 run lidar_bridge tf_bridge`
+# resolves. Without it (start_sim.sh doesn't source the overlay either), the
+# TF bridge dies with "Package 'lidar_bridge' not found" and the
+# world -> base_link TF goes missing in RViz.
+if [[ -f "${WORKSPACE}/install/setup.bash" ]]; then
+  set +u
+  # shellcheck disable=SC1091
+  source "${WORKSPACE}/install/setup.bash"
+  set -u
 fi
 
 bridge_enabled="$(python3 "${SIM_CONFIG_HELPER}" --config "${SIM_CONFIG}" get bridge.enabled)"
@@ -67,8 +77,8 @@ else
 fi
 
 if [[ "${tf_enabled}" == "true" ]]; then
-  echo "Starting TF bridge (${TF_NODE}) ..."
-  python3 "${TF_NODE}" &
+  echo "Starting TF bridge (ros2 run lidar_bridge tf_bridge) ..."
+  ros2 run lidar_bridge tf_bridge &
   pids+=("$!")
 else
   echo "TF bridge disabled (bridge.tf_enabled=false in ${SIM_CONFIG}); skipping."

@@ -16,7 +16,7 @@ Publishes a fused frame whenever either side delivers a new scan (the other
 side's latest is reused), so the output rate stays at the scan rate.
 
 Usage (started by start_fastlio.sh):
-  python3 utils/fastlio/lidar_merge.py
+  ros2 run lidar_bridge lidar_merge
 """
 
 import math
