@@ -1,0 +1,64 @@
+# ============================================================================
+# Benchmark world generator (Gazebo)
+# ============================================================================
+# Randomly generates a flat map (ground plane) with gate + pillar obstacles as
+# a Gazebo world (.sdf) for planner benchmarking.
+# Read by: benchmark/generate_map.py (src/benchmark).
+# ----------------------------------------------------------------------------
+
+benchmark:
+  # Map size [m] - flat ground plane; obstacles spawn on top of it.
+  map:
+    x: 40.0
+    y: 40.0
+
+  # --- Density control -----------------------------------------------------
+  # The map is discretized into an NxN grid; every cell receives
+  # `objects_per_cell` obstacles placed randomly inside it. Raise/lower
+  # `objects_per_cell` to make the map denser/sparser.
+  grid:
+    n_x: 2
+    n_y: 2
+  objects_per_cell: 10
+
+  # --- Obstacle types [m] --------------------------------------------------
+  # Gates are doorframe obstacles (two posts + a top beam, open bottom). They
+  # test VERTICAL obstacle avoidance: the drone must clear the opening height
+  # (fly through between the posts and under the beam) or fly over the top bar.
+  gates:
+    enabled: true
+    width_min: 3.5     # min gate opening width (between posts) [m]
+    width_max: 5.0     # max gate opening width [m]
+    height_min: 5.0    # min gate height (top beam height) [m]
+    height_max: 6.0    # max gate height [m]
+    post_thickness: 0.4   # post/beam cross-section [m]
+  pillars:
+    enabled: true
+    radius_min: 0.3    # min pillar radius
+    radius_max: 1.5    # max pillar radius
+    height_min: 8.0    # min pillar height
+    height_max: 10.0    # max pillar height
+
+  # --- Clearing distance [m] -----------------------------------------------
+  # Minimum center-to-center distance between any two obstacles. It should be
+  # at least the largest obstacle half-extent so obstacles never overlap
+  # (the generator also refuses positions that would make geometries intersect).
+  clearing_distance: 2.0
+
+  # --- Placement constraints -----------------------------------------------
+  # Keep a clear radius [m] around the world origin so the drone spawn point
+  # (PX4 spawns at the origin) is unobstructed.
+  spawn_clearance: 5.0
+  # Max placement attempts per object before it is skipped (a dense cell may
+  # skip objects that cannot satisfy the clearing distance).
+  max_attempts: 50
+
+  # --- Output --------------------------------------------------------------
+  # RNG seed (null = random each run; set a number for reproducible maps).
+  seed: 0
+  # Generated world file name (<world_name>.sdf).
+  world_name: benchmark
+  # Output directory, relative to the project root. The default points into the
+  # PX4 worlds dir so the sim can load it (set `world: benchmark` in
+  # config/simulation.yaml). Override with --output.
+  output_dir: VisionFlow-PX4/Tools/simulation/gz/worlds

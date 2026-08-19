@@ -60,15 +60,20 @@ static void nedToEnu(double pxn, double pyn, double pzn,
 }
 
 /**
- * @brief Transform the raw gz-bridged lidar cloud into the world (ENU) frame
- * using PX4's odometry.
+ * @brief Transform the fused lidar cloud into the world (ENU) frame using
+ * PX4's odometry.
  *
- * The gz lidar (/swan_gamma_v2/scan/points) publishes points in the lidar_link
- * (sensor) frame, but SUPER's ROG-Map treats the input cloud as world-frame
- * coordinates. PX4's vehicle_odometry is NED, so it is converted to ENU and
- * used to register the cloud:
+ * The input cloud (default /swan_gamma_v2/scan/points_fused) is the output of
+ * lidar_merge, i.e. the two side LiDARs already transformed into base_link
+ * (lidar_merge applied the mounting extrinsics). SUPER's ROG-Map treats the
+ * input cloud as world-frame coordinates, so each base_link point is rotated
+ * by the drone's ENU attitude and translated by its ENU position:
  *
- *   p_world = R_enu * (p_lidar + offset) + t_enu
+ *   p_world = R_enu * p_base + t_enu
+ *
+ * No lidar_link->base_link offset is applied: the fused cloud is already in
+ * base_link (lidar_offset_* defaults to 0; kept only for a raw lidar_link-
+ * frame input).
  *
  * The ENU pose is also republished as nav_msgs/Odometry (default
  * /lidar_slam/odom) so SUPER's ray origin matches the registered cloud.
@@ -182,7 +187,9 @@ private:
             std::memcpy(&ly, p + y_off, sizeof(float));
             std::memcpy(&lz, p + z_off, sizeof(float));
 
-            // lidar_link -> base_link (static offset), then base_link -> world
+            // The fused cloud is already in base_link (lidar_merge applied the
+            // side-lidar extrinsics) — no lidar_link offset here. base_link →
+            // world via the drone's ENU attitude + position.
             const double bx = lx + lidar_offset_x_;
             const double by = ly + lidar_offset_y_;
             const double bz = lz + lidar_offset_z_;
@@ -209,7 +216,10 @@ private:
     std::string base_frame_{"base_link"};
     double lidar_offset_x_{0.0};
     double lidar_offset_y_{0.0};
-    double lidar_offset_z_{0.16};  // lidar_link is 0.16 m above base_link
+    // Input cloud is the fused one in base_link -> no lidar_link offset. Was
+    // 0.16 when super_bridge consumed a raw lidar_link-frame cloud; set it back
+    // to 0.16 only if cloud_in_topic is pointed at such a cloud.
+    double lidar_offset_z_{0.0};
 
     bool pose_valid_{false};
     double px_{0.0}, py_{0.0}, pz_{0.0};

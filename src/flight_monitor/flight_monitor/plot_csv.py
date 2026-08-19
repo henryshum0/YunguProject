@@ -11,9 +11,9 @@
 #
 # Layout: 3 rows (X / Y / Z axes) x 5 columns (Position, Velocity, Accel,
 # Attitude, Body rate). Commanded (solid blue) and real odometry (dashed red)
-# are overlaid on the Position and Velocity columns so the tracking response can
-# be compared per axis; the goal position is drawn as a dotted gray line on the
-# Position column.
+# are overlaid on the Position, Velocity and Body-rate columns so the tracking
+# response can be compared per axis; the goal position is drawn as a dotted gray
+# line on the Position column.
 
 import argparse
 import csv
@@ -131,12 +131,25 @@ def main():
             elif c == 2:               # Acceleration: cmd
                 ax.plot(t, _col(rows, a), label="cmd", color="tab:blue",
                         linewidth=1.5)
-            elif c == 3:               # Attitude: cmd
+            elif c == 3:               # Attitude: cmd (+ yaw cmd / odom yaw on Z)
                 ax.plot(t, _col(rows, att), label="cmd", color="tab:blue",
                         linewidth=1.5)
-            else:                      # Body rate: cmd
+                if name == "Z" and "yaw_cmd" in rows[0]:
+                    ax.plot(t, _col(rows, "yaw_cmd"), label="yaw cmd",
+                            color="tab:green", linewidth=1.5)
+                if name == "Z" and "oyaw" in rows[0]:
+                    ax.plot(t, _col(rows, "oyaw"), label="odom yaw",
+                            color="tab:red", linestyle="--", linewidth=1.2)
+            else:                      # Body rate: cmd vs odom (+ yaw_dot cmd on Z)
                 ax.plot(t, _col(rows, br), label="cmd", color="tab:blue",
                         linewidth=1.5)
+                o_br = "o" + br        # e.g. wx -> owx (real body rate)
+                if o_br in rows[0]:
+                    ax.plot(t, _col(rows, o_br), label="odom", color="tab:red",
+                            linestyle="--", linewidth=1.2)
+                if name == "Z" and "yaw_dot_cmd" in rows[0]:
+                    ax.plot(t, _col(rows, "yaw_dot_cmd"), label="yaw_dot cmd",
+                            color="tab:green", linewidth=1.5)
             if r == 0:
                 ax.legend(loc="upper right", fontsize=7, ncol=3)
 

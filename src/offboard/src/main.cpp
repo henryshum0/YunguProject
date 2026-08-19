@@ -1,4 +1,4 @@
-#include "offboard/offboard_node.hpp"
+#include "offboard/offboard.hpp"
 
 int main(int argc, char **argv)
 {

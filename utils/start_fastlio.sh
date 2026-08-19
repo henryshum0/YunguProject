@@ -245,15 +245,10 @@ ros2 run lidar_bridge imu_relay &
 PIDS+=("$!")
 # Side LiDARs (real-hardware mirror): time-field each side, then fuse into one
 # scan in base_link for FAST-LIO (lidar_merge applies the mounting extrinsics).
-ros2 run lidar_bridge add_time_field --ros-args \
-    -p input_topic:="/swan_gamma_v2/scan_left/points" \
-    -p output_topic:="/swan_gamma_v2/scan_left/points_timed" &
-PIDS+=("$!")
-ros2 run lidar_bridge add_time_field --ros-args \
-    -p input_topic:="/swan_gamma_v2/scan_right/points" \
-    -p output_topic:="/swan_gamma_v2/scan_right/points_timed" &
-PIDS+=("$!")
-ros2 run lidar_bridge lidar_merge &
+# Folded into a single launch file
+# (src/lidar_bridge/launch/lidar_sensors.launch.py) so the topic names stay in
+# sync with ${SIM_MODEL}.
+ros2 launch lidar_bridge lidar_sensors.launch.py model:="${SIM_MODEL}" &
 PIDS+=("$!")
 
 # Ground-truth trajectory (gt_path_node) + FAST-LIO→PX4 bridge
