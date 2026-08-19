@@ -48,13 +48,3 @@ offboard:
   # waypoint_hold_time [s] before the next waypoint is sent to SUPER.
   waypoint_reached_dist: 3.0
   waypoint_hold_time: 0.0
-
-  # PX4 local ENU -> world ENU translation (model spawn pose). PX4's EKF local
-  # frame origin sits at the spawn pose in the airframe
-  # (PX4_GZ_MODEL_POSE="-4.0,-2.0,1.15392,0,0,0" in 4007_gz_swan_gamma_v2);
-  # these offsets make super_bridge's /lidar_slam/odom + /cloud_registered and
-  # the TF tree align with the Gazebo world frame. Keep in sync with the
-  # airframe. Set all to 0 when the model spawns at the world origin.
-  world_offset_x: -4.0
-  world_offset_y: -2.0
-  world_offset_z: 1.15392

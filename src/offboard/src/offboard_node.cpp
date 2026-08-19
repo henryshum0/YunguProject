@@ -32,9 +32,6 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     waypoint_hold_time_ = declare_parameter("waypoint_hold_time", waypoint_hold_time_);
     waypoint_marker_topic_ = declare_parameter("waypoint_marker_topic", waypoint_marker_topic_);
     waypoint_marker_rate_ = declare_parameter("waypoint_marker_rate", waypoint_marker_rate_);
-    world_offset_x_ = declare_parameter("world_offset_x", world_offset_x_);
-    world_offset_y_ = declare_parameter("world_offset_y", world_offset_y_);
-    world_offset_z_ = declare_parameter("world_offset_z", world_offset_z_);
 
     const auto update_period = std::chrono::milliseconds(static_cast<int>(1000.0 / update_rate_));
 
@@ -232,10 +229,9 @@ void OffboardNode::waypointTick()
     if (current_wp_) {
         // Wait for the drone to reach the waypoint (horizontal distance).
         if (!wp_reached_ && local_pos_ && local_pos_->xy_valid) {
-            // PX4 local position is NED, origin at the spawn pose; convert to
-            // world ENU (planner convention) by adding the spawn offset.
-            const double enu_x = local_pos_->y + world_offset_x_;
-            const double enu_y = local_pos_->x + world_offset_y_;
+            // PX4 local position is NED; convert to ENU (planner convention).
+            const double enu_x = local_pos_->y;
+            const double enu_y = local_pos_->x;
             const double dx = enu_x - current_wp_->pose.position.x;
             const double dy = enu_y - current_wp_->pose.position.y;
             const double dist = std::hypot(dx, dy);
@@ -639,11 +635,9 @@ void OffboardNode::timerCallback()
             if (!planner_active_) {
                 // Planner stopped → freeze at last commanded position.
                 if (latest_cmd_) {
-                    // Planner cmd is world ENU; PX4 hold setpoint needs local
-                    // (spawn-relative) ENU, so subtract the world offset.
-                    enuToNedPos(latest_cmd_->position.x - world_offset_x_,
-                                latest_cmd_->position.y - world_offset_y_,
-                                latest_cmd_->position.z - world_offset_z_,
+                    enuToNedPos(latest_cmd_->position.x,
+                                latest_cmd_->position.y,
+                                latest_cmd_->position.z,
                                 hold_x_, hold_y_, hold_z_);
                     have_hold_ = true;
                 }
@@ -670,14 +664,10 @@ void OffboardNode::timerCallback()
             }
 
             // Forward the planner command (ENU → NED), including the
-            // trajectory'x`xs acceleration as feedforward. The planner cmd is
-            // world ENU, but PX4 setpoints are in the local frame (origin at
-            // the spawn pose), so subtract the world offset first.
+            // trajectory'x`xs acceleration as feedforward.
             const auto &cmd = *latest_cmd_;
             float nx, ny, nz, vx, vy, vz, ax, ay, az;
-            enuToNedPos(cmd.position.x - world_offset_x_,
-                        cmd.position.y - world_offset_y_,
-                        cmd.position.z - world_offset_z_, nx, ny, nz);
+            enuToNedPos(cmd.position.x, cmd.position.y, cmd.position.z, nx, ny, nz);
             enuToNedVel(cmd.velocity.x, cmd.velocity.y, cmd.velocity.z, vx, vy, vz);
             enuToNedAcc(cmd.acceleration.x, cmd.acceleration.y, cmd.acceleration.z, ax, ay, az);
 
