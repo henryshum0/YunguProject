@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>cmd_record</name>
+  <name>flight_monitor</name>
   <version>0.1.0</version>
-  <description>Goal-triggered recorder for SUPER's command trajectory plus the real drone odometry. Writes one CSV per goal click (goal position + trajectory in the same file) into &lt;project&gt;/cmd_log, with a realtime sliding-window live plot.</description>
+  <description>Flight observability tools: realtime fusion monitor (GT / FAST-LIO / PX4 comparison + CPU panel) and goal-triggered command-trajectory recorder with CSV output and live plotting. Merged from monitor/ and cmd_record.</description>
   <maintainer email="windshape@example.com">windshape</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,6 +11,8 @@
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>mars_quadrotor_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

@@ -24,7 +24,7 @@ def generate_launch_description():
                               description='Live plot refresh rate [Hz]'),
 
         Node(
-            package='cmd_record',
+            package='flight_monitor',
             executable='cmd_record_node',
             name='cmd_record',
             output='screen',
