@@ -42,6 +42,12 @@ offboard:
   # falling back to super_planner/config/) or an absolute path.
   planner_config: gazebo-3m.yaml
 
+  # Raw lidar cloud topic read by super_bridge (then republished to SUPER as
+  # /cloud_registered). Defaults to /<model>/scan/points from
+  # config/simulation.yaml; set this to override (e.g. the fused base_link
+  # cloud /swan_gamma_v2/scan/points_fused). Leave empty to use the default.
+  cloud_in_topic: "/swan_gamma_v2/scan/points_fused"
+
   # Waypoint following: buffered waypoints (/waypoint_pose -> /waypoint_buffer)
   # are flown one at a time. A waypoint is "reached" when the drone is within
   # waypoint_reached_dist [m] horizontally; it then holds for

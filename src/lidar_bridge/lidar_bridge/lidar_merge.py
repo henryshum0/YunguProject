@@ -15,8 +15,13 @@ The extrinsics below match model.sdf (swan_gamma_v2):
 Publishes a fused frame whenever either side delivers a new scan (the other
 side's latest is reused), so the output rate stays at the scan rate.
 
-Usage (started by start_fastlio.sh):
-  ros2 run lidar_bridge lidar_merge
+Usage (started by start_fastlio.sh via the lidar_bridge launch file):
+  ros2 launch lidar_bridge lidar_sensors.launch.py
+# standalone (topics overridable via parameters):
+  ros2 run lidar_bridge lidar_merge --ros-args \
+    -p input_left:=/swan_gamma_v2/scan_left/points \
+    -p input_right:=/swan_gamma_v2/scan_right/points \
+    -p output_topic:=/swan_gamma_v2/scan/points_fused
 """
 
 import math
@@ -35,9 +40,12 @@ EXTRINSICS = {
     "right": {"t": (0.0, -0.40, 0.05), "roll": +0.6},
 }
 
-TOPIC_LEFT = "/swan_gamma_v2/scan_left/points_timed"
-TOPIC_RIGHT = "/swan_gamma_v2/scan_right/points_timed"
-TOPIC_OUT = "/swan_gamma_v2/scan/points_fused"
+# Default topics (match utils/start_fastlio.sh). Overridable per-model via ROS
+# parameters (input_left / input_right / output_topic) — the
+# lidar_sensors.launch.py launch file passes model-derived topic names.
+DEFAULT_TOPIC_LEFT = "/swan_gamma_v2/scan_left/points"
+DEFAULT_TOPIC_RIGHT = "/swan_gamma_v2/scan_right/points"
+DEFAULT_TOPIC_OUT = "/swan_gamma_v2/scan/points_fused"
 
 
 def _rotation_matrix(roll):
@@ -55,15 +63,23 @@ def _stamp_key(t):
 class LidarMergeNode(Node):
     def __init__(self):
         super().__init__("lidar_merge")
+        self.declare_parameter("input_left", DEFAULT_TOPIC_LEFT)
+        self.declare_parameter("input_right", DEFAULT_TOPIC_RIGHT)
+        self.declare_parameter("output_topic", DEFAULT_TOPIC_OUT)
+
+        in_left = self.get_parameter("input_left").value
+        in_right = self.get_parameter("input_right").value
+        out_topic = self.get_parameter("output_topic").value
+
         qos = QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT)
         self._latest = {"left": None, "right": None}
-        self.create_subscription(PointCloud2, TOPIC_LEFT,
+        self.create_subscription(PointCloud2, in_left,
                                  lambda m: self._cb("left", m), qos)
-        self.create_subscription(PointCloud2, TOPIC_RIGHT,
+        self.create_subscription(PointCloud2, in_right,
                                  lambda m: self._cb("right", m), qos)
-        self._pub = self.create_publisher(PointCloud2, TOPIC_OUT, qos)
+        self._pub = self.create_publisher(PointCloud2, out_topic, qos)
         self.get_logger().info(
-            f"lidar merge: {TOPIC_LEFT} + {TOPIC_RIGHT} → {TOPIC_OUT} (base_link)")
+            f"lidar merge: {in_left} + {in_right} → {out_topic} (base_link)")
 
     # ---------------------------------------------------------------- utils
     @staticmethod

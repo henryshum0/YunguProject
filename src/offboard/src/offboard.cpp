@@ -451,7 +451,7 @@ void OffboardNode::timerCallback()
                 std::remainder(PI_HALF - static_cast<double>(c.yaw), TWO_PI));
             const float yawspeed_ned = -static_cast<float>(c.yaw_dot);
 
-            px4_->publishSetpoint(nx, ny, nz, vx, vy, vz, NAN, yawspeed_ned, ax, ay, az);
+            px4_->publishSetpoint(nx, ny, nz, vx, vy, vz, yaw_ned, yawspeed_ned, ax, ay, az);
             break;
         }
         // --------------------------------------------------------------

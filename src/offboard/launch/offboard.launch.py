@@ -53,7 +53,7 @@ def generate_launch_description():
     # -> /swan_gamma_v2/scan/points. Read config/simulation.yaml (via the shared
     # config/sim_config.py helper) so the launch automatically tracks the model
     # selected there. Override with cloud_in_topic:=... if needed.
-    default_cloud_in = '/x500_lidar/scan/points'
+    default_cloud_in = '/swan_gamma_v2/scan/points'
     sim_config_path = _find_sim_config()
     sim_config = None
     if sim_config_path is not None:
@@ -111,6 +111,13 @@ def generate_launch_description():
     cfg_landing_z = str(_offboard_cfg('landing_z', 0.15))
     cfg_waypoint_reached_dist = str(_offboard_cfg('waypoint_reached_dist', 0.5))
     cfg_waypoint_hold_time = str(_offboard_cfg('waypoint_hold_time', 2.0))
+
+    # Raw lidar cloud topic for super_bridge: default is /<model>/scan/points
+    # (from config/simulation.yaml); override with offboard.cloud_in_topic in
+    # config/offboard.yaml (empty string -> keep the model-derived default).
+    cfg_cloud_in_topic = str(_offboard_cfg('cloud_in_topic', ''))
+    if cfg_cloud_in_topic.strip():
+        default_cloud_in = cfg_cloud_in_topic.strip()
 
     # Planner-config overrides applied by the launch (SUPER reads these from
     # its YAML file, not ROS params). A temporary copy of the planner config is
@@ -216,9 +223,10 @@ def generate_launch_description():
                               description='Final landing height [m]'),
         DeclareLaunchArgument('cmd_topic', default_value='/planning/pos_cmd'),
         DeclareLaunchArgument('cloud_in_topic', default_value=default_cloud_in,
-                              description='Lidar cloud for super_bridge (base_link '
-                                          'frame, both side LiDARs fused); defaults '
-                                          'to /<model>/scan/points_fused'),
+                              description='Raw lidar cloud read by super_bridge; '
+                                          'defaults to /<model>/scan/points from '
+                                          'config/simulation.yaml, overridable via '
+                                          'offboard.cloud_in_topic in config/offboard.yaml'),
         DeclareLaunchArgument('odom_topic', default_value='/fmu/out/vehicle_odometry',
                               description='PX4 odometry topic (NED, converted to ENU by the bridge)'),
         DeclareLaunchArgument('cloud_registered_topic', default_value='/cloud_registered',
