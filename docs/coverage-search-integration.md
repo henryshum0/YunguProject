@@ -211,10 +211,12 @@ uv run coverage-planner plan \
   --output results/example_run
 # 检查 results/example_run/flight_plan.json 的 mission_status == ready
 
-# ② 启动本仓库仿真栈（终端 1）
-./utils/start_fastlio.sh
+# ② 启动仿真栈（终端 1）：Gazebo + PX4 + agent + bridge
+./utils/start_sim.sh
 
-# ③ 启动 offboard + SUPER + RViz（终端 2）
+# ③ 启动 offboard + SUPER + FAST-LIO + RViz（终端 2）
+#    （offboard.launch.py 现直接拉起 FAST-LIO / lidar_merge，由
+#      config/offboard.yaml 的 use_fastlio / use_lidar_merge 控制）
 source install/setup.bash
 ros2 launch offboard offboard.launch.py
 

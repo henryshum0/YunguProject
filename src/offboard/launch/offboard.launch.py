@@ -7,8 +7,13 @@ from pathlib import Path
 
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    IncludeLaunchDescription,
+)
 from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
     LaunchConfiguration,
     PathJoinSubstitution,
@@ -48,12 +53,39 @@ def _find_sim_config():
     return None
 
 
+def _airframe_spawn_pose(project_root, model):
+    """Read the model spawn pose (PX4_GZ_MODEL_POSE) from the airframe file.
+
+    FAST-LIO's camera_init frame is the first lidar frame's position, i.e. the
+    model spawn pose. Publishing world -> camera_init with the real offset keeps
+    FAST-LIO's /path (camera_init frame) aligned with the Gazebo truth /gt_path
+    (world frame) in RViz. Mirrors the logic that used to live in
+    utils/start_fastlio.sh. Returns '' when no pose can be found.
+    """
+    spawn = os.environ.get('PX4_GZ_MODEL_POSE', '')
+    if spawn:
+        return spawn
+    if project_root is None:
+        return ''
+    airframes = (project_root / 'VisionFlow-PX4' / 'ROMFS' / 'px4fmu_common'
+                 / 'init.d-posix' / 'airframes')
+    if not airframes.is_dir():
+        return ''
+    for f in sorted(airframes.glob(f'*_gz_{model}')):
+        m = re.search(r'PX4_GZ_MODEL_POSE=.*"([-0-9.,]+)"',
+                      f.read_text(encoding='utf-8', errors='ignore'))
+        if m:
+            return m.group(1)
+    return ''
+
+
 def generate_launch_description():
     # The raw gz lidar topic follows the configured model, e.g. model=swan_gamma_v2
     # -> /swan_gamma_v2/scan/points. Read config/simulation.yaml (via the shared
     # config/sim_config.py helper) so the launch automatically tracks the model
     # selected there. Override with cloud_in_topic:=... if needed.
-    default_cloud_in = '/swan_gamma_v2/scan/points'
+    model = 'swan_gamma_v2'
+    default_cloud_in = f'/{model}/scan/points'
     sim_config_path = _find_sim_config()
     sim_config = None
     if sim_config_path is not None:
@@ -61,7 +93,7 @@ def generate_launch_description():
             # Reuse config/sim_config.py (sits next to simulation.yaml).
             sys.path.insert(0, str(sim_config_path.parent))
             sim_config = importlib.import_module('sim_config')
-            model = sim_config.get_value(sim_config_path, 'model', default='x500_lidar')
+            model = sim_config.get_value(sim_config_path, 'model', default='swan_gamma_v2')
             # The two side LiDARs are fused by lidar_merge into a base_link
             # cloud; super_bridge consumes that fused cloud now.
             default_cloud_in = f'/{model}/scan/points_fused'
@@ -89,6 +121,47 @@ def generate_launch_description():
                                         f'offboard.{key}', default)
         except Exception:  # noqa: BLE001 - keep the launch working
             return default
+
+    def _as_bool(v):
+        if isinstance(v, bool):
+            return v
+        return str(v).strip().lower() in ('1', 'true', 'yes')
+
+    # FAST-LIO + lidar_merge switches (config/offboard.yaml). These replace the
+    # removed utils/start_fastlio.sh:
+    #   use_fastlio     -> imu_relay + fastlio_mapping + fastlio_px4_bridge +
+    #                      static TFs + gt_path_node (PX4 EKF2 vision fusion)
+    #   use_lidar_merge -> lidar_sensors.launch (2x add_time_field + lidar_merge)
+    #                      -> /<model>/scan/points_fused
+    use_fastlio = _as_bool(_offboard_cfg('use_fastlio', True))
+    use_lidar_merge = _as_bool(_offboard_cfg('use_lidar_merge', True))
+
+    # FAST-LIO params file: a bare name resolves against config/ (e.g.
+    # fastlio_swan_gamma_effect.yaml), or an absolute path.
+    fastlio_cfg_name = str(_offboard_cfg('fastlio_config', 'fastlio_swan_gamma_effect.yaml'))
+    default_fastlio_config = fastlio_cfg_name
+    if project_root is not None:
+        fastlio_cfg = project_root / 'config' / fastlio_cfg_name
+        if fastlio_cfg.is_file():
+            default_fastlio_config = str(fastlio_cfg)
+
+    # Without lidar_merge there is no fused cloud: point super_bridge at the raw
+    # per-model scan instead (single-LiDAR models; offboard.cloud_in_topic in
+    # config/offboard.yaml still overrides).
+    if not use_lidar_merge:
+        default_cloud_in = f'/{model}/scan/points'
+
+    # world -> camera_init: FAST-LIO's camera_init is the first lidar frame's
+    # position, i.e. the model spawn pose. Publishing the real offset keeps
+    # FAST-LIO's /path (camera_init frame) aligned with the Gazebo truth /gt_path
+    # (world frame) in RViz.
+    spawn_pose = _airframe_spawn_pose(project_root, model)
+    sp_x, sp_y, sp_z_lidar = '0.0', '0.0', '0.16'
+    if spawn_pose:
+        parts = spawn_pose.split(',')
+        if len(parts) >= 3:
+            sp_x, sp_y, sp_z = parts[0], parts[1], parts[2]
+            sp_z_lidar = str(float(sp_z) + 0.16)
 
     # SUPER planner config: a file name (or absolute path) from config/offboard.yaml.
     # A bare name is resolved against config/super_planner/ first; otherwise it
@@ -199,6 +272,20 @@ def generate_launch_description():
 
     default_rviz_config = 'birdview.rviz'
 
+    # FAST-LIO -> PX4 bridge + ground-truth path (python scripts in
+    # src/offboard/scripts; launched only when the project root is resolvable).
+    fastlio_scripts = []
+    if project_root is not None:
+        scripts_dir = project_root / 'src' / 'offboard' / 'scripts'
+        fastlio_scripts = [
+            ExecuteProcess(cmd=['python3', str(scripts_dir / 'fastlio_px4_bridge.py')],
+                           output='screen',
+                           condition=IfCondition(LaunchConfiguration('use_fastlio'))),
+            ExecuteProcess(cmd=['python3', str(scripts_dir / 'gt_path_node.py')],
+                           output='screen',
+                           condition=IfCondition(LaunchConfiguration('use_fastlio'))),
+        ]
+
     return LaunchDescription([
         # ------------------------------------------------------------------
         # Launch arguments
@@ -255,6 +342,19 @@ def generate_launch_description():
         DeclareLaunchArgument('waypoint_hold_time', default_value=cfg_waypoint_hold_time,
                               description='Hold time [s] between reaching a waypoint and starting '
                                           'the next one'),
+        DeclareLaunchArgument('use_fastlio', default_value=str(use_fastlio).lower(),
+                              description='Launch the FAST-LIO layer (imu_relay + '
+                                          'fastlio_mapping + fastlio_px4_bridge + '
+                                          'static TFs + gt_path_node)'),
+        DeclareLaunchArgument('use_lidar_merge', default_value=str(use_lidar_merge).lower(),
+                              description='Launch lidar_merge (dual side LiDARs -> '
+                                          'fused base_link cloud)'),
+        DeclareLaunchArgument('fastlio_config', default_value=default_fastlio_config,
+                              description='FAST-LIO params file (absolute path, or a '
+                                          'bare name resolved against config/)'),
+        DeclareLaunchArgument('fastlio_model', default_value=model,
+                              description='Model used to build the LiDAR topic names '
+                                          'for the lidar_merge layer'),
         DeclareLaunchArgument('rviz', default_value=cfg_visualization,
                               description='Launch the RViz2 visualization windows'),
         DeclareLaunchArgument('rviz_config', default_value=default_rviz_config,
@@ -263,9 +363,20 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz_freelook', default_value='true',
                               description='Launch the 3D debug (freelook) RViz '
                                           'window alongside the planning one'),
-        DeclareLaunchArgument('rviz_freelook_config', default_value='freelook.rviz',
+        # The 3D (freelook) window shows the FAST-LIO map when use_fastlio is on:
+        # fastlio_ikdtree.rviz displays /cloud_effected (ikd-Tree incremental
+        # map), the /Laser_map display, /gt_path and /path — matching the removed
+        # utils/start_fastlio.sh. Without FAST-LIO, the plain 3D debug view
+        # (freelook.rviz) is used.
+        DeclareLaunchArgument('rviz_freelook_config',
+                              default_value=PythonExpression([
+                                  TextSubstitution(text="'fastlio_ikdtree.rviz' if '"),
+                                  LaunchConfiguration('use_fastlio'),
+                                  TextSubstitution(text="' == 'true' else 'freelook.rviz'"),
+                              ]),
                               description='Config for the 3D debug window '
-                                          '(freelook.rviz by default)'),
+                                          '(fastlio_ikdtree.rviz when use_fastlio, '
+                                          'freelook.rviz otherwise)'),
         DeclareLaunchArgument('planner_config', default_value=fsm_config_path,
                               description='SUPER planner config (absolute path under '
                                           'config/super_planner/, or a file name in '
@@ -274,6 +385,43 @@ def generate_launch_description():
                               description='Publish the aerial birdview overlay (/birdview_cloud)'),
         DeclareLaunchArgument('birdview_image', default_value=default_birdview_image,
                               description='Birdview PNG path (default: resources/yungu_birdview.png)'),
+
+        # ------------------------------------------------------------------
+        # FAST-LIO + lidar_merge layer (optional — config/offboard.yaml)
+        #   use_lidar_merge=true  -> lidar_sensors.launch (2x add_time_field +
+        #                            lidar_merge) -> /<model>/scan/points_fused,
+        #                            consumed by FAST-LIO and super_bridge
+        #   use_fastlio=true      -> imu_relay + fastlio_mapping +
+        #                            fastlio_px4_bridge + static TFs + gt_path_node
+        #   (replaces the removed utils/start_fastlio.sh)
+        # ------------------------------------------------------------------
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                FindPackageShare('lidar_bridge'), 'launch', 'lidar_sensors.launch.py'])),
+            launch_arguments={'model': LaunchConfiguration('fastlio_model')}.items(),
+            condition=IfCondition(LaunchConfiguration('use_lidar_merge')),
+        ),
+
+        Node(package='tf2_ros', executable='static_transform_publisher',
+             name='tf_body_base_link', output='screen',
+             arguments=['0', '0', '0', '0', '0', '0', '1', 'body', 'base_link'],
+             condition=IfCondition(LaunchConfiguration('use_fastlio'))),
+        Node(package='tf2_ros', executable='static_transform_publisher',
+             name='tf_base_link_lidar', output='screen',
+             arguments=['0', '0', '0.16', '0', '0', '0', '1', 'base_link', 'lidar_link'],
+             condition=IfCondition(LaunchConfiguration('use_fastlio'))),
+        Node(package='tf2_ros', executable='static_transform_publisher',
+             name='tf_world_camera_init', output='screen',
+             arguments=[sp_x, sp_y, sp_z_lidar, '0', '0', '0', '1', 'world', 'camera_init'],
+             condition=IfCondition(LaunchConfiguration('use_fastlio'))),
+        Node(package='lidar_bridge', executable='imu_relay', name='imu_relay',
+             output='screen',
+             condition=IfCondition(LaunchConfiguration('use_fastlio'))),
+        Node(package='fast_lio', executable='fastlio_mapping', name='fastlio_mapping',
+             output='screen',
+             parameters=[LaunchConfiguration('fastlio_config')],
+             condition=IfCondition(LaunchConfiguration('use_fastlio'))),
+        *fastlio_scripts,
 
         # ------------------------------------------------------------------
         # PX4 offboard state machine

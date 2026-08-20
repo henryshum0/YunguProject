@@ -48,6 +48,27 @@ offboard:
   # cloud /swan_gamma_v2/scan/points_fused). Leave empty to use the default.
   cloud_in_topic: "/swan_gamma_v2/scan/points_fused"
 
+  # --- FAST-LIO + lidar_merge (launched directly by offboard.launch.py) ---
+  # These replace the removed utils/start_fastlio.sh. Both are toggled here;
+  # they can also be overridden per run as launch args:
+  #   ros2 launch offboard offboard.launch.py use_fastlio:=false use_lidar_merge:=false
+
+  # Launch the FAST-LIO layer (LiDAR-inertial odometry + PX4 EKF2 fusion)?
+  #   true  -> imu_relay + fastlio_mapping + fastlio_px4_bridge + static TFs +
+  #            gt_path_node; super_bridge consumes the PX4-fused odometry
+  #            (real-hardware mirror, no Gazebo ground truth)
+  #   false -> skip FAST-LIO; super_bridge uses the sim EKF odometry
+  use_fastlio: true
+
+  # Launch lidar_merge (fuse the left/right side LiDARs into one base_link
+  # cloud /<model>/scan/points_fused)? Required by FAST-LIO and by super_bridge
+  # when cloud_in_topic points at the fused topic.
+  use_lidar_merge: true
+
+  # FAST-LIO params file: a file name resolved against config/, or an absolute
+  # path. Ignored when use_fastlio is false.
+  fastlio_config: fastlio_swan_gamma_effect.yaml
+
   # Waypoint following: buffered waypoints (/waypoint_pose -> /waypoint_buffer)
   # are flown one at a time. A waypoint is "reached" when the drone is within
   # waypoint_reached_dist [m] horizontally; it then holds for

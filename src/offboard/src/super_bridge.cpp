@@ -1,63 +1,15 @@
 #include <rclcpp/rclcpp.hpp>
 
-#include <cmath>
 #include <cstring>
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
 
+#include "offboard/frame_conversion.hpp"
+
 namespace offboard
 {
-
-// Rotate vector v by the unit quaternion q (Hamilton convention, w-first):
-//   v' = q * v * q^-1
-static void rotateByQuat(double qw, double qx, double qy, double qz,
-                         double vx, double vy, double vz,
-                         double &ox, double &oy, double &oz)
-{
-    const double tx = 2.0 * (qy * vz - qz * vy);
-    const double ty = 2.0 * (qz * vx - qx * vz);
-    const double tz = 2.0 * (qx * vy - qy * vx);
-    const double cx = qy * tz - qz * ty;
-    const double cy = qz * tx - qx * tz;
-    const double cz = qx * ty - qy * tx;
-    ox = vx + qw * tx + cx;
-    oy = vy + qw * ty + cy;
-    oz = vz + qw * tz + cz;
-}
-
-// Hamilton quaternion product p * q
-static void quatMul(double pw, double px, double py, double pz,
-                    double qw, double qx, double qy, double qz,
-                    double &w, double &x, double &y, double &z)
-{
-    w = pw * qw - px * qx - py * qy - pz * qz;
-    x = pw * qx + px * qw + py * qz - pz * qy;
-    y = pw * qy - px * qz + py * qw + pz * qx;
-    z = pw * qz + px * qy - py * qx + pz * qw;
-}
-
-// Convert a NED pose (position + quaternion) into ENU.
-//   p_enu = (y_ned, x_ned, -z_ned)
-//   q_enu = qE * q_ned * qD
-//     qE = (0, 1/sqrt(2), 1/sqrt(2), 0): NED -> ENU reference-frame change
-//     qD = (0, 1, 0, 0):                 PX4-NED body <-> gz-ENU body change
-//          (x fwd, y right, z down  vs  x fwd, y left, z up = 180 deg about x)
-static void nedToEnu(double pxn, double pyn, double pzn,
-                     double qnw, double qnx, double qny, double qnz,
-                     double &pxe, double &pye, double &pze,
-                     double &qew, double &qex, double &qey, double &qez)
-{
-    pxe = pyn;
-    pye = pxn;
-    pze = -pzn;
-
-    const double a = 1.0 / std::sqrt(2.0);
-    double t1w, t1x, t1y, t1z;
-    quatMul(0.0, a, a, 0.0, qnw, qnx, qny, qnz, t1w, t1x, t1y, t1z);   // qE * q_ned
-    quatMul(t1w, t1x, t1y, t1z, 0.0, 1.0, 0.0, 0.0, qew, qex, qey, qez); // * qD
-}
 
 /**
  * @brief Transform the fused lidar cloud into the world (ENU) frame using
@@ -119,9 +71,9 @@ private:
         // PX4 vehicle_odometry is NED; convert to ENU so the output cloud and
         // odometry match the ENU world used by SUPER.
         double pxe, pye, pze, qew, qex, qey, qez;
-        nedToEnu(msg->position[0], msg->position[1], msg->position[2],
-                 msg->q[0], msg->q[1], msg->q[2], msg->q[3],
-                 pxe, pye, pze, qew, qex, qey, qez);
+        frame::nedToEnu(msg->position[0], msg->position[1], msg->position[2],
+                        msg->q[0], msg->q[1], msg->q[2], msg->q[3],
+                        pxe, pye, pze, qew, qex, qey, qez);
 
         pose_valid_ = true;
         px_ = pxe;
@@ -195,7 +147,7 @@ private:
             const double bz = lz + lidar_offset_z_;
 
             double wx, wy, wz;
-            rotateByQuat(qw_, qx_, qy_, qz_, bx, by, bz, wx, wy, wz);
+            frame::rotateByQuat(qw_, qx_, qy_, qz_, bx, by, bz, wx, wy, wz);
             const float fwx = static_cast<float>(wx + px_);
             const float fwy = static_cast<float>(wy + py_);
             const float fwz = static_cast<float>(wz + pz_);
