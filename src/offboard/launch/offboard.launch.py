@@ -342,25 +342,6 @@ def generate_launch_description():
         DeclareLaunchArgument('waypoint_hold_time', default_value=cfg_waypoint_hold_time,
                               description='Hold time [s] between reaching a waypoint and starting '
                                           'the next one'),
-        DeclareLaunchArgument('rviz', default_value=cfg_visualization,
-                              description='Launch the RViz2 visualization windows'),
-        DeclareLaunchArgument('rviz_config', default_value=default_rviz_config,
-                              description='Config for the planning window '
-                                          '(birdview.rviz by default)'),
-        DeclareLaunchArgument('rviz_freelook', default_value='true',
-                              description='Launch the 3D debug (freelook) RViz '
-                                          'window alongside the planning one'),
-        DeclareLaunchArgument('rviz_freelook_config', default_value='freelook.rviz',
-                              description='Config for the 3D debug window '
-                                          '(freelook.rviz by default)'),
-        DeclareLaunchArgument('planner_config', default_value=fsm_config_path,
-                              description='SUPER planner config (absolute path under '
-                                          'config/super_planner/, or a file name in '
-                                          'super_planner/config/)'),
-        DeclareLaunchArgument('birdview', default_value=cfg_visualization,
-                              description='Publish the aerial birdview overlay (/birdview_cloud)'),
-        DeclareLaunchArgument('birdview_image', default_value=default_birdview_image,
-                              description='Birdview PNG path (default: resources/yungu_birdview.png)'),
         DeclareLaunchArgument('use_fastlio', default_value=str(use_fastlio).lower(),
                               description='Launch the FAST-LIO layer (imu_relay + '
                                           'fastlio_mapping + fastlio_px4_bridge + '
@@ -374,6 +355,36 @@ def generate_launch_description():
         DeclareLaunchArgument('fastlio_model', default_value=model,
                               description='Model used to build the LiDAR topic names '
                                           'for the lidar_merge layer'),
+        DeclareLaunchArgument('rviz', default_value=cfg_visualization,
+                              description='Launch the RViz2 visualization windows'),
+        DeclareLaunchArgument('rviz_config', default_value=default_rviz_config,
+                              description='Config for the planning window '
+                                          '(birdview.rviz by default)'),
+        DeclareLaunchArgument('rviz_freelook', default_value='true',
+                              description='Launch the 3D debug (freelook) RViz '
+                                          'window alongside the planning one'),
+        # The 3D (freelook) window shows the FAST-LIO map when use_fastlio is on:
+        # fastlio_ikdtree.rviz displays /cloud_effected (ikd-Tree incremental
+        # map), the /Laser_map display, /gt_path and /path — matching the removed
+        # utils/start_fastlio.sh. Without FAST-LIO, the plain 3D debug view
+        # (freelook.rviz) is used.
+        DeclareLaunchArgument('rviz_freelook_config',
+                              default_value=PythonExpression([
+                                  TextSubstitution(text="'fastlio_ikdtree.rviz' if '"),
+                                  LaunchConfiguration('use_fastlio'),
+                                  TextSubstitution(text="' == 'true' else 'freelook.rviz'"),
+                              ]),
+                              description='Config for the 3D debug window '
+                                          '(fastlio_ikdtree.rviz when use_fastlio, '
+                                          'freelook.rviz otherwise)'),
+        DeclareLaunchArgument('planner_config', default_value=fsm_config_path,
+                              description='SUPER planner config (absolute path under '
+                                          'config/super_planner/, or a file name in '
+                                          'super_planner/config/)'),
+        DeclareLaunchArgument('birdview', default_value=cfg_visualization,
+                              description='Publish the aerial birdview overlay (/birdview_cloud)'),
+        DeclareLaunchArgument('birdview_image', default_value=default_birdview_image,
+                              description='Birdview PNG path (default: resources/yungu_birdview.png)'),
 
         # ------------------------------------------------------------------
         # FAST-LIO + lidar_merge layer (optional — config/offboard.yaml)
