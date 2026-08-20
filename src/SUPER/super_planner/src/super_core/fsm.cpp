@@ -43,6 +43,37 @@ namespace fsm {
         write_time_ << endl;
     }
 
+    void Fsm::setPlanningFail(bool fail) {
+        if (fail) {
+            if (!planner_failing_) {
+                planner_failing_ = true;
+                fail_start_time_ = ros_ptr_->getSimTime();
+            }
+        } else {
+            planner_failing_ = false;
+        }
+    }
+
+    void Fsm::updatePlannerState() {
+        PLANNER_STATE new_state;
+        if (planner_failing_ && (ros_ptr_->getSimTime() - fail_start_time_) > 2.0) {
+            new_state = PLANNER_FAIL;
+        } else if (machine_state_ == INIT) {
+            new_state = PLANNER_INIT;
+        } else if (machine_state_ == WAIT_GOAL) {
+            new_state = PLANNER_WAIT_GOAL;
+        } else {
+            // GENERATE_TRAJ / FOLLOW_TRAJ / YAWING / EMER_STOP -> planning/moving
+            new_state = PLANNER_MOVE;
+        }
+
+        if (new_state != planner_state_) {
+            planner_state_ = new_state;
+            fmt::print(" -- [Fsm] Planner state -> {}.\n", PLANNER_STATE_STR[planner_state_]);
+        }
+        publishPlannerState();
+    }
+
     void Fsm::callReplanOnce() {
         if (stop) {
             return;
@@ -67,8 +98,10 @@ namespace fsm {
 
         RET_CODE ret_code = planner_ptr_->ReplanOnce(gi_.goal_p, gi_.goal_yaw, gi_.new_goal);
         if (ret_code == FAILED) {
-//            cout << YELLOW << " -- [Fsm] ReplanOnce failed." << RESET << endl;
-        } else { cout << GREEN << " -- [Fsm] ReplanOnce succeed." << RESET << endl; }
+           cout << YELLOW << " -- [Fsm] ReplanOnce failed." << RESET << endl;
+            setPlanningFail(true);
+        } 
+        // else { cout << GREEN << " -- [Fsm] ReplanOnce succeed." << RESET << endl; }
 
         if (ret_code == EMER) {
             ChangeState("ReplanTimerCallback", EMER_STOP);
@@ -76,6 +109,7 @@ namespace fsm {
             ChangeState("ReplanTimerCallback", GENERATE_TRAJ);
         } else if (ret_code == SUCCESS || ret_code == FINISH) {
             gi_.new_goal = false;
+            setPlanningFail(false);
             publishPolyTraj();
         }
 
@@ -90,6 +124,7 @@ namespace fsm {
         if (stop) {
             return;
         }
+        updatePlannerState();
         static double fsm_start_time = ros_ptr_->getSimTime();
         double cur_t = (ros_ptr_->getSimTime() - fsm_start_time);
         static double last_print_t = 0.0;
@@ -112,9 +147,9 @@ namespace fsm {
 
         switch (machine_state_) {
             case INIT: {
-                if (!started_) {
-                    return;
-                }
+                // if (!started_) {
+                //     return;
+                // }
                 if ((!robot_state_.rcv || (ros_ptr_->getSimTime() - robot_state_.rcv_time) > 0.1)) {
                     cout << YELLOW << " -- [Fsm] No odom." << RESET << endl;
                 }
@@ -150,12 +185,14 @@ namespace fsm {
                     if (retcode == FINISH) {
                         finish_plan = true;
                     }
+                    setPlanningFail(false);
 
                     publishPolyTraj();
 
                     ChangeState("MainFsmCallback", FOLLOW_TRAJ);
                 } else {
                     cout << YELLOW << " -- [Fsm] PlanFromRest failed, try replan." << RESET << endl;
+                    setPlanningFail(true);
                     // ros::Duration(0.1).sleep();
                 }
                 replan_logs_.push_back(planner_ptr_->getLatestReplanLog());
@@ -227,5 +264,10 @@ namespace fsm {
         fmt::print(fg(fmt::color::green), " -- [Fsm]: [{}] change state from [{}] to [{}].\n", call_func,
                    MACHINE_STATE_STR[int(machine_state_)], MACHINE_STATE_STR[int(new_state)]);
         machine_state_ = new_state;
+        // Once the FSM is idle (goal reached / invalid / after an emergency
+        // stop) the planner is no longer failing.
+        if (new_state == WAIT_GOAL) {
+            setPlanningFail(false);
+        }
     }
 }

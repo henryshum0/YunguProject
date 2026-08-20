@@ -92,6 +92,27 @@ namespace fsm {
 
         MACHINE_STATE machine_state_{INIT};
 
+        // High-level planner state reported to external observers (e.g. flight
+        // monitor / ground station). FAIL means planning has been failing
+        // continuously for more than 2 s (see fail_start_time_).
+        enum PLANNER_STATE {
+            PLANNER_INIT = 0,
+            PLANNER_WAIT_GOAL,
+            PLANNER_MOVE,
+            PLANNER_FAIL
+        };
+
+        vector<string> PLANNER_STATE_STR{
+                "INIT",
+                "WAIT_GOAL",
+                "MOVE",
+                "FAIL"
+        };
+
+        PLANNER_STATE planner_state_{PLANNER_INIT};
+        bool planner_failing_{false};
+        double fail_start_time_{0.0};
+
 
     public:
         Fsm() = default;
@@ -161,6 +182,18 @@ namespace fsm {
         void setGoalPosiAndYaw(const Vec3f &p, const Quatf &q);
 
         void ChangeState(const string &call_func, const MACHINE_STATE &new_state);
+
+        // Recompute planner_state_ from the current machine state / failure
+        // status and forward it to publishPlannerState().
+        void updatePlannerState();
+
+        // Track consecutive planning failures. The FAIL state is only reported
+        // once the failure has persisted for more than 2 s.
+        void setPlanningFail(bool fail);
+
+        // Called by updatePlannerState(); overridden by the ROS interface to
+        // actually publish the state (empty default keeps ROS1 build working).
+        virtual void publishPlannerState() {}
 
         virtual void publishPolyTraj() = 0;
 

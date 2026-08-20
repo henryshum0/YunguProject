@@ -37,6 +37,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "mars_quadrotor_msgs/msg/position_command.hpp"
 #include "mars_quadrotor_msgs/msg/polynomial_trajectory.hpp"
+#include "super_planner/msg/planner_state.hpp"
 
 
 namespace fsm {
@@ -46,6 +47,7 @@ namespace fsm {
         rclcpp::Publisher<mars_quadrotor_msgs::msg::PositionCommand>::SharedPtr cmd_pub_;
         rclcpp::Publisher<mars_quadrotor_msgs::msg::PolynomialTrajectory>::SharedPtr mpc_cmd_pub_;
         rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+        rclcpp::Publisher<super_planner::msg::PlannerState>::SharedPtr planner_state_pub_;
         rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
 
         rclcpp::TimerBase::SharedPtr execution_timer_, replan_timer_, cmd_timer_;
@@ -82,6 +84,20 @@ namespace fsm {
             mars_quadrotor_msgs::msg::PolynomialTrajectory cmd_traj;
             getCommittedTrajectory(cmd_traj);
             mpc_cmd_pub_->publish(cmd_traj);
+        }
+
+        void publishPlannerState() override {
+            if (!planner_state_pub_) {
+                return;
+            }
+            super_planner::msg::PlannerState msg;
+            msg.state = static_cast<uint8_t>(planner_state_);
+            msg.init = (planner_state_ == PLANNER_INIT);
+            msg.wait_goal = (planner_state_ == PLANNER_WAIT_GOAL);
+            msg.move = (planner_state_ == PLANNER_MOVE);
+            msg.fail = (planner_state_ == PLANNER_FAIL);
+            ros_ptr_->getSimTime(msg.stamp.sec, msg.stamp.nanosec);
+            planner_state_pub_->publish(msg);
         }
 
         void getOneHeartBeatMsg(mars_quadrotor_msgs::msg::PolynomialTrajectory &heartbeat, bool &traj_finish) {
@@ -299,6 +315,7 @@ namespace fsm {
             mpc_cmd_pub_ = nh_->create_publisher<mars_quadrotor_msgs::msg::PolynomialTrajectory>(cfg_.mpc_cmd_topic,
                                                                                                  qos);
             path_pub_ = nh_->create_publisher<nav_msgs::msg::Path>("fsm/path", qos);
+            planner_state_pub_ = nh_->create_publisher<super_planner::msg::PlannerState>("fsm/planner_state", qos);
 
             int cmd_cnt = 0;
 
