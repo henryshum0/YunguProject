@@ -29,6 +29,7 @@ add_executable(offboard_node
   src/px4_handler.cpp
   src/super_handler.cpp
   src/visualization_handler.cpp
+  src/waypoint_handler.cpp
 )
 
 target_include_directories(offboard_node PUBLIC
@@ -62,6 +63,11 @@ add_executable(super_bridge
   src/super_bridge.cpp
 )
 
+target_include_directories(super_bridge PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
 ament_target_dependencies(super_bridge
   rclcpp
   px4_msgs
@@ -75,6 +81,7 @@ add_library(offboard_component SHARED
   src/px4_handler.cpp
   src/super_handler.cpp
   src/visualization_handler.cpp
+  src/waypoint_handler.cpp
 )
 
 target_include_directories(offboard_component PUBLIC

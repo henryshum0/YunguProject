@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cmath>
 
+#include "offboard/frame_conversion.hpp"
+
 using namespace std::chrono_literals;
 
 namespace offboard
@@ -22,16 +24,18 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     takeoff_duration_ = declare_parameter("takeoff_duration", takeoff_duration_);
     landing_vel_ = declare_parameter("landing_vel", landing_vel_);
     landing_z_ = declare_parameter("landing_z", landing_z_);
-    cmd_timeout_ = declare_parameter("cmd_timeout", cmd_timeout_);
     cmd_topic_ = declare_parameter("cmd_topic", cmd_topic_);
     local_pos_topic_ = declare_parameter("local_pos_topic", local_pos_topic_);
     status_topic_ = declare_parameter("status_topic", status_topic_);
     goal_topic_ = declare_parameter("goal_topic", goal_topic_);
-    waypoint_buffer_topic_ = declare_parameter("waypoint_buffer_topic", waypoint_buffer_topic_);
-    waypoint_reached_dist_ = declare_parameter("waypoint_reached_dist", waypoint_reached_dist_);
-    waypoint_hold_time_ = declare_parameter("waypoint_hold_time", waypoint_hold_time_);
     waypoint_marker_topic_ = declare_parameter("waypoint_marker_topic", waypoint_marker_topic_);
     waypoint_marker_rate_ = declare_parameter("waypoint_marker_rate", waypoint_marker_rate_);
+    const std::string waypoint_buffer_topic =
+        declare_parameter("waypoint_buffer_topic", "/waypoint_buffer");
+    const double waypoint_reached_dist =
+        declare_parameter("waypoint_reached_dist", 0.5);
+    const double waypoint_hold_time =
+        declare_parameter("waypoint_hold_time", 2.0);
 
     const auto update_period = std::chrono::milliseconds(static_cast<int>(1000.0 / update_rate_));
 
@@ -39,18 +43,22 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     px4_ = std::make_unique<Px4Handler>(*this, local_pos_topic_, status_topic_);
     super_ = std::make_unique<SuperHandler>(*this, cmd_topic_, goal_topic_);
 
-    // --- Waypoint buffer (buffered waypoints forwarded by the goal marker node) ---
-    waypoint_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
-        waypoint_buffer_topic_, rclcpp::QoS(10).reliable(),
-        std::bind(&OffboardNode::waypointCallback, this, std::placeholders::_1));
+    // --- Waypoint following (buffered waypoints forwarded by the goal marker
+    //     node, flown one at a time via SUPER) ---
+    waypoints_ = std::make_unique<WaypointHandler>(
+        *this, waypoint_buffer_topic, waypoint_reached_dist, waypoint_hold_time,
+        [this]() { return px4_->getLocalPosition(); },
+        [this](const geometry_msgs::msg::PoseStamped &goal) {
+            super_->publishGoal(goal);
+        });
 
     // --- Waypoint buffer visualization (MarkerArray, latched + regular) ---
     vis_ = std::make_unique<VisualizationHandler>(
         *this, waypoint_marker_topic_, waypoint_marker_rate_,
         [this](std::deque<geometry_msgs::msg::PoseStamped> &buffered,
                std::optional<geometry_msgs::msg::PoseStamped> &current) {
-            buffered = waypoint_buffer_;
-            current = current_wp_;
+            buffered = waypoints_->buffered();
+            current = waypoints_->current();
         });
 
     // --- Landing service ---
@@ -132,91 +140,6 @@ void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Re
 }
 
 // ======================================================================
-//  Waypoint buffer / following
-// ======================================================================
-
-void OffboardNode::waypointCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
-{
-    waypoint_buffer_.push_back(*msg);
-    RCLCPP_INFO(get_logger(), "Waypoint buffered (#%zu): (%.2f, %.2f, %.2f)",
-                waypoint_buffer_.size(),
-                msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
-}
-
-void OffboardNode::publishNextWaypoint()
-{
-    if (waypoint_buffer_.empty()) {
-        return;
-    }
-
-    current_wp_ = waypoint_buffer_.front();
-    waypoint_buffer_.pop_front();
-    wp_reached_ = false;
-    const size_t seq = ++waypoint_seq_;
-
-    // Forward this single waypoint to SUPER (world frame, ENU), which plans to
-    // it. /goal_pose is reserved for exactly this.
-    geometry_msgs::msg::PoseStamped goal;
-    goal.header.stamp = now();
-    goal.header.frame_id = current_wp_->header.frame_id.empty()
-                               ? "world" : current_wp_->header.frame_id;
-    goal.pose = current_wp_->pose;
-    super_->publishGoal(goal);
-
-    RCLCPP_INFO(get_logger(), "Waypoint #%zu sent to SUPER: (%.2f, %.2f, %.2f), "
-                "%zu still buffered",
-                seq,
-                goal.pose.position.x, goal.pose.position.y, goal.pose.position.z,
-                waypoint_buffer_.size());
-}
-
-void OffboardNode::waypointTick()
-{
-    // Run during flight states only (never during takeoff/landing). Checking
-    // in PLANNER as well lets a reached waypoint advance to the next goal
-    // immediately, without waiting for SUPER to drop out of the planner.
-    if (state_ != State::IDLE && state_ != State::PLANNER) {
-        return;
-    }
-
-    // A waypoint is being pursued (already sent to SUPER).
-    if (current_wp_) {
-        const auto local_pos = px4_->getLocalPosition();
-        // Wait for the drone to reach the waypoint (horizontal distance).
-        if (!wp_reached_ && local_pos && local_pos->xy_valid) {
-            // PX4 local position is NED; convert to ENU (planner convention).
-            const double enu_x = local_pos->y;
-            const double enu_y = local_pos->x;
-            const double dx = enu_x - current_wp_->pose.position.x;
-            const double dy = enu_y - current_wp_->pose.position.y;
-            const double dist = std::hypot(dx, dy);
-            if (dist <= waypoint_reached_dist_) {
-                wp_reached_ = true;
-                wp_reached_t_ = now();
-                RCLCPP_INFO(get_logger(),
-                            "Waypoint reached (dist=%.2f m) - holding %.1f s",
-                            dist, waypoint_hold_time_);
-            }
-        }
-        // Hold at the reached waypoint, then advance to the next one.
-        if (wp_reached_ && (now() - wp_reached_t_).seconds() >= waypoint_hold_time_) {
-            current_wp_.reset();
-            wp_reached_ = false;
-            RCLCPP_INFO(get_logger(), "Waypoint hold complete - advancing");
-            if (!waypoint_buffer_.empty()) {
-                publishNextWaypoint();
-            }
-        }
-        return;
-    }
-
-    // No active waypoint: start the next one if any are buffered.
-    if (!waypoint_buffer_.empty()) {
-        publishNextWaypoint();
-    }
-}
-
-// ======================================================================
 //  Setpoint helpers (built on Px4Handler::publishSetpoint)
 // ======================================================================
 
@@ -225,7 +148,11 @@ void OffboardNode::publishHold()
     px4_->publishSetpoint(hold_x_, hold_y_, hold_z_, 0.0f, 0.0f, 0.0f);
 }
 
-void OffboardNode::publishTakeoffSetpoint()
+// ======================================================================
+//  Per-state handlers
+// ======================================================================
+
+void OffboardNode::handleTakeoff()
 {
     const double duration = std::max(takeoff_duration_, 0.1);
     const double s = std::clamp(stateElapsedSec() / duration, 0.0, 1.0);
@@ -283,207 +210,176 @@ void OffboardNode::updatePlannerActivity()
 }
 
 // ======================================================================
-//  ENU → NED conversion
-// ======================================================================
-
-void OffboardNode::enuToNedPos(double ex, double ey, double ez,
-                               float &nx, float &ny, float &nz)
-{
-    nx = static_cast<float>(ey);
-    ny = static_cast<float>(ex);
-    nz = static_cast<float>(-ez);
-}
-
-void OffboardNode::enuToNedVel(double ex, double ey, double ez,
-                               float &nx, float &ny, float &nz)
-{
-    nx = static_cast<float>(ey);
-    ny = static_cast<float>(ex);
-    nz = static_cast<float>(-ez);
-}
-
-void OffboardNode::enuToNedAcc(double ex, double ey, double ez,
-                               float &nx, float &ny, float &nz)
-{
-    nx = static_cast<float>(ey);
-    ny = static_cast<float>(ex);
-    nz = static_cast<float>(-ez);
-}
-
-// ======================================================================
 //  Main state machine
 // ======================================================================
 
 void OffboardNode::timerCallback()
 {
-    if (state_ == State::PLANNER) px4_->publishOffboardControlMode(true, true, true);
-    else px4_->publishOffboardControlMode(true, false, false);
+    if (state_ == State::PLANNER) {
+        px4_->publishOffboardControlMode(true, true, true);
+    } else {
+        px4_->publishOffboardControlMode(true, false, false);
+    }
 
     switch (state_) {
-        // --------------------------------------------------------------
-        case State::INIT: {
-            // Stream origin so PX4 sees the offboard stream before arming.
-            px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
-            if (stateElapsedSec() > arm_wait_) {
-                setState(State::ARMING);
-            }
-            break;
-        }
-        // --------------------------------------------------------------
-        case State::ARMING: {
-            px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
-            // if (stateElapsedSec() < 0.1) {
-            //     arm();
-            // }
-            // Confirm arming from vehicle_status instead of a fixed wait.
-            if (px4_->isArmed()) {
-                RCLCPP_INFO(get_logger(), "Vehicle confirmed ARMED");
-                setState(State::SET_OFFBOARD);
-            }
-            else px4_->arm();
-            break;
-        }
-        // --------------------------------------------------------------
-        case State::SET_OFFBOARD: {
-            px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
-            if (stateElapsedSec() < 0.1) {
-                px4_->setOffboardMode();
-            }
-            if (px4_->isOffboard()) {
-                RCLCPP_INFO(get_logger(), "Vehicle confirmed OFFBOARD mode");
-
-                const auto local_pos = px4_->getLocalPosition();
-                if (local_pos && local_pos->xy_valid && local_pos->z_valid
-                    && std::isfinite(local_pos->x) && std::isfinite(local_pos->y)
-                    && std::isfinite(local_pos->z)) {
-                    takeoff_start_x_ = local_pos->x;
-                    takeoff_start_y_ = local_pos->y;
-                    takeoff_start_z_ = local_pos->z;
-                } else {
-                    takeoff_start_x_ = 0.0f;
-                    takeoff_start_y_ = 0.0f;
-                    takeoff_start_z_ = 0.0f;
-                }
-
-                hold_x_ = takeoff_start_x_;
-                hold_y_ = takeoff_start_y_;
-                hold_z_ = static_cast<float>(-default_height_);
-                have_hold_ = true;
-                RCLCPP_INFO(get_logger(),
-                            "Starting %.1f s smooth takeoff: z %.2f -> %.2f m",
-                            std::max(takeoff_duration_, 0.1), takeoff_start_z_, hold_z_);
-                setState(State::TAKEOFF);
-            }
-            break;
-        }
-        // --------------------------------------------------------------
-        case State::TAKEOFF: {
-            publishTakeoffSetpoint();
-            break;
-        }
-        // --------------------------------------------------------------
-        case State::IDLE: {
-            updatePlannerActivity();
-            publishHold();
-
-            if (planner_active_) {
-                // Remember the current hold so we can return to it later.
-                if (auto local_pos = px4_->getLocalPosition()) {
-                    hold_x_ = local_pos->x;
-                    hold_y_ = local_pos->y;
-                    hold_z_ = local_pos->z;
-                }
-                setState(State::PLANNER);
-            }
-            break;
-        }
-        // --------------------------------------------------------------
-        case State::PLANNER: {
-            updatePlannerActivity();
-            if (!planner_active_) {
-                // Planner stopped → freeze at last commanded position.
-                if (auto cmd = super_->getLatestCommand()) {
-                    enuToNedPos(cmd->position.x,
-                                cmd->position.y,
-                                cmd->position.z,
-                                hold_x_, hold_y_, hold_z_);
-                    have_hold_ = true;
-                }
-                // Exiting the planner means either all buffered waypoints were
-                // flown (buffer already empty) or a waypoint failed; either way
-                // discard any remaining waypoints and the in-flight one so the
-                // drone stops at the current goal.
-                const size_t pending = waypoint_buffer_.size();
-                waypoint_buffer_.clear();
-                current_wp_.reset();
-                wp_reached_ = false;
-                if (pending > 0) {
-                    RCLCPP_INFO(get_logger(),
-                                "Planner exited with %zu waypoint(s) unflown - "
-                                "waypoint buffer cleared", pending);
-                }
-                setState(State::IDLE);
-                break;
-            }
-
-            auto cmd = super_->getLatestCommand();
-            if (!cmd) {
-                publishHold();
-                break;
-            }
-
-            // Forward the planner command (ENU → NED), including the
-            // trajectory's acceleration as feedforward.
-            const auto &c = *cmd;
-            float nx, ny, nz, vx, vy, vz, ax, ay, az;
-            enuToNedPos(c.position.x, c.position.y, c.position.z, nx, ny, nz);
-            enuToNedVel(c.velocity.x, c.velocity.y, c.velocity.z, vx, vy, vz);
-            enuToNedAcc(c.acceleration.x, c.acceleration.y, c.acceleration.z, ax, ay, az);
-
-            // SUPER yaw is ENU (0 = East, CCW+); PX4 is NED (0 = North, CW+).
-            constexpr float PI_HALF = 1.57079632679f;
-            constexpr double TWO_PI = 6.28318530717958647692;
-            // SUPER's yaw command is an unwrapped (continuous) angle and can
-            // exceed [-pi, pi]; wrap the NED yaw into [-pi, pi] (equivalent
-            // angle) so PX4 always gets a heading in range and tracks the
-            // shortest path.
-            const float yaw_ned = static_cast<float>(
-                std::remainder(PI_HALF - static_cast<double>(c.yaw), TWO_PI));
-            const float yawspeed_ned = -static_cast<float>(c.yaw_dot);
-
-            px4_->publishSetpoint(nx, ny, nz, vx, vy, vz, yaw_ned, yawspeed_ned, ax, ay, az);
-            break;
-        }
-        // --------------------------------------------------------------
-        case State::LANDING: {
-            const float target_z = static_cast<float>(landing_z_);
-            if (have_hold_) {
-                px4_->publishSetpoint(hold_x_, hold_y_, target_z,
-                                      0.0f, 0.0f, static_cast<float>(-landing_vel_));
-            } else {
-                px4_->publishSetpoint(0.0f, 0.0f, target_z,
-                                      0.0f, 0.0f, static_cast<float>(-landing_vel_));
-            }
-
-            const auto local_pos = px4_->getLocalPosition();
-            const bool on_ground = local_pos && local_pos->z > target_z;
-            if (on_ground || stateElapsedSec() > 20.0) {
-                px4_->disarm();
-                setState(State::LANDED);
-            }
-            break;
-        }
-        // --------------------------------------------------------------
-        case State::LANDED: {
-            // Stop streaming setpoints; PX4 drops out of offboard.
-            break;
-        }
+        case State::INIT:         handleInit(); break;
+        case State::ARMING:       handleArming(); break;
+        case State::SET_OFFBOARD: handleSetOffboard(); break;
+        case State::TAKEOFF:      handleTakeoff(); break;
+        case State::IDLE:         handleIdle(); break;
+        case State::PLANNER:      handlePlanner(); break;
+        case State::LANDING:      handleLanding(); break;
+        case State::LANDED:       break;  // stop streaming; PX4 drops out of offboard
     }
 
     // Waypoint following runs on every state-machine tick (internally gated to
     // IDLE/PLANNER), so a waypoint reached while SUPER is still planning can
     // advance to the next one immediately.
-    waypointTick();
+    waypoints_->tick(state_ == State::IDLE || state_ == State::PLANNER);
+}
+
+void OffboardNode::handleInit()
+{
+    // Stream origin so PX4 sees the offboard stream before arming.
+    px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
+    if (stateElapsedSec() > arm_wait_) {
+        setState(State::ARMING);
+    }
+}
+
+void OffboardNode::handleArming()
+{
+    px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
+    // if (stateElapsedSec() < 0.1) {
+    //     arm();
+    // }
+    // Confirm arming from vehicle_status instead of a fixed wait.
+    if (px4_->isArmed()) {
+        RCLCPP_INFO(get_logger(), "Vehicle confirmed ARMED");
+        setState(State::SET_OFFBOARD);
+    } else {
+        px4_->arm();
+    }
+}
+
+void OffboardNode::handleSetOffboard()
+{
+    px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
+    if (stateElapsedSec() < 0.1) {
+        px4_->setOffboardMode();
+    }
+    if (!px4_->isOffboard()) {
+        return;
+    }
+
+    RCLCPP_INFO(get_logger(), "Vehicle confirmed OFFBOARD mode");
+
+    const auto local_pos = px4_->getLocalPosition();
+    if (local_pos && local_pos->xy_valid && local_pos->z_valid
+        && std::isfinite(local_pos->x) && std::isfinite(local_pos->y)
+        && std::isfinite(local_pos->z)) {
+        takeoff_start_x_ = local_pos->x;
+        takeoff_start_y_ = local_pos->y;
+        takeoff_start_z_ = local_pos->z;
+    } else {
+        takeoff_start_x_ = 0.0f;
+        takeoff_start_y_ = 0.0f;
+        takeoff_start_z_ = 0.0f;
+    }
+
+    hold_x_ = takeoff_start_x_;
+    hold_y_ = takeoff_start_y_;
+    hold_z_ = static_cast<float>(-default_height_);
+    have_hold_ = true;
+    RCLCPP_INFO(get_logger(),
+                "Starting %.1f s smooth takeoff: z %.2f -> %.2f m",
+                std::max(takeoff_duration_, 0.1), takeoff_start_z_, hold_z_);
+    setState(State::TAKEOFF);
+}
+
+void OffboardNode::handleIdle()
+{
+    updatePlannerActivity();
+    publishHold();
+
+    if (planner_active_) {
+        // Remember the current hold so we can return to it later.
+        if (auto local_pos = px4_->getLocalPosition()) {
+            hold_x_ = local_pos->x;
+            hold_y_ = local_pos->y;
+            hold_z_ = local_pos->z;
+        }
+        setState(State::PLANNER);
+    }
+}
+
+void OffboardNode::handlePlanner()
+{
+    updatePlannerActivity();
+    if (!planner_active_) {
+        // Planner stopped → freeze at last commanded position.
+        if (auto cmd = super_->getLatestCommand()) {
+            frame::enuToNed(cmd->position.x,
+                            cmd->position.y,
+                            cmd->position.z,
+                            hold_x_, hold_y_, hold_z_);
+            have_hold_ = true;
+        }
+        // Exiting the planner means either all buffered waypoints were
+        // flown (buffer already empty) or a waypoint failed; either way
+        // discard any remaining waypoints and the in-flight one so the
+        // drone stops at the current goal.
+        const size_t pending = waypoints_->clearPending();
+        if (pending > 0) {
+            RCLCPP_INFO(get_logger(),
+                        "Planner exited with %zu waypoint(s) unflown - "
+                        "waypoint buffer cleared", pending);
+        }
+        setState(State::IDLE);
+        return;
+    }
+
+    auto cmd = super_->getLatestCommand();
+    if (!cmd) {
+        publishHold();
+        return;
+    }
+
+    // Forward the planner command (ENU → NED), including the trajectory's
+    // acceleration as feedforward.
+    const auto &c = *cmd;
+    float nx, ny, nz, vx, vy, vz, ax, ay, az;
+    frame::enuToNed(c.position.x, c.position.y, c.position.z, nx, ny, nz);
+    frame::enuToNed(c.velocity.x, c.velocity.y, c.velocity.z, vx, vy, vz);
+    frame::enuToNed(c.acceleration.x, c.acceleration.y, c.acceleration.z, ax, ay, az);
+
+    // SUPER yaw is ENU (0 = East, CCW+); PX4 is NED (0 = North, CW+).
+    // SUPER's yaw command is an unwrapped (continuous) angle and can exceed
+    // [-pi, pi]; the NED yaw is wrapped into [-pi, pi] (equivalent angle) so
+    // PX4 always gets a heading in range and tracks the shortest path.
+    const float yaw_ned = static_cast<float>(frame::enuYawToNed(c.yaw));
+    const float yawspeed_ned = static_cast<float>(frame::enuYawRateToNed(c.yaw_dot));
+
+    px4_->publishSetpoint(nx, ny, nz, vx, vy, vz, yaw_ned, yawspeed_ned, ax, ay, az);
+}
+
+void OffboardNode::handleLanding()
+{
+    const float target_z = static_cast<float>(landing_z_);
+    if (have_hold_) {
+        px4_->publishSetpoint(hold_x_, hold_y_, target_z,
+                              0.0f, 0.0f, static_cast<float>(-landing_vel_));
+    } else {
+        px4_->publishSetpoint(0.0f, 0.0f, target_z,
+                              0.0f, 0.0f, static_cast<float>(-landing_vel_));
+    }
+
+    const auto local_pos = px4_->getLocalPosition();
+    const bool on_ground = local_pos && local_pos->z > target_z;
+    if (on_ground || stateElapsedSec() > 20.0) {
+        px4_->disarm();
+        setState(State::LANDED);
+    }
 }
 
 }  // namespace offboard

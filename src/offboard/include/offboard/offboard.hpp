@@ -1,19 +1,14 @@
 #pragma once
 
-#include <rclcpp/rclcpp.hpp>
-
-#include <deque>
 #include <memory>
-#include <optional>
 
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <mars_quadrotor_msgs/msg/position_command.hpp>
-#include <px4_msgs/msg/vehicle_local_position.hpp>
+#include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
 #include "offboard/px4_handler.hpp"
 #include "offboard/super_handler.hpp"
 #include "offboard/visualization_handler.hpp"
+#include "offboard/waypoint_handler.hpp"
 
 namespace offboard
 {
@@ -35,9 +30,11 @@ namespace offboard
  *  The planner only publishes /planning/pos_cmd after it receives a goal,
  *  so this node detects "hand-over to planner" by measuring the command rate.
  *
- *  Topic I/O is delegated to Px4Handler (PX4 stack), SuperHandler (SUPER
- *  planner) and VisualizationHandler (waypoint-route markers); this class
- *  keeps the state machine, waypoint following and the ENU→NED conversions.
+ *  Topic I/O and per-subdomain logic are delegated to Px4Handler (PX4 stack),
+ *  SuperHandler (SUPER planner), VisualizationHandler (waypoint-route markers)
+ *  and WaypointHandler (buffered waypoint following). Frame conversions live in
+ *  offboard::frame (frame_conversion.hpp); this class keeps only the state
+ *  machine and the ENU→NED setpoint forwarding.
  */
 class OffboardNode : public rclcpp::Node
 {
@@ -69,7 +66,7 @@ private:
     double takeoff_duration_{10.0};   ///< duration of the smooth takeoff trajectory [s]
     double landing_vel_{0.5};         ///< descend speed [m/s]
     double landing_z_{0.15};          ///< NED z at which to disarm [m]
-    double cmd_timeout_{0.5};         ///< max age of planner cmd before considered lost [s]
+
     std::string cmd_topic_{"/planning/pos_cmd"};
     /// PX4 local position topic. Note the "_v1" version suffix — this PX4 fork
     /// reports get_message_version()=1 for vehicle_local_position, so the
@@ -77,14 +74,8 @@ private:
     std::string local_pos_topic_{"/fmu/out/vehicle_local_position_v1"};
     /// PX4 vehicle status topic; MESSAGE_VERSION=4 → "_v4" suffix.
     std::string status_topic_{"/fmu/out/vehicle_status_v4"};
-    /// Waypoint following: horizontal distance [m] to consider a waypoint
-    /// reached, and hold time [s] between reaching one and starting the next.
-    double waypoint_reached_dist_{0.5};
-    double waypoint_hold_time_{2.0};
     /// Topic the current waypoint is published to for SUPER (one at a time).
     std::string goal_topic_{"/goal_pose"};
-    /// Topic where buffered waypoints arrive (published by the goal marker node).
-    std::string waypoint_buffer_topic_{"/waypoint_buffer"};
     /// Topic the waypoint buffer is visualized on (MarkerArray, published regularly).
     std::string waypoint_marker_topic_{"/waypoint_markers"};
     /// Rate [Hz] at which the waypoint buffer markers are (re)published.
@@ -96,13 +87,13 @@ private:
     std::unique_ptr<Px4Handler> px4_;
     std::unique_ptr<SuperHandler> super_;
     std::unique_ptr<VisualizationHandler> vis_;
+    std::unique_ptr<WaypointHandler> waypoints_;
 
     // ------------------------------------------------------------------
     //  Publishers / Subscribers / Services (node-local, not PX4/SUPER)
     // ------------------------------------------------------------------
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_srv_;
     rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_;
 
     // ------------------------------------------------------------------
     //  Internal state
@@ -126,20 +117,12 @@ private:
     bool planner_cond_val_{false};
     rclcpp::Time planner_cond_t_;
 
-    // buffered waypoints (run consecutively); current one is sent to SUPER
-    std::deque<geometry_msgs::msg::PoseStamped> waypoint_buffer_;
-    std::optional<geometry_msgs::msg::PoseStamped> current_wp_;
-    bool wp_reached_{false};
-    rclcpp::Time wp_reached_t_;
-    size_t waypoint_seq_{0};
-
     // ------------------------------------------------------------------
     //  Callbacks
     // ------------------------------------------------------------------
     void timerCallback();
     void landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
                       std::shared_ptr<std_srvs::srv::Trigger::Response> res);
-    void waypointCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
 
     // ------------------------------------------------------------------
     //  State helpers
@@ -150,31 +133,25 @@ private:
     double stateElapsedSec() const;
 
     // ------------------------------------------------------------------
+    //  Per-state handlers (called from timerCallback's dispatch)
+    // ------------------------------------------------------------------
+    void handleInit();
+    void handleArming();
+    void handleSetOffboard();
+    void handleTakeoff();
+    void handleIdle();
+    void handlePlanner();
+    void handleLanding();
+
+    // ------------------------------------------------------------------
     //  Setpoint helpers (built on Px4Handler::publishSetpoint)
     // ------------------------------------------------------------------
     void publishHold();
-    void publishTakeoffSetpoint();
 
     // ------------------------------------------------------------------
     //  Planner rate measurement (uses SuperHandler::cmdRateHz)
     // ------------------------------------------------------------------
     void updatePlannerActivity();
-
-    // ------------------------------------------------------------------
-    //  Waypoint following
-    // ------------------------------------------------------------------
-    void waypointTick();
-    void publishNextWaypoint();
-
-    // ------------------------------------------------------------------
-    //  Conversion (ENU → NED)
-    // ------------------------------------------------------------------
-    static void enuToNedPos(double ex, double ey, double ez,
-                            float &nx, float &ny, float &nz);
-    static void enuToNedVel(double ex, double ey, double ez,
-                            float &nx, float &ny, float &nz);
-    static void enuToNedAcc(double ex, double ey, double ez,
-                            float &nx, float &ny, float &nz);
 };
 
 }  // namespace offboard
