@@ -33,10 +33,9 @@ The stack runs in two layers (two terminals):
 ./utils/start_sim.sh
 
 # Terminal 2 — perception + planning + offboard + RViz
-#   without FAST-LIO (Gazebo ground truth via super_bridge):
+#   FAST-LIO + lidar_merge are launched by this file when enabled in
+#   config/offboard.yaml (use_fastlio / use_lidar_merge).
 ros2 launch offboard offboard.launch.py
-#   with FAST-LIO (LiDAR-inertial odometry fused into PX4 EKF2, real-hw mirror):
-./utils/start_fastlio.sh
 ```
 
 Stop with `Ctrl+C`; if anything lingers (e.g. `gz-server` detached into its
@@ -53,12 +52,13 @@ Every config value can be overridden without editing the file:
 | `GZ_VERSION` | `harmonic` | gz-transport version for `ros_gz_bridge` |
 | `HEADLESS=1` | *(unset)* | Run Gazebo without its GUI (server only) |
 | `rviz:=false`, `rviz_freelook:=false` | `true` | Toggle the two RViz windows in `offboard.launch.py` |
-| `NO_RVIZ=1` | *(unset)* | Skip RViz in `start_fastlio.sh` |
+| `use_fastlio:=...`, `use_lidar_merge:=...` | `true` | Toggle the FAST-LIO layer / lidar_merge in `offboard.launch.py` (same keys as `config/offboard.yaml`) |
 
 ```bash
 PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./utils/start_sim.sh
 HEADLESS=1 ./utils/start_sim.sh
 ros2 launch offboard offboard.launch.py rviz:=false
+ros2 launch offboard offboard.launch.py use_fastlio:=false   # no FAST-LIO layer
 ```
 
 `offboard.launch.py` also launches the birdview overlay + two RViz windows
@@ -73,7 +73,7 @@ launch (no rebuild).
 | File | Purpose | Key keys |
 |---|---|---|
 | [`config/simulation.yaml`](config/simulation.yaml) | Sim: model, world, gz version, uXRCE port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
-| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner + waypoint following | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `goal_height`, `planner_config`, `cloud_in_topic`, `waypoint_reached_dist`, `waypoint_hold_time` |
+| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner + waypoint following + FAST-LIO/lidar_merge switches | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `goal_height`, `planner_config`, `cloud_in_topic`, `use_fastlio`, `use_lidar_merge`, `fastlio_config`, `waypoint_reached_dist`, `waypoint_hold_time` |
 | [`config/super_planner/`](config/super_planner/) | SUPER planner behaviour (A*, traj opt, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
 | [`config/birdview.yaml`](config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
 
@@ -172,7 +172,7 @@ flowchart LR
         BR --> TF["tf_bridge"]
     end
 
-    subgraph perc["Perception — utils/start_fastlio.sh"]
+    subgraph perc["FAST-LIO + lidar_merge — offboard.launch.py"]
         GZ -->|scan_left/right| LB["lidar_bridge<br/>imu_relay · add_time_field · lidar_merge"]
         LB -->|fused cloud + imu| FL["FAST-LIO<br/>fastlio_mapping"]
         FL -->|/Odometry| FPB["fastlio_px4_bridge"]

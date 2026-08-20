@@ -20,10 +20,11 @@ Topics (all best_effort, matching the rest of the project):
   /lidar_slam/odom PX4 EKF2 fused,     nav_msgs/Odometry, frame world
 
 FAST-LIO is transformed from camera_init into world via the static TF
-world -> camera_init published by utils/start_fastlio.sh (spawn pose
-+ lidar offset), so all three streams are compared in one frame.
+world -> camera_init published by offboard.launch.py when use_fastlio is
+enabled (spawn pose + lidar offset), so all three streams are compared in
+one frame.
 
-Run it while the stack is up (start_fastlio.sh), in any terminal:
+Run it while the stack is up, in any terminal:
 
   ros2 run flight_monitor monitor
 
