@@ -85,7 +85,6 @@ private:
     double yaw_align_thresh_{0.35};   ///< rad, heading-to-goal for can_move_
     double waypoint_reached_dist_{3.0}; ///< horizontal distance to consider a waypoint reached
     double planner_reset_delay_{5.0};   ///< delay between planner reset attempts [s]
-    double planner_stall_timeout_{5.0}; ///< time without planner commands before treated as a planner failure [s]
 
     std::string cmd_topic_{"/planning/pos_cmd"};
     /// PX4 local position topic. Note the "_v1" version suffix — this PX4 fork
@@ -166,8 +165,6 @@ private:
     bool planner_active_{false};
     bool planner_cond_val_{false};
     rclcpp::Time planner_cond_t_;
-    /// Time the last planner command was received (stall detection).
-    rclcpp::Time last_cmd_time_;
 
     // ------------------------------------------------------------------
     //  Callbacks
@@ -221,9 +218,6 @@ private:
     /// Compute the can_move_ gate (reached current goal and yaw towards next).
     bool computeCanMove() const;
     void updatePlannerActivity();
-    /// True when the planner has stopped producing commands for
-    /// planner_stall_timeout_ while a goal is still pending (stalled).
-    bool plannerStalled() const;
 
     // ------------------------------------------------------------------
     //  Planner failure handling

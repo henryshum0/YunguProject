@@ -21,7 +21,6 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     arm_retry_max_ = declare_parameter("arm_retry_max", arm_retry_max_);
     planner_fail_retry_max_ = declare_parameter("planner_fail_retry_max", planner_fail_retry_max_);
     planner_reset_delay_ = declare_parameter("planner_reset_delay", planner_reset_delay_);
-    planner_stall_timeout_ = declare_parameter("planner_stall_timeout", planner_stall_timeout_);
     default_height_ = declare_parameter("default_height", default_height_);
     landing_vel_ = declare_parameter("landing_vel", landing_vel_);
     takeoff_vel_ = declare_parameter("takeoff_vel", takeoff_vel_);
@@ -81,7 +80,6 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     // the first subtraction (now() - last_*) uses a matching time source.
     last_arm_t_ = now();
     last_planner_reset_t_ = now();
-    last_cmd_time_ = now();
 
     RCLCPP_INFO(get_logger(),
                 "Offboard state machine started (planner-driven). "
@@ -343,25 +341,9 @@ void OffboardNode::updatePlannerActivity()
     // below the threshold (plan rate drop) is used to leave MOVE.
     planner_active_ = cond;
 
-    // Track the last time a fresh planner command arrived (for stall
-    // detection: the planner may stop commanding while stuck in PlanFromRest
-    // without ever flipping the 2 s FAIL flag).
-    if (super_->getLatestCommand()) {
-        last_cmd_time_ = now();
-    }
-
     // (Re)compute the gate. "can move" when the current goal was reached and
     // the heading points toward the next goal.
     can_move_ = computeCanMove();
-}
-
-bool OffboardNode::plannerStalled() const
-{
-    // Guard against a default-constructed stamp (system-clock source).
-    if (last_cmd_time_.nanoseconds() == 0) {
-        return false;
-    }
-    return (now() - last_cmd_time_).seconds() > planner_stall_timeout_;
 }
 
 // ======================================================================
@@ -463,6 +445,24 @@ void OffboardNode::handleInit()
         RCLCPP_ERROR(get_logger(), "Critical failure during INIT - emergency stop");
         setState(State::EMERGENCY_STOP);
         return;
+    }
+
+    // If the vehicle is already airborne in OFFBOARD mode (e.g. the FSM was
+    // restarted mid-flight) and odometry + planner are ready, resume directly
+    // in IDLE instead of waiting for a takeoff command / going through
+    // ARMING->TAKEOFF.
+    if (px4_->isOffboard() && super_->isPlannerReady()) {
+        const auto local_pos = px4_->getLocalPosition();
+        const bool in_air = local_pos && local_pos->xy_valid &&
+                            local_pos->z_valid && local_pos->z < -0.5;
+        if (in_air) {
+            RCLCPP_INFO(get_logger(),
+                        "Vehicle already OFFBOARD and airborne - resuming in IDLE");
+            captureHold();
+            planner_fail_count_ = 0;
+            setState(State::IDLE);
+            return;
+        }
     }
 
     // Wait until the whole system is ready (odom + fastlio + planner +
@@ -611,9 +611,10 @@ void OffboardNode::handleMove()
         return;
     }
 
-    // Planner failure during navigation (explicit FAIL flag or a stall while
-    // a goal is still pending: the planner stopped commanding mid-leg).
-    if (super_->isPlannerFail() || plannerStalled()) {
+    // Enter PLANNER_FAIL only when the planner itself publishes the FAIL flag
+    // (after `planner_fail_time` of continuous failure). A mere command-rate
+    // drop / stall is handled below by holding, never by declaring a failure.
+    if (super_->isPlannerFail()) {
         enterPlannerFail();
         return;
     }
