@@ -17,18 +17,20 @@ find_package(rclcpp_components REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(mars_quadrotor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(super_planner REQUIRED)
+find_package(fast_lio REQUIRED)
 
 # --- Standalone executable ---
 add_executable(offboard_node
   src/main.cpp
-  src/offboard.cpp
+  src/offboard_fsm.cpp
   src/px4_handler.cpp
   src/super_handler.cpp
-  src/visualization_handler.cpp
   src/waypoint_handler.cpp
 )
 
@@ -43,8 +45,11 @@ ament_target_dependencies(offboard_node
   px4_msgs
   mars_quadrotor_msgs
   std_srvs
+  std_msgs
   geometry_msgs
   visualization_msgs
+  super_planner
+  fast_lio
 )
 
 # --- Goal marker node (RViz 2D Goal Pose -> /goal_marker markers) ---
@@ -77,10 +82,9 @@ ament_target_dependencies(super_bridge
 
 # --- Composable component ---
 add_library(offboard_component SHARED
-  src/offboard.cpp
+  src/offboard_fsm.cpp
   src/px4_handler.cpp
   src/super_handler.cpp
-  src/visualization_handler.cpp
   src/waypoint_handler.cpp
 )
 
@@ -95,8 +99,11 @@ ament_target_dependencies(offboard_component
   px4_msgs
   mars_quadrotor_msgs
   std_srvs
+  std_msgs
   geometry_msgs
   visualization_msgs
+  super_planner
+  fast_lio
 )
 
 rclcpp_components_register_node(offboard_component

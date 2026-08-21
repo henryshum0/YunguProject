@@ -174,6 +174,7 @@ def generate_launch_description():
             default_planner_config = str(planner_cfg)
 
     # Offboard state-machine tuning defaults (config/offboard.yaml).
+    cfg_use_sim_time = 'true' if bool(_offboard_cfg('use_sim_time', True)) else 'false'
     cfg_update_rate = str(_offboard_cfg('update_rate', 100.0))
     cfg_planner_cmd_hz = str(_offboard_cfg('planner_cmd_hz', 10.0))
     cfg_planner_enter_delay = str(_offboard_cfg('planner_enter_delay', 0.5))
@@ -181,9 +182,16 @@ def generate_launch_description():
     cfg_arm_wait = str(_offboard_cfg('arm_wait', 2.0))
     cfg_default_height = str(_offboard_cfg('default_height', 5.0))
     cfg_landing_vel = str(_offboard_cfg('landing_vel', 0.5))
+    cfg_takeoff_vel = str(_offboard_cfg('takeoff_vel', 0.5))
     cfg_landing_z = str(_offboard_cfg('landing_z', 0.15))
     cfg_waypoint_reached_dist = str(_offboard_cfg('waypoint_reached_dist', 0.5))
     cfg_waypoint_hold_time = str(_offboard_cfg('waypoint_hold_time', 2.0))
+    cfg_arm_retry_delay = str(_offboard_cfg('arm_retry_delay', 5.0))
+    cfg_arm_retry_max = str(_offboard_cfg('arm_retry_max', 3))
+    cfg_planner_fail_retry_max = str(_offboard_cfg('planner_fail_retry_max', 3))
+    cfg_planner_reset_delay = str(_offboard_cfg('planner_reset_delay', 5.0))
+    cfg_planner_stall_timeout = str(_offboard_cfg('planner_stall_timeout', 5.0))
+    cfg_yaw_align_thresh = str(_offboard_cfg('yaw_align_thresh', 0.35))
 
     # Raw lidar cloud topic for super_bridge: default is /<model>/scan/points
     # (from config/simulation.yaml); override with offboard.cloud_in_topic in
@@ -306,6 +314,8 @@ def generate_launch_description():
                               description='Duration of the smooth takeoff trajectory [s]'),
         DeclareLaunchArgument('landing_vel', default_value=cfg_landing_vel,
                               description='Landing descent velocity [m/s]'),
+        DeclareLaunchArgument('takeoff_vel', default_value=cfg_takeoff_vel,
+                              description='Takeoff climb velocity [m/s] (direct PX4 climb)'),
         DeclareLaunchArgument('landing_z', default_value=cfg_landing_z,
                               description='Final landing height [m]'),
         DeclareLaunchArgument('cmd_topic', default_value='/planning/pos_cmd'),
@@ -335,13 +345,42 @@ def generate_launch_description():
                               description='Topic where the goal marker node forwards buffered '
                                           'waypoints for the offboard node'),
         DeclareLaunchArgument('waypoint_marker_topic', default_value='/waypoint_markers',
-                              description='Topic where the offboard node publishes the waypoint '
+                              description='Topic where the goal marker node publishes the waypoint '
                                           'buffer state as a MarkerArray (regularly)'),
+        DeclareLaunchArgument('waypoint_marker_rate', default_value='10.0',
+                              description='Rate [Hz] at which the goal marker node republishes '
+                                          'the waypoint markers'),
         DeclareLaunchArgument('waypoint_reached_dist', default_value=cfg_waypoint_reached_dist,
                               description='Horizontal distance [m] to consider a waypoint reached'),
         DeclareLaunchArgument('waypoint_hold_time', default_value=cfg_waypoint_hold_time,
                               description='Hold time [s] between reaching a waypoint and starting '
                                           'the next one'),
+        DeclareLaunchArgument('planner_state_topic', default_value='fsm/planner_state',
+                              description='SUPER planner FSM state topic'),
+        DeclareLaunchArgument('lio_state_topic', default_value='fastlio/lio_state',
+                              description='FAST-LIO odometry health topic'),
+        DeclareLaunchArgument('planner_reset_service', default_value='/fsm_node/reset',
+                              description='SUPER planner reset/restart service'),
+        DeclareLaunchArgument('takeoff_cmd_topic', default_value='/takeoff_cmd',
+                              description='Takeoff command topic (std_msgs/Bool; true = take off)'),
+        DeclareLaunchArgument('land_cmd_topic', default_value='/land_cmd',
+                              description='Land command topic (std_msgs/Bool; true = land)'),
+        DeclareLaunchArgument('arm_retry_delay', default_value=cfg_arm_retry_delay,
+                              description='Delay between arm attempts [s]'),
+        DeclareLaunchArgument('arm_retry_max', default_value=cfg_arm_retry_max,
+                              description='Max arm attempts before falling back to INIT'),
+        DeclareLaunchArgument('planner_fail_retry_max', default_value=cfg_planner_fail_retry_max,
+                              description='Max planner restarts before FAILSAFE'),
+        DeclareLaunchArgument('planner_reset_delay', default_value=cfg_planner_reset_delay,
+                              description='Delay between planner reset attempts [s]'),
+        DeclareLaunchArgument('planner_stall_timeout', default_value=cfg_planner_stall_timeout,
+                              description='Time without planner commands before treated as a planner failure [s]'),
+        DeclareLaunchArgument('yaw_align_thresh', default_value=cfg_yaw_align_thresh,
+                              description='Heading-to-goal tolerance [rad] for can_move_'),
+        DeclareLaunchArgument('use_sim_time', default_value=cfg_use_sim_time,
+                              description='Use the /clock simulation clock (true) or the real '
+                                          'system clock (false); aligned between offboard and '
+                                          'FAST-LIO'),
         DeclareLaunchArgument('use_fastlio', default_value=str(use_fastlio).lower(),
                               description='Launch the FAST-LIO layer (imu_relay + '
                                           'fastlio_mapping + fastlio_px4_bridge + '
@@ -419,7 +458,12 @@ def generate_launch_description():
              condition=IfCondition(LaunchConfiguration('use_fastlio'))),
         Node(package='fast_lio', executable='fastlio_mapping', name='fastlio_mapping',
              output='screen',
-             parameters=[LaunchConfiguration('fastlio_config')],
+             # Merge the FAST-LIO config YAML with an explicit use_sim_time that is
+             # aligned with the offboard node (inline dict overrides the YAML value).
+             parameters=[
+                 LaunchConfiguration('fastlio_config'),
+                 {'use_sim_time': LaunchConfiguration('use_sim_time')},
+             ],
              condition=IfCondition(LaunchConfiguration('use_fastlio'))),
         *fastlio_scripts,
 
@@ -432,6 +476,7 @@ def generate_launch_description():
             name='offboard',
             output='screen',
             parameters=[{
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
                 'update_rate': LaunchConfiguration('update_rate'),
                 'planner_cmd_hz': LaunchConfiguration('planner_cmd_hz'),
                 'planner_enter_delay': LaunchConfiguration('planner_enter_delay'),
@@ -440,6 +485,7 @@ def generate_launch_description():
                 'default_height': LaunchConfiguration('default_height'),
                 'takeoff_duration': LaunchConfiguration('takeoff_duration'),
                 'landing_vel': LaunchConfiguration('landing_vel'),
+                'takeoff_vel': LaunchConfiguration('takeoff_vel'),
                 'landing_z': LaunchConfiguration('landing_z'),
                 'cmd_topic': LaunchConfiguration('cmd_topic'),
                 'local_pos_topic': LaunchConfiguration('local_pos_topic'),
@@ -448,7 +494,17 @@ def generate_launch_description():
                 'waypoint_buffer_topic': LaunchConfiguration('waypoint_buffer_topic'),
                 'waypoint_reached_dist': LaunchConfiguration('waypoint_reached_dist'),
                 'waypoint_hold_time': LaunchConfiguration('waypoint_hold_time'),
-                'waypoint_marker_topic': LaunchConfiguration('waypoint_marker_topic'),
+                'planner_state_topic': LaunchConfiguration('planner_state_topic'),
+                'lio_state_topic': LaunchConfiguration('lio_state_topic'),
+                'planner_reset_service': LaunchConfiguration('planner_reset_service'),
+                'takeoff_cmd_topic': LaunchConfiguration('takeoff_cmd_topic'),
+                'land_cmd_topic': LaunchConfiguration('land_cmd_topic'),
+                'arm_retry_delay': LaunchConfiguration('arm_retry_delay'),
+                'arm_retry_max': LaunchConfiguration('arm_retry_max'),
+                'planner_fail_retry_max': LaunchConfiguration('planner_fail_retry_max'),
+                'planner_reset_delay': LaunchConfiguration('planner_reset_delay'),
+                'planner_stall_timeout': LaunchConfiguration('planner_stall_timeout'),
+                'yaw_align_thresh': LaunchConfiguration('yaw_align_thresh'),
             }],
         ),
 
@@ -474,12 +530,13 @@ def generate_launch_description():
         ),
 
         # ------------------------------------------------------------------
-        # Goal marker node (waypoint ingestion -> waypoint buffer)
+        # Goal marker node (waypoint ingestion + marking -> waypoint buffer)
         #   - subscribes /waypoint_pose (user waypoints, e.g. RViz 2D Goal Pose
         #     re-targeted to this topic)
+        #   - buffers + marks the waypoints (/waypoint_markers)
         #   - forwards the waypoints to /waypoint_buffer for the offboard node
-        #     to buffer and fly (offboard visualizes the buffer on
-        #     /waypoint_markers)
+        #     to buffer, fly, and (as the sole /goal_pose publisher) hand one
+        #     at a time to SUPER
         # ------------------------------------------------------------------
         Node(
             package='offboard',
@@ -489,6 +546,8 @@ def generate_launch_description():
             parameters=[{
                 'waypoint_topic': LaunchConfiguration('waypoint_topic'),
                 'waypoint_buffer_topic': LaunchConfiguration('waypoint_buffer_topic'),
+                'waypoint_marker_topic': LaunchConfiguration('waypoint_marker_topic'),
+                'waypoint_marker_rate': LaunchConfiguration('waypoint_marker_rate'),
             }],
         ),
 
@@ -499,7 +558,9 @@ def generate_launch_description():
         #     super_planner/config/)
         #   - subscribes to /cloud_registered + /lidar_slam/odom (super_bridge)
         #   - publishes /planning/pos_cmd (consumed by the offboard node)
-        #   - receives goals on /goal_pose (RViz "2D Goal Pose" tool)
+        #   - receives goals on /goal_pose, published ONLY by the offboard state
+        #     machine (RViz "2D Goal Pose" targets /waypoint_pose, buffered by
+        #     the state machine before being forwarded here)
         # ------------------------------------------------------------------
         Node(
             package='super_planner',

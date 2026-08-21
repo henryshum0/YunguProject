@@ -13,6 +13,25 @@
 offboard: 
   visualization: true
 
+  # Use the /clock simulation clock for all time handling (true for a Gazebo
+  # simulation, false to use the real system clock). This is aligned between
+  # the offboard node and FAST-LIO so their timestamps share the same source.
+  use_sim_time: false
+  # Launch the FAST-LIO layer (LiDAR-inertial odometry + PX4 EKF2 fusion)?
+  #   true  -> imu_relay + fastlio_mapping + fastlio_px4_bridge + static TFs +
+  #            gt_path_node; super_bridge consumes the PX4-fused odometry
+  #            (real-hardware mirror, no Gazebo ground truth)
+  #   false -> skip FAST-LIO; super_bridge uses the sim EKF odometry
+  use_fastlio: false
+
+  # Launch lidar_merge (fuse the left/right side LiDARs into one base_link
+  # cloud /<model>/scan/points_fused)? Required by FAST-LIO and by super_bridge
+  # when cloud_in_topic points at the fused topic.
+  use_lidar_merge: true
+
+  # FAST-LIO params file: a file name resolved against config/, or an absolute
+  # path. Ignored when use_fastlio is false.
+  fastlio_config: fastlio_swan_gamma_effect.yaml
   # State machine update rate [Hz]
   update_rate: 100.0
 
@@ -26,6 +45,22 @@ offboard:
   # Wait after ARM before switching to OFFBOARD [s]
   arm_wait: 2.0
 
+  # Arm retry policy: delay between attempts [s] and max attempts before
+  # falling back to INIT.
+  arm_retry_delay: 5.0
+  arm_retry_max: 3
+
+  # Planner failure recovery: max consecutive planner restarts before entering
+  # FAILSAFE, the delay [s] between restart attempts, and the stall timeout [s]
+  # (time without planner commands while a goal is pending that is treated as a
+  # planner failure).
+  planner_fail_retry_max: 3
+  planner_reset_delay: 5.0
+  planner_stall_timeout: 5.0
+
+  # Heading-to-goal tolerance [rad] for the can_move_ gate.
+  yaw_align_thresh: 0.35
+
   # NED hover height after OFFBOARD (negative = up) [m]
   default_height: 5.0
 
@@ -33,6 +68,9 @@ offboard:
   # fsm.click_height in the SUPER planner config
   # (config/super_planner/<planner_config>).
   goal_height: 5.0
+
+  # Takeoff climb velocity [m/s] (direct PX4 vertical climb, no planner).
+  takeoff_vel: 0.5
 
   # Landing descent velocity [m/s] and final landing height [m]
   landing_vel: 0.5
@@ -53,25 +91,11 @@ offboard:
   # they can also be overridden per run as launch args:
   #   ros2 launch offboard offboard.launch.py use_fastlio:=false use_lidar_merge:=false
 
-  # Launch the FAST-LIO layer (LiDAR-inertial odometry + PX4 EKF2 fusion)?
-  #   true  -> imu_relay + fastlio_mapping + fastlio_px4_bridge + static TFs +
-  #            gt_path_node; super_bridge consumes the PX4-fused odometry
-  #            (real-hardware mirror, no Gazebo ground truth)
-  #   false -> skip FAST-LIO; super_bridge uses the sim EKF odometry
-  use_fastlio: true
 
-  # Launch lidar_merge (fuse the left/right side LiDARs into one base_link
-  # cloud /<model>/scan/points_fused)? Required by FAST-LIO and by super_bridge
-  # when cloud_in_topic points at the fused topic.
-  use_lidar_merge: true
-
-  # FAST-LIO params file: a file name resolved against config/, or an absolute
-  # path. Ignored when use_fastlio is false.
-  fastlio_config: fastlio_swan_gamma_effect.yaml
 
   # Waypoint following: buffered waypoints (/waypoint_pose -> /waypoint_buffer)
   # are flown one at a time. A waypoint is "reached" when the drone is within
   # waypoint_reached_dist [m] horizontally; it then holds for
   # waypoint_hold_time [s] before the next waypoint is sent to SUPER.
-  waypoint_reached_dist: 3.0
+  waypoint_reached_dist: 0.2
   waypoint_hold_time: 0.0

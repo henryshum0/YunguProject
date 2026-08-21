@@ -141,6 +141,30 @@ namespace fsm {
                        replan_logs_.size() - 1, replan_logs_.back().getRetCode());
         }
 
+        /// Reset the planner FSM back to its idle / waiting-for-goal state.
+        /// Used by the offboard node when recovering from a planner failure:
+        /// clears the current goal and any outstanding failure so a new goal
+        /// can be re-published.
+        void reset() {
+            // Clear the planner failure condition so a new goal can be planned
+            // from a clean state: setPlanningFail(false) clears planner_failing_,
+            // and we also reset the fail timer + the published planner state.
+            setPlanningFail(false);
+            fail_start_time_ = 0.0;
+            ChangeState("reset", WAIT_GOAL);
+            gi_.new_goal = false;
+            started_ = false;
+            finish_plan = false;
+            plan_from_rest_ = false;
+            traj_finish_ = false;
+            // Machine state is WAIT_GOAL, so publish the matching planner state
+            // (not PLANNER_INIT) so upstream sees wait_goal, not init.
+            planner_state_ = PLANNER_WAIT_GOAL;
+            publishPlannerState();
+            fmt::print(fg(fmt::color::yellow),
+                       " -- [Fsm] Reset requested - planner back to WAIT_GOAL.\n");
+        }
+
         Eigen::Quaterniond eulerToQuaternion(double roll, double pitch, double yaw) {
             double half_roll = roll * 0.5;
             double half_pitch = pitch * 0.5;

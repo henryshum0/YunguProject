@@ -40,6 +40,7 @@ find_package(rclcpp REQUIRED)
 find_package(rog_map REQUIRED)
 find_package(mars_quadrotor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -74,6 +75,7 @@ set(third_party_libs
 set(ros_libs
         rclcpp
         std_msgs
+        std_srvs
         mars_quadrotor_msgs
         sensor_msgs
         tf2_ros

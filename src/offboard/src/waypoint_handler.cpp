@@ -9,13 +9,11 @@ WaypointHandler::WaypointHandler(rclcpp::Node &node,
                                  const std::string &buffer_topic,
                                  double reached_dist,
                                  double hold_time,
-                                 LocalPosGetter local_pos_getter,
-                                 GoalPublisher goal_publisher)
+                                 LocalPosGetter local_pos_getter)
     : node_(node),
       reached_dist_(reached_dist),
       hold_time_(hold_time),
-      local_pos_getter_(std::move(local_pos_getter)),
-      goal_publisher_(std::move(goal_publisher))
+      local_pos_getter_(std::move(local_pos_getter))
 {
     // Reliable so buffered waypoints are never dropped in transit.
     buffer_sub_ = node_.create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -42,19 +40,13 @@ void WaypointHandler::publishNextWaypoint()
     wp_reached_ = false;
     const size_t seq = ++seq_;
 
-    // Forward this single waypoint to SUPER (world frame, ENU), which plans to
-    // it. /goal_pose is reserved for exactly this.
-    geometry_msgs::msg::PoseStamped goal;
-    goal.header.stamp = node_.now();
-    goal.header.frame_id = current_->header.frame_id.empty()
-                               ? "world" : current_->header.frame_id;
-    goal.pose = current_->pose;
-    goal_publisher_(goal);
-
-    RCLCPP_INFO(node_.get_logger(), "Waypoint #%zu sent to SUPER: (%.2f, %.2f, %.2f), "
+    // The state machine (sole /goal_pose publisher) forwards this current
+    // waypoint to SUPER when it is in MOVE.
+    RCLCPP_INFO(node_.get_logger(), "Waypoint #%zu active: (%.2f, %.2f, %.2f), "
                 "%zu still buffered",
                 seq,
-                goal.pose.position.x, goal.pose.position.y, goal.pose.position.z,
+                current_->pose.position.x, current_->pose.position.y,
+                current_->pose.position.z,
                 buffer_.size());
 }
 

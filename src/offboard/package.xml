@@ -18,8 +18,11 @@
   <depend>px4_msgs</depend>
   <depend>mars_quadrotor_msgs</depend>
   <depend>std_srvs</depend>
+  <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>visualization_msgs</depend>
+  <depend>super_planner</depend>
+  <depend>fast_lio</depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
 

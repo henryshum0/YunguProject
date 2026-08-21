@@ -38,6 +38,7 @@
 #include "mars_quadrotor_msgs/msg/position_command.hpp"
 #include "mars_quadrotor_msgs/msg/polynomial_trajectory.hpp"
 #include "super_planner/msg/planner_state.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 
 namespace fsm {
@@ -49,6 +50,7 @@ namespace fsm {
         rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
         rclcpp::Publisher<super_planner::msg::PlannerState>::SharedPtr planner_state_pub_;
         rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_srv_;
 
         rclcpp::TimerBase::SharedPtr execution_timer_, replan_timer_, cmd_timer_;
         rclcpp::CallbackGroup::SharedPtr exec_cbk_group_, replan_cbk_group_, cmd_cbk_group_, goal_cbk_group_;
@@ -290,6 +292,13 @@ namespace fsm {
             return true;
         }
 
+        void resetCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
+                           std::shared_ptr<std_srvs::srv::Trigger::Response> res) {
+            reset();
+            res->success = true;
+            res->message = "Planner FSM reset to WAIT_GOAL";
+        }
+
         void goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
             super_utils::Vec3f goal_p = Vec3f{msg->pose.position.x, msg->pose.position.y, msg->pose.position.z};
             super_utils::Quatf goal_q = super_utils::Quatf{msg->pose.orientation.w, msg->pose.orientation.x,
@@ -316,6 +325,13 @@ namespace fsm {
                                                                                                  qos);
             path_pub_ = nh_->create_publisher<nav_msgs::msg::Path>("fsm/path", qos);
             planner_state_pub_ = nh_->create_publisher<super_planner::msg::PlannerState>("fsm/planner_state", qos);
+
+            // External reset / restart service (called by the offboard node on
+            // planner failure recovery). Resets the FSM to WAIT_GOAL.
+            reset_srv_ = nh_->create_service<std_srvs::srv::Trigger>(
+                    "~/reset",
+                    std::bind(&FsmRos2::resetCallback, this,
+                              std::placeholders::_1, std::placeholders::_2));
 
             int cmd_cnt = 0;
 

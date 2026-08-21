@@ -5,7 +5,10 @@ ROS 2 (Humble) drone autonomy stack for the Yungu flight test: Gazebo + PX4
 SITL simulation, the SUPER trajectory planner, optional FAST-LIO localization
 (mirrors real hardware) and a PX4 offboard state machine with waypoint
 following. Any external search/coverage planner can command the drone by
-publishing waypoints on `/waypoint_pose` — no launch or code changes.
+publishing waypoints on `/waypoint_pose` — no launch or code changes. Once the
+system is up you take off with a `/takeoff_cmd` message (direct PX4 climb);
+navigation between waypoints is planner-driven (SUPER), with automatic
+planner-failure recovery and direct PX4 landing.
 
 ## Prerequisites
 
@@ -73,7 +76,7 @@ launch (no rebuild).
 | File | Purpose | Key keys |
 |---|---|---|
 | [`config/simulation.yaml`](config/simulation.yaml) | Sim: model, world, gz version, uXRCE port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
-| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner + waypoint following + FAST-LIO/lidar_merge switches | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `goal_height`, `planner_config`, `cloud_in_topic`, `use_fastlio`, `use_lidar_merge`, `fastlio_config`, `waypoint_reached_dist`, `waypoint_hold_time` |
+| [`config/offboard.yaml`](config/offboard.yaml) | Offboard state machine + planner + waypoint following + FAST-LIO/lidar_merge switches | `visualization`, `update_rate`, `planner_cmd_hz`, `default_height`, `goal_height`, `planner_config`, `cloud_in_topic`, `use_fastlio`, `use_lidar_merge`, `fastlio_config`, `waypoint_reached_dist`, `waypoint_hold_time`, `arm_retry_delay`, `arm_retry_max`, `planner_fail_retry_max`, `planner_reset_delay`, `planner_stall_timeout`, `takeoff_vel`, `landing_vel`, `yaw_align_thresh` |
 | [`config/super_planner/`](config/super_planner/) | SUPER planner behaviour (A*, traj opt, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
 | [`config/birdview.yaml`](config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
 
@@ -81,18 +84,83 @@ Set `offboard.visualization: false` for a fully headless run (no RViz, no
 birdview overlay, SUPER markers off). `goal_height` overrides SUPER's
 `fsm.click_height` for the RViz "2D Goal Pose" tool.
 
+## Flight states & takeoff/landing
+
+The `offboard_node` runs a planner-driven state machine. On start it waits in
+`INIT` until odometry, FAST-LIO and the planner are all healthy and the
+vehicle is on the ground and disarmed; it then switches PX4 to **OFFBOARD**
+mode and waits for a takeoff command.
+
+```mermaid
+stateDiagram-v2
+    [*] --> INIT
+
+    INIT --> ARMING : takeoff_cmd
+    INIT --> EMERGENCY_STOP : critical_failure (LIO error / planner fail)
+
+    ARMING --> TAKEOFF : armed
+    ARMING --> INIT : heartbeat_failed
+    ARMING --> INIT : arm_retry_exhausted (3 attempts, 5 s apart)
+
+    TAKEOFF --> IDLE : reached default_height
+
+    IDLE --> MOVE : buffered_goal &amp; can_move_
+    IDLE --> PLANNER_FAIL : planner_error
+    IDLE --> LAND : land_cmd
+
+    MOVE --> IDLE : goal_reached / paused
+    MOVE --> PLANNER_FAIL : planner_error (2 s FAIL flag or stall)
+    MOVE --> LAND : land_cmd
+
+    PLANNER_FAIL --> MOVE : planner_reset_ok
+    PLANNER_FAIL --> FAILSAFE : 3_consecutive_failures
+
+    FAILSAFE --> INIT : disarm_complete (direct PX4 land)
+
+    LAND --> INIT : disarm_complete (direct PX4 land)
+
+    EMERGENCY_STOP --> INIT : manual_recovery
+
+    note right of LAND : /land_cmd is honoured in every state\nexcept INIT / PLANNER_FAIL / FAILSAFE / LAND
+```
+
+| State | Behaviour |
+|---|---|
+| `INIT` | Verifies odometry / FAST-LIO (`fastlio/lio_state.running`) / planner (`fsm/planner_state`) readiness, sets OFFBOARD, waits for `/takeoff_cmd`. Critical failure → `EMERGENCY_STOP`. |
+| `ARMING` | Arms, retrying every `arm_retry_delay` (5 s) up to `arm_retry_max` (3) times; on exhaustion returns to `INIT`. |
+| `TAKEOFF` | Direct PX4 vertical climb (no planner) to `default_height` at `takeoff_vel`; on reaching altitude → `IDLE`. |
+| `IDLE` | Hovers, waiting for goals. With a buffered goal and the heading pointed toward it (`can_move_`), publishes it and moves to `MOVE`. |
+| `MOVE` | Forwards SUPER's `PositionCommand` to PX4. Planner command-rate drop → `IDLE`; planner failure → `PLANNER_FAIL`; goal reached → `IDLE`; `/land_cmd` → `LAND`. |
+| `PLANNER_FAIL` | Calls the planner reset service (`/fsm_node/reset`) and re-publishes the current goal. After `planner_fail_retry_max` (3) consecutive failures → `FAILSAFE`. |
+| `FAILSAFE` | Lands with direct PX4 commands (no planner), then returns to `INIT`. |
+| `LAND` | Direct PX4 landing (no planner) to `landing_z` at `landing_vel`, then disarms and returns to `INIT`. |
+| `EMERGENCY_STOP` | Holds position on a critical failure; recovers to `INIT` on a manual recovery signal. |
+
+Take off / land at any time:
+
+```bash
+# Take off (only accepted once the system is ready in INIT)
+ros2 topic pub --once /takeoff_cmd std_msgs/msg/Bool "{data: true}"
+
+# Land (interrupts any flight except INIT / PLANNER_FAIL / FAILSAFE)
+ros2 topic pub --once /land_cmd std_msgs/msg/Bool "{data: true}"
+```
+
 ## Point-to-point navigation (interface for search algorithms)
 
 This is the **only** interface a search/planning algorithm needs. Once the
-stack is up, the drone auto-takes-off to `default_height` and enters `IDLE`;
-command it by publishing a `geometry_msgs/PoseStamped`.
+stack is up, send a `/takeoff_cmd` to take off; the drone climbs directly to
+`default_height` and enters `IDLE`. Then command it by publishing a
+`geometry_msgs/PoseStamped`.
 
 ### Inputs
 
 | Topic | Type | Purpose |
 |---|---|---|
 | `/waypoint_pose` | `PoseStamped` | **Batch waypoint input (recommended).** Queued in the offboard waypoint buffer and flown one at a time. RViz's "2D Goal Pose" tool is re-targeted here. |
-| `/goal_pose` | `PoseStamped` | **Direct single goal.** Also the internal channel offboard uses to hand the current waypoint to SUPER. |
+| `/goal_pose` | `PoseStamped` | **Direct single goal.** Also the internal channel offboard uses to hand the current navigation waypoint to SUPER. |
+| `/takeoff_cmd` | `std_msgs/Bool` | **Take off** once the system is ready (`true`). The drone arms and climbs planner-driven to `default_height`. |
+| `/land_cmd` | `std_msgs/Bool` | **Land** (`true`). Interrupts any flight and lands planner-driven. Ignored in `INIT` / `PLANNER_FAIL` / `FAILSAFE`. |
 | `/waypoint_markers` | `MarkerArray` | Feedback: green = queued, yellow = currently pursued, cyan line = route. |
 
 > QoS caveat: `/waypoint_pose` is `best_effort`/`keep_last(1)` — publish at
@@ -129,6 +197,8 @@ rclpy.spin(GoalPublisher())
 | `/lidar_slam/odom` | `Odometry` | Fused world-frame ENU odometry (FAST-LIO → PX4 EKF2, else Gazebo truth) — the state feedback for your algorithm |
 | `/cloud_registered` | `PointCloud2` | World-frame lidar cloud (ROG-Map input) |
 | `/planning/pos_cmd` | `PositionCommand` | SUPER's commanded trajectory (pos/vel/acc/yaw/yaw_dot), ~100 Hz |
+| `fsm/planner_state` | `super_planner/PlannerState` | High-level planner FSM state (`init` / `wait_goal` / `move` / `fail`) |
+| `fastlio/lio_state` | `fast_lio/LioState` | FAST-LIO odometry health (`init` / `running` / `error`) |
 | `/fmu/out/vehicle_local_position_v1` | `VehicleLocalPosition` | Raw PX4 local position (NED) |
 | `/fmu/out/vehicle_status_v4` | `VehicleStatus` | Arming / nav state |
 
@@ -145,8 +215,14 @@ rclpy.spin(GoalPublisher())
 
 ### Landing
 
+The drone lands with a direct PX4 descent (no planner) at `landing_vel` down
+to `landing_z`, then disarms. Either command it with the `/land_cmd` topic
+(works from any flight state except `INIT` / `PLANNER_FAIL` / `FAILSAFE`), or
+use the legacy `~/land` service:
+
 ```bash
-ros2 service call /offboard/land std_srvs/srv/Trigger
+ros2 topic pub --once /land_cmd std_msgs/msg/Bool "{data: true}"
+ros2 service call /offboard/land std_srvs/srv/Trigger   # legacy, same effect
 ```
 
 ### Recording & evaluation

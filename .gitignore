@@ -8,3 +8,4 @@ cmd_log/
 __pycache__/
 *.pyc
 .claude
+.codebuddy

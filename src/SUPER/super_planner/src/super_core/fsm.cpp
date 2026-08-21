@@ -56,7 +56,11 @@ namespace fsm {
 
     void Fsm::updatePlannerState() {
         PLANNER_STATE new_state;
-        if (planner_failing_ && (ros_ptr_->getSimTime() - fail_start_time_) > 2.0) {
+        // Only publish FAIL after the planner has been failing continuously for
+        // cfg_.planner_fail_time (configurable; tolerant so brief, recoverable
+        // replan failures do not immediately trigger a FAILSAFE).
+        if (planner_failing_ &&
+            (ros_ptr_->getSimTime() - fail_start_time_) > cfg_.planner_fail_time) {
             new_state = PLANNER_FAIL;
         } else if (machine_state_ == INIT) {
             new_state = PLANNER_INIT;
