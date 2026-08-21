@@ -3,20 +3,24 @@
 <package format="3">
   <name>lidar_bridge</name>
   <version>0.1.0</version>
-  <description>Dual-side LiDAR data-flow glue for the Yungu sim stack: time-fielding, fusion into a base_link cloud, IMU relay, and the RViz TF bridge. Nodes moved here from utils/fastlio and utils/gz_bridges.</description>
+  <description>Dual-side LiDAR data-flow glue for the Yungu sim stack: time-fielding, fusion into a base_link cloud, IMU relay, and the RViz TF bridge. C++ nodes (ament_cmake).</description>
   <maintainer email="windshape@example.com">windshape</maintainer>
   <license>Apache-2.0</license>
 
-  <exec_depend>rclpy</exec_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>builtin_interfaces</depend>
+
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>python3-numpy</exec_depend>
 
   <export>
-    <build_type>ament_python</build_type>
+    <build_type>ament_cmake</build_type>
   </export>
 </package>
