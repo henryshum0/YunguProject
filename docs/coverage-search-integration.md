@@ -107,9 +107,9 @@ p_world = p_planner + T,   T = (t_x, t_y, t_z)
 4. `T = p_world - p_planner`，写入适配器配置
 
 方法 B（无地标时）：`start` 起降点即无人机 spawn 后起飞的位置，直接用起飞瞬间
-`/lidar_slam/odom` 的读数近似 `T + start`。PX4 `vehicle_odometry` 已是
-world 系（2026-08-19 实测），所以起飞点读数直接 ≈ 模型 spawn 位置
-`(-4, -2, z)`。
+`/lidar_slam/odom` 的读数近似 `T + start`。模型 spawn 在世界原点
+（airframe `PX4_GZ_MODEL_POSE="0,0,1.15392,0,0,0"`），EKF 原点即
+gz world 原点，所以起飞点读数直接 ≈ `(0, 0, z)`。
 
 > 若语义地图的 y 轴与 world 不一致（如地图旋转过），还需一个绕 z 的旋转矩阵；
 > 先在地图上选两个已知 world 坐标的点解算。
