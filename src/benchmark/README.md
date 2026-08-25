@@ -13,11 +13,11 @@ obstacles (and refuses positions that would overlap geometries). The result is
 written as a Gazebo world with a flat ground plane, sun, and static obstacle
 models.
 
-Gates are **doorframe obstacles** (two posts + a top beam, open at the bottom)
-meant to test **vertical** obstacle avoidance: the drone must clear the opening
-height (fly through between the posts and under the beam) or fly over the top
-bar — they are not solid blocks to simply fly around. Pillars remain solid
-cylinders. Tune the gate opening/height ranges in `config/benchmark.yaml`.
+Gates are finite, horizontal **suspended slabs** meant to test vertical obstacle
+avoidance: the drone must pass beneath the slab or fly above it when crossing
+its span. They remain bypassable around their finite ends. Pillars remain solid
+cylinders. Tune the slab span, centre-height range, thickness, and depth in
+`config/benchmark.yaml`.
 
 ## Density control
 
@@ -87,7 +87,7 @@ Map size is read from `config/benchmark.yaml`; override with `--map-x/--map-y`.
 | `map.x`, `map.y` | Map size [m] (flat ground plane) |
 | `grid.n_x`, `grid.n_y` | Grid discretization (default 10×10) |
 | `objects_per_cell` | Number of obstacles per grid cell (density) |
-| `gates.enabled`, `gates.width_min/max`, `gates.height_min/max`, `gates.post_thickness` | Gate opening width, height (top beam), post thickness [m] |
+| `gates.enabled`, `gates.width_min/max`, `gates.center_height_min/max`, `gates.slab_thickness`, `gates.slab_depth` | Random slab span and centre-height range; fixed vertical thickness and local-Y depth [m] |
 | `pillars.enabled`, `pillars.radius_min/max`, `pillars.height_min/max` | Pillar radius/height ranges [m] |
 | `clearing_distance` | Min center-to-center distance between obstacles [m] |
 | `spawn_clearance` | Clear radius around the world origin (drone spawn point) [m] |
