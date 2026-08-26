@@ -88,7 +88,6 @@ namespace super_planner {
             Vec3f goal_p{0, 0, 0};
             double goal_yaw{0};
             bool new_goal{true};
-            bool goal_valid{true};
         } gi_;
 
         FOVChecker::Ptr fov_checker_;
@@ -113,10 +112,6 @@ namespace super_planner {
 
         void unlockCommittedTraj() {
             cmd_traj_info_.unlock();
-        }
-
-        bool goalValid() const {
-            return gi_.goal_valid;
         }
 
         typedef std::shared_ptr<SuperPlanner> Ptr;

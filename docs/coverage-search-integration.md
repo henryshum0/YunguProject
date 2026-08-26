@@ -215,8 +215,7 @@ uv run coverage-planner plan \
 ./utils/start_sim.sh
 
 # ③ 启动 offboard + SUPER + FAST-LIO + RViz（终端 2）
-#    （offboard.launch.py 现直接拉起 FAST-LIO / lidar_merge，由
-#      config/offboard.yaml 的 use_fastlio / use_lidar_merge 控制）
+#    （offboard.launch.py 现直接拉起 FAST-LIO）
 source install/setup.bash
 ros2 launch offboard offboard.launch.py
 

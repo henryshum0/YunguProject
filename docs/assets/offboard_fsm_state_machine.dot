@@ -1,0 +1,55 @@
+digraph OffboardFsm {
+  graph [
+    rankdir=TB,
+    bgcolor="white",
+    pad="0.25",
+    nodesep="0.55",
+    ranksep="0.8",
+    fontname="Helvetica"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    color="#28536B",
+    fillcolor="#EAF4F7",
+    fontname="Helvetica",
+    fontsize=12,
+    margin="0.18,0.10"
+  ];
+  edge [
+    color="#28536B",
+    fontname="Helvetica",
+    fontsize=10,
+    arrowsize=0.75
+  ];
+
+  start [shape=circle, label="", width=0.18, fixedsize=true, fillcolor="#28536B", color="#28536B"];
+  INIT [label="INIT\nwait for readiness + takeoff", fillcolor="#F4F5F6"];
+  ARMING [label="ARMING\narm retries"];
+  TAKEOFF [label="TAKEOFF\ndirect PX4 climb"];
+  IDLE [label="IDLE\nhold + manage goals", fillcolor="#E9F7EF", color="#1E8449"];
+  MOVE [label="MOVE\nforward SUPER commands", fillcolor="#EAF2F8", color="#2874A6"];
+  LAND [label="LAND\ndirect PX4 descent", fillcolor="#FDEDEC", color="#B03A2E"];
+  recovery [
+    shape=note,
+    label="IDLE recovery:\nplanner not WAIT_GOAL → reset after delay\nREACHED/CLOSE → complete goal\nSTUCK → skip goal; clear buffer after consecutive stuck goals",
+    fillcolor="#FFF8E1",
+    color="#B7950B",
+    fontsize=10
+  ];
+
+  start -> INIT;
+  INIT -> ARMING [label="system ready, OFFBOARD, takeoff command"];
+  INIT -> IDLE [label="already airborne in OFFBOARD\nand planner ready"];
+  ARMING -> TAKEOFF [label="armed"];
+  ARMING -> INIT [label="planner/LIO unhealthy\nor arm retry limit"];
+  TAKEOFF -> IDLE [label="takeoff target reached"];
+  IDLE -> MOVE [label="pending goal, planner WAIT_GOAL,\nheading aligned"];
+  MOVE -> IDLE [label="REACHED / CLOSE / STUCK,\nplanner FAIL, or waypoint reached"];
+  ARMING -> LAND [label="land command/service"];
+  TAKEOFF -> LAND [label="land command/service"];
+  IDLE -> LAND [label="land command/service"];
+  MOVE -> LAND [label="land command/service"];
+  LAND -> INIT [label="land detector confirms landed; disarm"];
+  recovery -> IDLE [style=dashed, arrowhead=none, color="#B7950B"];
+}

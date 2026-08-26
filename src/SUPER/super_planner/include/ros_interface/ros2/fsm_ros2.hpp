@@ -37,6 +37,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "mars_quadrotor_msgs/msg/position_command.hpp"
 #include "mars_quadrotor_msgs/msg/polynomial_trajectory.hpp"
+#include "super_planner/msg/goal_status.hpp"
 #include "super_planner/msg/planner_state.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
@@ -48,6 +49,7 @@ namespace fsm {
         rclcpp::Publisher<mars_quadrotor_msgs::msg::PositionCommand>::SharedPtr cmd_pub_;
         rclcpp::Publisher<mars_quadrotor_msgs::msg::PolynomialTrajectory>::SharedPtr mpc_cmd_pub_;
         rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+        rclcpp::Publisher<super_planner::msg::GoalStatus>::SharedPtr goal_status_pub_;
         rclcpp::Publisher<super_planner::msg::PlannerState>::SharedPtr planner_state_pub_;
         rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_srv_;
@@ -100,6 +102,16 @@ namespace fsm {
             msg.fail = (planner_state_ == PLANNER_FAIL);
             ros_ptr_->getSimTime(msg.stamp.sec, msg.stamp.nanosec);
             planner_state_pub_->publish(msg);
+        }
+
+        void publishGoalStatus(uint8_t status) override {
+            if (!goal_status_pub_) {
+                return;
+            }
+            super_planner::msg::GoalStatus msg;
+            msg.status = status;
+            ros_ptr_->getSimTime(msg.stamp.sec, msg.stamp.nanosec);
+            goal_status_pub_->publish(msg);
         }
 
         void getOneHeartBeatMsg(mars_quadrotor_msgs::msg::PolynomialTrajectory &heartbeat, bool &traj_finish) {
@@ -268,9 +280,7 @@ namespace fsm {
             getOnePositionCommand(pid_cmd_, traj_finish_);
             if (traj_finish_) {
                 cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
-                if (closeToGoal(0.1)) {
-                    ChangeState("getPoseFromTraj", WAIT_GOAL);
-                } else {
+                if (!completeGoalIfReached("getPoseFromTraj")) {
                     ChangeState("getPoseFromTraj", GENERATE_TRAJ);
                 }
             }
@@ -325,6 +335,8 @@ namespace fsm {
                                                                                                  qos);
             path_pub_ = nh_->create_publisher<nav_msgs::msg::Path>("fsm/path", qos);
             planner_state_pub_ = nh_->create_publisher<super_planner::msg::PlannerState>("fsm/planner_state", qos);
+            goal_status_pub_ = nh_->create_publisher<super_planner::msg::GoalStatus>(
+                    "fsm/goal_status", rclcpp::QoS(10).reliable());
 
             // External reset / restart service (called by the offboard node on
             // planner failure recovery). Resets the FSM to WAIT_GOAL.
@@ -413,9 +425,7 @@ namespace fsm {
             cmd_pub_->publish(pid_cmd_);
             if (traj_finish_) {
                 cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
-                if (closeToGoal(0.1)) {
-                    ChangeState("PubCmdCallback", WAIT_GOAL);
-                } else {
+                if (!completeGoalIfReached("PubCmdCallback")) {
                     ChangeState("PubCmdCallback", GENERATE_TRAJ);
                 }
             }

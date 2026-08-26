@@ -24,7 +24,7 @@ string(TOUPPER $ENV{ROS_DISTRO} ROS_VERSION)
 message(STATUS "ROS version: ${ROS_VERSION}")
 
 # for CLION to search the package, user should change to his/her own relative location
-set(CMAKE_PREFIX_PATH ../../../install)
+set(CMAKE_PREFIX_PATH ../../../../install)
 include_directories(
         SYSTEM
         include
@@ -54,6 +54,7 @@ find_package(builtin_interfaces REQUIRED)
 #=================FOR messages ============================#
 rosidl_generate_interfaces(${PROJECT_NAME}
         "msg/PlannerState.msg"
+        "msg/GoalStatus.msg"
         DEPENDENCIES builtin_interfaces
 )
 

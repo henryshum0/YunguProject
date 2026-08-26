@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <queue>
 #include <memory>
 #include <fstream>
@@ -92,9 +93,6 @@ namespace fsm {
 
         MACHINE_STATE machine_state_{INIT};
 
-        // High-level planner state reported to external observers (e.g. flight
-        // monitor / ground station). FAIL means planning has been failing
-        // continuously for more than 2 s (see fail_start_time_).
         enum PLANNER_STATE {
             PLANNER_INIT = 0,
             PLANNER_WAIT_GOAL,
@@ -141,14 +139,7 @@ namespace fsm {
                        replan_logs_.size() - 1, replan_logs_.back().getRetCode());
         }
 
-        /// Reset the planner FSM back to its idle / waiting-for-goal state.
-        /// Used by the offboard node when recovering from a planner failure:
-        /// clears the current goal and any outstanding failure so a new goal
-        /// can be re-published.
         void reset() {
-            // Clear the planner failure condition so a new goal can be planned
-            // from a clean state: setPlanningFail(false) clears planner_failing_,
-            // and we also reset the fail timer + the published planner state.
             setPlanningFail(false);
             fail_start_time_ = 0.0;
             ChangeState("reset", WAIT_GOAL);
@@ -157,8 +148,6 @@ namespace fsm {
             finish_plan = false;
             plan_from_rest_ = false;
             traj_finish_ = false;
-            // Machine state is WAIT_GOAL, so publish the matching planner state
-            // (not PLANNER_INIT) so upstream sees wait_goal, not init.
             planner_state_ = PLANNER_WAIT_GOAL;
             publishPlannerState();
             fmt::print(fg(fmt::color::yellow),
@@ -188,12 +177,19 @@ namespace fsm {
         }
 
     protected:
+        enum GoalStatus : uint8_t {
+            GOAL_STATUS_REACHED = 1,
+            GOAL_STATUS_CLOSE = 2,
+            GOAL_STATUS_STUCK = 3
+        };
+
         vector<LogOneReplan> replan_logs_;
         /* Callback functions */
         bool finish_plan = false;
         double system_start_time_;
 
         bool traj_finish_{false};
+        bool goal_status_sent_{false};
 
         void WriteTimeToLog();
 
@@ -203,21 +199,21 @@ namespace fsm {
 
         bool closeToGoal(const double &thresh_dis);
 
+        bool completeGoalIfReached(const string &call_func);
+
         void setGoalPosiAndYaw(const Vec3f &p, const Quatf &q);
 
         void ChangeState(const string &call_func, const MACHINE_STATE &new_state);
 
-        // Recompute planner_state_ from the current machine state / failure
-        // status and forward it to publishPlannerState().
         void updatePlannerState();
 
-        // Track consecutive planning failures. The FAIL state is only reported
-        // once the failure has persisted for more than 2 s.
         void setPlanningFail(bool fail);
 
-        // Called by updatePlannerState(); overridden by the ROS interface to
-        // actually publish the state (empty default keeps ROS1 build working).
+        void reportGoalStatus(uint8_t status);
+        void reportGoalFailureStatus();
+
         virtual void publishPlannerState() {}
+        virtual void publishGoalStatus(uint8_t /*status*/) {}
 
         virtual void publishPolyTraj() = 0;
 

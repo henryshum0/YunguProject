@@ -1,0 +1,55 @@
+# gz_sensor_interface — Gazebo sensor bridge + coordinate conversion config.
+#
+# Centralizes the ROS 2 topics / frames / mounting extrinsics used by the
+# sensor_interface package (lidar_sensor, imu_bridge, truth_odom, super_lidar).
+# Read by gz_sensor_interface/launch/sensor_sensors.launch.py.
+#
+# Model naming: topic prefixes use the Gazebo model name (default swan_gamma_v2).
+
+model: swan_gamma_v2
+
+# --- lidar_sensor ------------------------------------------------------------
+# Subscribes to the three raw Gazebo gpu_lidar clouds (sensor-local frame) and
+# applies each sensor's mounting extrinsics to express the points in base_link,
+# publishing four body-frame outputs:
+#   output_merged: left + right fused (time-synced, monotonic stamps)
+#   output_left / output_right / output_top: each LiDAR alone, in base_link
+# Extrinsics match swan_gamma_v2/model.sdf (roll-only tilt / pure +z translation).
+lidar_sensor:
+  input_left:       /swan_gamma_v2/scan_left/points      # Gazebo bridge (sensor-local)
+  input_right:      /swan_gamma_v2/scan_right/points
+  input_horizontal: /swan_gamma_v2/scan_horizontal/points
+  output_merged:    /swan_gamma_v2/scan/points_fused     # merged side LiDARs (base_link)
+  output_left:      /swan_gamma_v2/scan_left/points_body
+  output_right:     /swan_gamma_v2/scan_right/points_body
+  output_top:       /swan_gamma_v2/scan_horizontal/points_body
+  frame_id:         base_link
+  # Max gap [s] between the left/right scans that are fused together, so the
+  # fused cloud stays temporally coherent with the simultaneous IMU data.
+  time_sync_tol: 0.05
+  left:
+    roll: -0.6
+    t: [0.0, 0.40, 0.05]
+  right:
+    roll: +0.6
+    t: [0.0, -0.40, 0.05]
+  horizontal:
+    roll: 0.0
+    t: [0.0, 0.0, 0.16]
+
+# --- IMU (imu_bridge) -------------------------------------------------------
+imu_bridge:
+  input_topic:  /livox/imu_raw
+  output_topic: /livox/imu
+
+# --- ground-truth odometry (truth_odom) --------------------------------------
+truth_odom:
+  input_topic:  /odom                       # Gazebo truth (frame world)
+  output_topic: /gz/ground_truth/odom
+
+# --- SUPER world cloud + odom (super_lidar) ----------------------------------
+super_lidar:
+  in_cloud:  /swan_gamma_v2/scan_horizontal/points_body       # base_link (per cloud_source)
+  in_odom:   /fmu/out/vehicle_odometry              # PX4 NED
+  out_cloud: /gz/point_cloud_super                  # world ENU cloud for SUPER
+  out_odom:  /gz/odom_super                         # world ENU odom for SUPER

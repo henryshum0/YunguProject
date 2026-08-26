@@ -108,7 +108,7 @@ HEADLESS=1 ./utils/start_sim.sh
 - RViz 显示无人机（TF）、激光点云，以及 "2D Goal Pose" 工具——
   该工具向 `/goal_pose` 发布目标点（默认 `rviz:=true`，可用 `rviz:=false` 关闭）。
 - SUPER 规划器由 `offboard.launch.py` 启动，使用
-  `config/offboard.yaml` 中的 `planner_config`（在 `config/super_planner/`
+  `config/offboard/` 中的 `planner_config`（在 `config/super_planner/`
   下解析），订阅 super_bridge 输出（`/cloud_registered`、`/lidar_slam/odom`）。
 - **地面真值里程计**（`/odom`，world 系）：yungudemo 分支的 swan_gamma_v2
   不再自带顶层 `OdometryPublisher`，桥接指向模型实例话题
@@ -151,7 +151,7 @@ NO_RVIZ=1 ./utils/start_fastlio.sh
 |---|---|---|
 | 1 | `lidar_bridge`（`imu_relay`）| gz `/livox/imu_raw` → `/livox/imu`（时间戳单调化）|
 | 2 | `lidar_bridge`（`add_time_field`）| 为 Gazebo 点云补充 `time` 字段（瞬时扫描填 0）|
-| 3 | `fast_lio`（`fastlio_mapping`）| 激光惯性里程计，配置：`config/fastlio_swan_gamma_effect.yaml`（ikd-Tree 增量地图 → `/cloud_effected`）|
+| 3 | `fast_lio`（`fastlio_mapping`）| 激光惯性里程计，配置：`config/offboard/fastlio_swan_gamma_effect.yaml`（ikd-Tree 增量地图 → `/cloud_effected`）|
 | 4 | `offboard`（`fastlio_px4_bridge`）| FAST-LIO `/Odometry`（ENU）→ `/fmu/in/vehicle_visual_odometry`（NED）供 EKF2 使用 |
 | 5 | `super_bridge` | PX4 融合里程计 + 原始点云 → `/lidar_slam/odom` + `/cloud_registered` |
 
@@ -272,7 +272,7 @@ offboard 日志（`Waypoint buffered (#N)`）或 `/waypoint_markers` 确认入�
 - 航点到达按**水平**距离判断（`waypoint_reached_dist`）；到达后悬停
   `waypoint_hold_time` 秒，再开始执行缓冲队列中的下一个航点。
 
-### 航点跟随参数（`config/offboard.yaml`）
+### 航点跟随参数（`config/offboard/`）
 
 | 键 | 默认值 | 说明 |
 |---|---|---|
