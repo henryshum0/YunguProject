@@ -1,0 +1,74 @@
+/**:
+    ros__parameters:
+        # ============================================================================
+        # FAST_LIO_MULTI_ROS2 config for swan_gamma_v2 (dual side LiDARs, Gazebo)
+        # ============================================================================
+        # Feeds the two side LiDAR scans directly into fast_lio_multi's internal
+        # dual-lidar fusion. Both clouds are pre-transformed into base_link (== IMU
+        # frame) by lidar_bridge/lidar_transform, so all extrinsics are identity.
+        #
+        # Notes:
+        #   - lidar_type 0 = default handler (no time/ring fields, no deskew) —
+        #     required for Gazebo instantaneous scans; provided by the dev branch
+        #     patch of FAST_LIO_MULTI_ROS2.
+        #   - map_frame "camera_init" keeps /Odometry + TF compatible with the
+        #     world→camera_init static TF and fastlio_px4_bridge.
+        #   - scan_publish_en false: /cloud_registered is owned by super_bridge
+        #     (world frame) — MULTI's own copy would collide on the same topic.
+        #   - zero_start_pose false: odom must stay in camera_init frame.
+
+        common:
+            multi_lidar: true
+            map_frame: "camera_init"
+            lid_topic: "/swan_gamma_v2/scan_left/points_base"
+            lid_topic2: "/swan_gamma_v2/scan_right/points_base"
+            imu_topic: "/livox/imu"
+            max_iteration: 3
+            publish_tf_results: false
+            async_debug: false
+
+        preprocess:
+            filter_size_surf: 0.3
+            point_filter_num: 4
+            point_filter_num2: 4
+            lidar_type: 0                 # default handler (Gazebo, no time/ring)
+            lidar_type2: 0
+            scan_line: 16
+            scan_line2: 16
+            scan_rate: 10                 # swan_gamma_v2 lidar update_rate = 10 Hz
+            scan_rate2: 10
+            timestamp_unit: 2             # US
+            timestamp_unit2: 2
+            blind: 0.5
+            blind2: 0.5
+
+        mapping:
+            zero_start_pose: false
+            zero_start_delay_scans: 40
+            cube_side_length: 100.0
+            acc_cov: 0.1
+            gyr_cov: 0.1
+            b_acc_cov: 0.0001
+            b_gyr_cov: 0.0001
+            det_range: 25.0
+            extrinsic_est_en: false       # multi mode does not support online est
+            extrinsic_imu_to_lidars: false
+            # Clouds arrive already in base_link (== IMU) — all extrinsics identity.
+            extrinsic_T: [0.0, 0.0, 0.0]
+            extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+            extrinsic_T2: [0.0, 0.0, 0.0]
+            extrinsic_R2: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+            extrinsic_T_L2_wrt_L1: [0.0, 0.0, 0.0]
+            extrinsic_R_L2_wrt_L1: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+            extrinsic_T_L1_wrt_drone: [0.0, 0.0, 0.0]
+            extrinsic_R_L1_wrt_drone: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+
+        publish:
+            path_en: true
+            scan_publish_en: false        # /cloud_registered owned by super_bridge
+            dense_publish_en: false
+            scan_bodyframe_pub_en: false
+
+        pcd_save:
+            pcd_save_en: false
+            interval: -1

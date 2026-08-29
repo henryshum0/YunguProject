@@ -62,8 +62,10 @@ def generate_launch_description():
             sys.path.insert(0, str(sim_config_path.parent))
             sim_config = importlib.import_module('sim_config')
             model = sim_config.get_value(sim_config_path, 'model', default='x500_lidar')
-            # The two side LiDARs are fused by lidar_merge into a base_link
-            # cloud; super_bridge consumes that fused cloud now.
+            # The side LiDARs are fused by lidar_merge into a base_link cloud;
+            # super_bridge consumes that fused cloud for the world-frame
+            # /cloud_registered (fast_lio_multi consumes the per-side
+            # /points_base topics from lidar_transform instead).
             default_cloud_in = f'/{model}/scan/points_fused'
         except Exception as exc:  # noqa: BLE001 - keep the launch working
             print(f'[offboard.launch] WARNING: could not read {sim_config_path}: '

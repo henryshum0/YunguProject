@@ -22,8 +22,8 @@ setup(
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
-            'add_time_field = lidar_bridge.add_time_field:main',
             'lidar_merge = lidar_bridge.lidar_merge:main',
+            'lidar_transform = lidar_bridge.lidar_transform:main',
             'imu_relay = lidar_bridge.imu_relay:main',
             'tf_bridge = lidar_bridge.tf_bridge:main',
         ],

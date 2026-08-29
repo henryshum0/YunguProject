@@ -150,10 +150,11 @@ NO_RVIZ=1 ./utils/start_fastlio.sh
 | # | 组件 | 说明 |
 |---|---|---|
 | 1 | `lidar_bridge`（`imu_relay`）| gz `/livox/imu_raw` → `/livox/imu`（时间戳单调化）|
-| 2 | `lidar_bridge`（`add_time_field`）| 为 Gazebo 点云补充 `time` 字段（瞬时扫描填 0）|
-| 3 | `fast_lio`（`fastlio_mapping`）| 激光惯性里程计，配置：`config/fastlio_swan_gamma_effect.yaml`（ikd-Tree 增量地图 → `/cloud_effected`）|
-| 4 | `offboard`（`fastlio_px4_bridge`）| FAST-LIO `/Odometry`（ENU）→ `/fmu/in/vehicle_visual_odometry`（NED）供 EKF2 使用 |
-| 5 | `super_bridge` | PX4 融合里程计 + 原始点云 → `/lidar_slam/odom` + `/cloud_registered` |
+| 2 | `lidar_bridge`（`lidar_transform` ×2）| 左右侧雷达点云变换到 base_link（`/scan_{left,right}/points_base`），供 fast_lio_multi 双雷达融合 |
+| 3 | `fast_lio_multi`（`laserMapping_bundle`）| 双雷达激光惯性里程计，配置：`config/fastlio_multi_swan.yaml`（bundle 融合模式，lidar_type 0 = Gazebo 无 deskew）|
+| 4 | `lidar_bridge`（`lidar_merge`）| 双侧点云合成 base_link 云（`/scan/points_fused`），供 `super_bridge` 生成 world 系 `/cloud_registered` |
+| 5 | `offboard`（`fastlio_px4_bridge`）| FAST-LIO `/Odometry`（ENU）→ `/fmu/in/vehicle_visual_odometry`（NED）供 EKF2 使用 |
+| 6 | `super_bridge` | PX4 融合里程计 + 原始点云 → `/lidar_slam/odom` + `/cloud_registered` |
 
 PX4 EKF2 外部视觉参数在 swan_gamma_v2 机型中设置（`4007_gz_swan_gamma_v2`）：
 `EKF2_EV_CTRL 13`（水平位置+速度+偏航融合——**不含 VPOS**：FAST-LIO 无绝对

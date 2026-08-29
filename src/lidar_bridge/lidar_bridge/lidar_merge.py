@@ -35,8 +35,11 @@ EXTRINSICS = {
     "right": {"t": (0.0, -0.40, 0.05), "roll": +0.6},
 }
 
-TOPIC_LEFT = "/swan_gamma_v2/scan_left/points_timed"
-TOPIC_RIGHT = "/swan_gamma_v2/scan_right/points_timed"
+# Raw gz scans (no time field needed: consumers are super_bridge's world-frame
+# registration and the old single-lidar FAST-LIO; fast_lio_multi consumes the
+# per-side /points_base topics from lidar_transform instead).
+TOPIC_LEFT = "/swan_gamma_v2/scan_left/points"
+TOPIC_RIGHT = "/swan_gamma_v2/scan_right/points"
 TOPIC_OUT = "/swan_gamma_v2/scan/points_fused"
 
 

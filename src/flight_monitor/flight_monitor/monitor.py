@@ -61,8 +61,8 @@ LABELS = {"gt": "GT", "px4": "PX4 fused", "fastlio": "FAST-LIO"}
 
 # ------------------------------------------------------------------ process
 # htop-like process tracking: name substrings to watch, sample interval.
-PROC_NAMES = ("px4", "gz sim", "fastlio_mapping", "fastlio_px4_bridge",
-              "add_time_field", "super_bridge",
+PROC_NAMES = ("px4", "gz sim", "laserMapping_bundle", "fastlio_px4_bridge",
+              "lidar_transform", "lidar_merge", "super_bridge",
               "offboard_node", "MicroXRCEAgent", "monitor.py")
 CPU_TICKS = 20        # refresh CPU panel every 20 frames (2 s at 100 ms)
 CLK_TCK = os.sysconf(os.sysconf_names["SC_CLK_TCK"])

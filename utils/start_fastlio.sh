@@ -18,11 +18,12 @@
 #   NO_RVIZ=1 ./utils/start_fastlio.sh    # skip RViz
 #
 # Model & lidar topics follow config/simulation.yaml (model / world). The
-# FAST-LIO config ships for swan_gamma_v2; for other models, override
-# FASTLIO_CONFIG. Other overrides:
+# FAST_LIO_MULTI config ships for swan_gamma_v2; for other models, override
+# FASTLIO_MULTI_CONFIG. Other overrides:
 #   SIM_MODEL=swan_gamma_v2 SIM_WORLD=yungu ./utils/start_fastlio.sh
-#   LIDAR_TOPIC=/swan_gamma_v2/scan ./utils/start_fastlio.sh
-#   FASTLIO_CONFIG=config/fastlio_swan_gamma_effect.yaml ./utils/start_fastlio.sh
+#   LIDAR_LEFT_TOPIC=/swan_gamma_v2/scan_left/points_base ./utils/start_fastlio.sh
+#   LIDAR_RIGHT_TOPIC=/swan_gamma_v2/scan_right/points_base ./utils/start_fastlio.sh
+#   FASTLIO_MULTI_CONFIG=config/fastlio_multi_swan.yaml ./utils/start_fastlio.sh
 #   RVIZ_CONFIG=fastlio_ikdtree.rviz ./utils/start_fastlio.sh
 #   BIRDVIEW_CONFIG=birdview.rviz ./utils/start_fastlio.sh  # top-down window config
 #
@@ -53,14 +54,14 @@ SIM_MODEL="${SIM_MODEL:-$(config_get model)}"
 SIM_MODEL="${SIM_MODEL:-swan_gamma_v2}"
 SIM_WORLD="${SIM_WORLD:-$(config_get world)}"
 SIM_WORLD="${SIM_WORLD:-yungu}"
-# Two side LiDARs (real-hardware mirror) are fused by lidar_merge into one
-# base_link cloud; FAST-LIO and super_bridge both consume the fused topic.
-LIDAR_FUSED_TOPIC="${LIDAR_FUSED_TOPIC:-/${SIM_MODEL}/scan/points_fused}"
-# ikd-Tree incremental-map config (effect_map_en: true → /cloud_effected,
-# map_en: true → /Laser_map still published). The yaml hardcodes
-# lid_topic: /swan_gamma_v2/scan/points_timed — for another model, override
-# FASTLIO_CONFIG with a matching config.
-FASTLIO_CONFIG="${FASTLIO_CONFIG:-${WORKSPACE}/config/fastlio_swan_gamma_effect.yaml}"
+# Two side LiDARs (real-hardware mirror) are transformed into base_link by
+# lidar_transform (two instances) and fed directly into fast_lio_multi's
+# dual-lidar fusion (lidar_merge no longer needed).
+LIDAR_LEFT_TOPIC="${LIDAR_LEFT_TOPIC:-/${SIM_MODEL}/scan_left/points_base}"
+LIDAR_RIGHT_TOPIC="${LIDAR_RIGHT_TOPIC:-/${SIM_MODEL}/scan_right/points_base}"
+# FAST_LIO_MULTI_ROS2 config (dev-branch patch: lidar_type 0 = default
+# handler for Gazebo clouds without time/ring fields).
+FASTLIO_MULTI_CONFIG="${FASTLIO_MULTI_CONFIG:-${WORKSPACE}/config/fastlio_multi_swan.yaml}"
 # Bare file name → resolved via the offboard package share (same as
 # start_sim.sh + offboard.launch.py flow); needs a colcon build to install.
 RVIZ_CONFIG="${RVIZ_CONFIG:-fastlio_ikdtree.rviz}"
@@ -116,14 +117,14 @@ cleanup() {
     for p in "${PIDS[@]:-}"; do kill -9 -- "-${p}" 2>/dev/null || kill -9 "${p}" 2>/dev/null || true; done
 
     # 3. Safety net — kill our layer by name (no px4 / gz / agent / bridge!)
-    pkill -9 -f "fastlio_mapping" 2>/dev/null || true
+    pkill -9 -f "laserMapping_bundle" 2>/dev/null || true
     pkill -9 -f "fastlio_px4_bridge" 2>/dev/null || true
     pkill -9 -f "offboard_node" 2>/dev/null || true
     pkill -9 -f "super_bridge" 2>/dev/null || true
     pkill -9 -f "fsm_node" 2>/dev/null || true
     pkill -9 -f "rviz2" 2>/dev/null || true
     pkill -9 -f "imu_relay" 2>/dev/null || true
-    pkill -9 -f "add_time_field" 2>/dev/null || true
+    pkill -9 -f "lidar_transform" 2>/dev/null || true
     pkill -9 -f "lidar_merge" 2>/dev/null || true
     pkill -9 -f "static_transform_publisher" 2>/dev/null || true
     echo "FAST-LIO layer stopped (simulation untouched)."
@@ -175,9 +176,10 @@ fastlio_watchdog() {
             fi
             echo "FAST-LIO watchdog: lost lidar lock (${count} 'No Effective Points!') — restart ${restarts}/${max_restarts}"
             count=0
-            pkill -9 -f "fastlio_mapping" 2>/dev/null || true
+            pkill -9 -f "laserMapping_bundle" 2>/dev/null || true
             sleep 2
-            ros2 run fast_lio fastlio_mapping --ros-args --params-file "${FASTLIO_CONFIG}" \
+            ros2 run fast_lio_multi laserMapping_bundle --ros-args \
+                --params-file "${FASTLIO_MULTI_CONFIG}" \
                 >"${LOG_DIR}/fastlio.log" 2>&1 &
         fi
     done
@@ -236,6 +238,15 @@ else
 fi
 PIDS+=("$!")
 
+# Self-check: the FAST-LIO red path (/path, camera_init frame) only renders
+# in RViz (fixed frame world) if this static TF actually arrives. Fail loudly
+# instead of silently losing the red line.
+if ! timeout 5 ros2 topic echo /tf_static --once --qos-durability transient_local \
+        --qos-reliability reliable 2>/dev/null | grep -q "camera_init"; then
+    echo "WARNING: world→camera_init static TF not seen within 5s — the FAST-LIO" \
+         "red path (/path) will not render in RViz. Check the static_transform_publisher above." >&2
+fi
+
 # Sensor nodes start in parallel (no serial sleeps); the readiness gate below
 # blocks until their data actually flows.
 # IMU comes DIRECTLY from gz (bridged in simulation.yaml → /livox/imu_raw,
@@ -243,16 +254,22 @@ PIDS+=("$!")
 # (250 Hz DDS jitter once made FAST-LIO diverge) → /livox/imu.
 ros2 run lidar_bridge imu_relay &
 PIDS+=("$!")
-# Side LiDARs (real-hardware mirror): time-field each side, then fuse into one
-# scan in base_link for FAST-LIO (lidar_merge applies the mounting extrinsics).
-ros2 run lidar_bridge add_time_field --ros-args \
+# Side LiDARs (real-hardware mirror): transform each side into base_link (the
+# IMU frame) and feed fast_lio_multi's dual-lidar fusion directly.
+# Extrinsics match model.sdf: left (0, +0.40, 0.05, roll -0.6),
+# right (0, -0.40, 0.05, roll +0.6) relative to base_link.
+ros2 run lidar_bridge lidar_transform --ros-args \
     -p input_topic:="/swan_gamma_v2/scan_left/points" \
-    -p output_topic:="/swan_gamma_v2/scan_left/points_timed" &
+    -p output_topic:="${LIDAR_LEFT_TOPIC}" \
+    -p t_y:=0.40 -p t_z:=0.05 -p roll:=-0.6 &
 PIDS+=("$!")
-ros2 run lidar_bridge add_time_field --ros-args \
+ros2 run lidar_bridge lidar_transform --ros-args \
     -p input_topic:="/swan_gamma_v2/scan_right/points" \
-    -p output_topic:="/swan_gamma_v2/scan_right/points_timed" &
+    -p output_topic:="${LIDAR_RIGHT_TOPIC}" \
+    -p t_y:=-0.40 -p t_z:=0.05 -p roll:=0.6 &
 PIDS+=("$!")
+# Dual-side fused cloud in base_link for super_bridge's world-frame
+# /cloud_registered (fast_lio_multi consumes the per-side /points_base).
 ros2 run lidar_bridge lidar_merge &
 PIDS+=("$!")
 
@@ -261,6 +278,13 @@ PIDS+=("$!")
 # src/offboard/scripts/ (kept out of offboard.launch.py on purpose).
 python3 "${WORKSPACE}/src/offboard/scripts/gt_path_node.py" &
 PIDS+=("$!")
+# World-frame registered point cloud map (accumulates /cloud_registered
+# from super_bridge, voxel-downsampled) — RViz topic /world_map. The map
+# follows the drone: nothing accumulates while it sits on the ground at
+# spawn (dwell gate), and regions farther than forget_range m are forgotten
+# as it flies away.
+python3 "${WORKSPACE}/src/offboard/scripts/world_map_node.py" &
+PIDS+=("$!")
 python3 "${WORKSPACE}/src/offboard/scripts/fastlio_px4_bridge.py" &
 PIDS+=("$!")
 
@@ -268,16 +292,20 @@ PIDS+=("$!")
 # before the LiDAR/IMU data is stable, it can crash on a regressing
 # timestamp ("cannot store a negative time point"). Two blocking waits run
 # in parallel — "echo --once" exits on the first message, timeout bounds it.
-echo "Waiting for LiDAR + IMU streams (${LIDAR_FUSED_TOPIC})..."
-timeout 30 ros2 topic echo "${LIDAR_FUSED_TOPIC}" --once --qos-reliability best_effort >/dev/null 2>&1 &
+echo "Waiting for LiDAR + IMU streams (${LIDAR_LEFT_TOPIC}, ${LIDAR_RIGHT_TOPIC})..."
+timeout 30 ros2 topic echo "${LIDAR_LEFT_TOPIC}" --once --qos-reliability best_effort >/dev/null 2>&1 &
 LIDAR_WAIT=$!
+timeout 30 ros2 topic echo "${LIDAR_RIGHT_TOPIC}" --once --qos-reliability best_effort >/dev/null 2>&1 &
+LIDAR_WAIT2=$!
 timeout 30 ros2 topic echo /livox/imu --once --qos-reliability best_effort >/dev/null 2>&1 &
 IMU_WAIT=$!
-wait "${LIDAR_WAIT}" || echo "WARNING: ${LIDAR_FUSED_TOPIC} not seen within 30s" >&2
+wait "${LIDAR_WAIT}" || echo "WARNING: ${LIDAR_LEFT_TOPIC} not seen within 30s" >&2
+wait "${LIDAR_WAIT2}" || echo "WARNING: ${LIDAR_RIGHT_TOPIC} not seen within 30s" >&2
 wait "${IMU_WAIT}" || echo "WARNING: /livox/imu not seen within 30s" >&2
 echo "Sensor streams ready."
 
-ros2 run fast_lio fastlio_mapping --ros-args --params-file "${FASTLIO_CONFIG}" \
+ros2 run fast_lio_multi laserMapping_bundle --ros-args \
+    --params-file "${FASTLIO_MULTI_CONFIG}" \
     >"${LOG_DIR}/fastlio.log" 2>&1 &
 PIDS+=("$!")
 
