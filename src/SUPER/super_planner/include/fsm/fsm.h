@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <queue>
 #include <memory>
 #include <fstream>
@@ -92,6 +93,24 @@ namespace fsm {
 
         MACHINE_STATE machine_state_{INIT};
 
+        enum PLANNER_STATE {
+            PLANNER_INIT = 0,
+            PLANNER_WAIT_GOAL,
+            PLANNER_MOVE,
+            PLANNER_FAIL
+        };
+
+        vector<string> PLANNER_STATE_STR{
+                "INIT",
+                "WAIT_GOAL",
+                "MOVE",
+                "FAIL"
+        };
+
+        PLANNER_STATE planner_state_{PLANNER_INIT};
+        bool planner_failing_{false};
+        double fail_start_time_{0.0};
+
 
     public:
         Fsm() = default;
@@ -120,6 +139,21 @@ namespace fsm {
                        replan_logs_.size() - 1, replan_logs_.back().getRetCode());
         }
 
+        void reset() {
+            setPlanningFail(false);
+            fail_start_time_ = 0.0;
+            ChangeState("reset", WAIT_GOAL);
+            gi_.new_goal = false;
+            started_ = false;
+            finish_plan = false;
+            plan_from_rest_ = false;
+            traj_finish_ = false;
+            planner_state_ = PLANNER_WAIT_GOAL;
+            publishPlannerState();
+            fmt::print(fg(fmt::color::yellow),
+                       " -- [Fsm] Reset requested - planner back to WAIT_GOAL.\n");
+        }
+
         Eigen::Quaterniond eulerToQuaternion(double roll, double pitch, double yaw) {
             double half_roll = roll * 0.5;
             double half_pitch = pitch * 0.5;
@@ -143,12 +177,19 @@ namespace fsm {
         }
 
     protected:
+        enum GoalStatus : uint8_t {
+            GOAL_STATUS_REACHED = 1,
+            GOAL_STATUS_CLOSE = 2,
+            GOAL_STATUS_STUCK = 3
+        };
+
         vector<LogOneReplan> replan_logs_;
         /* Callback functions */
         bool finish_plan = false;
         double system_start_time_;
 
         bool traj_finish_{false};
+        bool goal_status_sent_{false};
 
         void WriteTimeToLog();
 
@@ -158,9 +199,21 @@ namespace fsm {
 
         bool closeToGoal(const double &thresh_dis);
 
+        bool completeGoalIfReached(const string &call_func);
+
         void setGoalPosiAndYaw(const Vec3f &p, const Quatf &q);
 
         void ChangeState(const string &call_func, const MACHINE_STATE &new_state);
+
+        void updatePlannerState();
+
+        void setPlanningFail(bool fail);
+
+        void reportGoalStatus(uint8_t status);
+        void reportGoalFailureStatus();
+
+        virtual void publishPlannerState() {}
+        virtual void publishGoalStatus(uint8_t /*status*/) {}
 
         virtual void publishPolyTraj() = 0;
 

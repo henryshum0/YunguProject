@@ -60,6 +60,7 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 #include <livox_ros_driver2/msg/custom_msg.hpp>
+#include <fast_lio/msg/lio_state.hpp>
 #include "preprocess.h"
 #include <ikd-Tree/ikd_Tree.h>
 
@@ -95,7 +96,14 @@ double cube_len = 0, HALF_FOV_COS = 0, FOV_DEG = 0, total_distance = 0, lidar_en
 int    effct_feat_num = 0, time_log_counter = 0, scan_count = 0, publish_count = 0;
 int    iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0, pcd_save_interval = -1, pcd_index = 0;
 bool   point_selected_surf[100000] = {0};
-bool   lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
+bool   lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited = false;
+bool   lio_first_lidar_rcv = false, lio_first_imu_rcv = false;
+double last_lidar_rcv_steady = 0.0, last_imu_rcv_steady = 0.0;
+
+static inline double steady_now_sec()
+{
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 bool   scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false;
 bool    is_first_lidar = true;
 
@@ -301,6 +309,8 @@ void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::UniquePtr msg)
     lidar_buffer.push_back(ptr);
     time_buffer.push_back(cur_time);
     last_timestamp_lidar = cur_time;
+    last_lidar_rcv_steady = steady_now_sec();
+    lio_first_lidar_rcv = true;
     s_plot11[scan_count] = omp_get_wtime() - preprocess_start_time;
     mtx_buffer.unlock();
     sig_buffer.notify_all();
@@ -341,7 +351,9 @@ void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::UniquePtr msg)
     p_pre->process(msg, ptr);
     lidar_buffer.push_back(ptr);
     time_buffer.push_back(last_timestamp_lidar);
-    
+    last_lidar_rcv_steady = steady_now_sec();
+    lio_first_lidar_rcv = true;
+
     s_plot11[scan_count] = omp_get_wtime() - preprocess_start_time;
     mtx_buffer.unlock();
     sig_buffer.notify_all();
@@ -372,6 +384,8 @@ void imu_cbk(const sensor_msgs::msg::Imu::UniquePtr msg_in)
     }
 
     last_timestamp_imu = timestamp;
+    last_imu_rcv_steady = steady_now_sec();
+    lio_first_imu_rcv = true;
 
     imu_buffer.push_back(msg);
     mtx_buffer.unlock();
@@ -934,6 +948,7 @@ public:
         pubOdomAftMapped_ = this->create_publisher<nav_msgs::msg::Odometry>("/Odometry", 20);
         pubPath_ = this->create_publisher<nav_msgs::msg::Path>("/path", 20);
         tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+        lio_state_pub_ = this->create_publisher<fast_lio::msg::LioState>("fastlio/lio_state", rclcpp::QoS(10));
 
         //------------------------------------------------------------------------------------------------------
         auto period_ms = std::chrono::milliseconds(static_cast<int64_t>(1000.0 / 100.0));
@@ -941,6 +956,9 @@ public:
 
         auto map_period_ms = std::chrono::milliseconds(static_cast<int64_t>(1000.0));
         map_pub_timer_ = rclcpp::create_timer(this, this->get_clock(), map_period_ms, std::bind(&LaserMappingNode::map_publish_callback, this));
+
+        auto state_period_ms = std::chrono::milliseconds(100);
+        state_timer_ = rclcpp::create_timer(this, this->get_clock(), state_period_ms, std::bind(&LaserMappingNode::state_timer_callback, this));
 
         map_save_srv_ = this->create_service<std_srvs::srv::Trigger>("map_save", std::bind(&LaserMappingNode::map_save_callback, this, std::placeholders::_1, std::placeholders::_2));
 
@@ -955,6 +973,37 @@ public:
     }
 
 private:
+    void state_timer_callback()
+    {
+        fast_lio::msg::LioState msg;
+        msg.stamp = this->get_clock()->now();
+
+        // A sensor stream is considered alive if a message arrived within the
+        // last 2 s (same window the planner FSM uses for the FAIL state).
+        const double now = steady_now_sec();
+        const bool lidar_stale = lio_first_lidar_rcv && (now - last_lidar_rcv_steady) >= 2.0;
+        const bool imu_stale = lio_first_imu_rcv && (now - last_imu_rcv_steady) >= 2.0;
+        const bool has_data = lio_first_lidar_rcv || lio_first_imu_rcv;
+
+        if (lidar_stale || imu_stale)
+        {
+            msg.state = fast_lio::msg::LioState::STATE_ERROR;
+        }
+        else if (!has_data || !flg_EKF_inited)
+        {
+            msg.state = fast_lio::msg::LioState::STATE_INIT;
+        }
+        else
+        {
+            msg.state = fast_lio::msg::LioState::STATE_RUNNING;
+        }
+
+        msg.init = (msg.state == fast_lio::msg::LioState::STATE_INIT);
+        msg.running = (msg.state == fast_lio::msg::LioState::STATE_RUNNING);
+        msg.error = (msg.state == fast_lio::msg::LioState::STATE_ERROR);
+        lio_state_pub_->publish(msg);
+    }
+
     void timer_callback()
     {
         if(sync_packages(Measures))
@@ -1098,7 +1147,7 @@ private:
                 s_plot9[time_log_counter] = aver_time_consu;
                 s_plot10[time_log_counter] = add_point_size;
                 time_log_counter ++;
-                printf("[ mapping ]: time: IMU + Map + Input Downsample: %0.6f ave match: %0.6f ave solve: %0.6f  ave ICP: %0.6f  map incre: %0.6f ave total: %0.6f icp: %0.6f construct H: %0.6f \n",t1-t0,aver_time_match,aver_time_solve,t3-t1,t5-t3,aver_time_consu,aver_time_icp, aver_time_const_H_time);
+                // printf("[ mapping ]: time: IMU + Map + Input Downsample: %0.6f ave match: %0.6f ave solve: %0.6f  ave ICP: %0.6f  map incre: %0.6f ave total: %0.6f icp: %0.6f construct H: %0.6f \n",t1-t0,aver_time_match,aver_time_solve,t3-t1,t5-t3,aver_time_consu,aver_time_icp, aver_time_const_H_time);
                 ext_euler = SO3ToEuler(state_point.offset_R_L_I);
                 fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time << " " << euler_cur.transpose() << " " << state_point.pos.transpose()<< " " << ext_euler.transpose() << " "<<state_point.offset_T_L_I.transpose()<<" "<< state_point.vel.transpose() \
                 <<" "<<state_point.bg.transpose()<<" "<<state_point.ba.transpose()<<" "<<state_point.grav<<" "<<feats_undistort->points.size()<<endl;
@@ -1140,8 +1189,10 @@ private:
     rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr sub_pcl_livox_;
 
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    rclcpp::Publisher<fast_lio::msg::LioState>::SharedPtr lio_state_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::TimerBase::SharedPtr map_pub_timer_;
+    rclcpp::TimerBase::SharedPtr state_timer_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr map_save_srv_;
 
     bool effect_pub_en = false, map_pub_en = false;

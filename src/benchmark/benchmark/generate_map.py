@@ -60,13 +60,15 @@ def make_obstacle(rng: random.Random, cfg: dict):
         gate_cfg = cfg.get("gates", {})
         width = rng.uniform(float(gate_cfg["width_min"]),
                             float(gate_cfg["width_max"]))
-        height = rng.uniform(float(gate_cfg["height_min"]),
-                             float(gate_cfg["height_max"]))
-        thick = float(gate_cfg.get("post_thickness", 0.2))
-        # Footprint half-extent: half the total width including the posts.
-        half = width / 2.0 + thick
-        return {"kind": "gate", "width": width, "height": height,
-                "thickness": thick, "half": half,
+        center_height = rng.uniform(float(gate_cfg["center_height_min"]),
+                                    float(gate_cfg["center_height_max"]))
+        thickness = float(gate_cfg["slab_thickness"])
+        depth = float(gate_cfg["slab_depth"])
+        # A circumscribed radius keeps randomly yawed slab footprints separate.
+        half = math.hypot(width, depth) / 2.0
+        return {"kind": "gate", "width": width,
+                "center_height": center_height, "thickness": thickness,
+                "depth": depth, "half": half,
                 "yaw": rng.uniform(-math.pi, math.pi)}
     radius = rng.uniform(float(cfg["pillars"]["radius_min"]),
                          float(cfg["pillars"]["radius_max"]))
@@ -218,31 +220,24 @@ def build_sdf(cfg: dict, placed, map_x: float, map_y: float) -> str:
     # --- Obstacles ---
     for i, o in enumerate(placed):
         if o["kind"] == "gate":
-            # A gate is a doorframe: two posts + a top beam with an open bottom,
-            # so the drone must consider vertical clearance (fly through the
-            # opening or over the top bar) rather than a solid block.
+            # A gate is a finite horizontal slab: traverse below or above it.
             w = o["width"]
-            h = o["height"]
+            h = o["center_height"]
             t = o["thickness"]
-            px = w / 2.0 + t / 2.0          # post centre offset from the axis
+            d = o["depth"]
             color = "0.85 0.45 0.10 1"      # orange (gates)
             A(f'    <model name="obstacle_{i}">')
             A('      <static>true</static>')
             A(f'      <pose>{o["x"]:.3f} {o["y"]:.3f} 0 0 0 {o["yaw"]:.3f}</pose>')
             A('      <link name="link">')
-            for name, sx, sy, sz, bx, by, bz in (
-                    ("post_l", -px, 0.0, h / 2.0, t, t, h),
-                    ("post_r",  px, 0.0, h / 2.0, t, t, h),
-                    ("beam",    0.0, 0.0, h - t / 2.0, w + 2.0 * t, t, t)):
-                A(f'        <collision name="{name}">'
-                  f'<pose>{sx:.3f} {sy:.3f} {sz:.3f} 0 0 0</pose>'
-                  f'<geometry><box><size>{bx:.3f} {by:.3f} {bz:.3f}</size></box>'
-                  f'</geometry></collision>')
-                A(f'        <visual name="{name}_vis">'
-                  f'<pose>{sx:.3f} {sy:.3f} {sz:.3f} 0 0 0</pose>'
-                  f'<geometry><box><size>{bx:.3f} {by:.3f} {bz:.3f}</size></box>'
-                  f'</geometry><material><ambient>{color}</ambient>'
-                  f'<diffuse>{color}</diffuse></material></visual>')
+            geom = f'<box><size>{w:.3f} {d:.3f} {t:.3f}</size></box>'
+            A('        <collision name="slab">'
+              f'<pose>0 0 {h:.3f} 0 0 0</pose><geometry>{geom}</geometry>'
+              '</collision>')
+            A('        <visual name="slab_vis">'
+              f'<pose>0 0 {h:.3f} 0 0 0</pose><geometry>{geom}</geometry>'
+              f'<material><ambient>{color}</ambient><diffuse>{color}</diffuse>'
+              '</material></visual>')
             A('      </link>')
             A('    </model>')
             continue

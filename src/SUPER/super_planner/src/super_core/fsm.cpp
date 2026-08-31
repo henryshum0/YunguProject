@@ -28,6 +28,11 @@
 using namespace super_utils;
 
 namespace fsm {
+    namespace {
+        constexpr double kReachedGoalDistance = 0.1;
+        constexpr double kCloseGoalDistance = 2.0;
+    }
+
     Fsm::~Fsm() {
         write_time_.close();
     }
@@ -41,6 +46,69 @@ namespace fsm {
             }
         }
         write_time_ << endl;
+    }
+
+    void Fsm::setPlanningFail(bool fail) {
+        if (fail) {
+            if (!planner_failing_) {
+                planner_failing_ = true;
+                fail_start_time_ = ros_ptr_->getSimTime();
+            }
+        } else {
+            planner_failing_ = false;
+        }
+    }
+
+    void Fsm::updatePlannerState() {
+        PLANNER_STATE new_state;
+        if (planner_failing_ &&
+            (ros_ptr_->getSimTime() - fail_start_time_) > cfg_.planner_fail_time) {
+            new_state = PLANNER_FAIL;
+        } else if (machine_state_ == INIT) {
+            new_state = PLANNER_INIT;
+        } else if (machine_state_ == WAIT_GOAL) {
+            new_state = PLANNER_WAIT_GOAL;
+        } else {
+            new_state = PLANNER_MOVE;
+        }
+
+        if (new_state != planner_state_) {
+            planner_state_ = new_state;
+            if (planner_state_ == PLANNER_FAIL) {
+                reportGoalFailureStatus();
+            }
+            fmt::print(" -- [Fsm] Planner state -> {}.\n", PLANNER_STATE_STR[planner_state_]);
+        }
+        publishPlannerState();
+    }
+
+    void Fsm::reportGoalStatus(uint8_t status) {
+        if (goal_status_sent_) {
+            return;
+        }
+        goal_status_sent_ = true;
+        publishGoalStatus(status);
+    }
+
+    void Fsm::reportGoalFailureStatus() {
+        const auto status = closeToGoal(kCloseGoalDistance)
+                                ? GOAL_STATUS_CLOSE
+                                : GOAL_STATUS_STUCK;
+        reportGoalStatus(status);
+    }
+
+    bool Fsm::completeGoalIfReached(const string &call_func) {
+        if (!closeToGoal(kReachedGoalDistance)) {
+            return false;
+        }
+
+        reportGoalStatus(GOAL_STATUS_REACHED);
+        gi_.new_goal = false;
+        finish_plan = true;
+        if (machine_state_ != WAIT_GOAL) {
+            ChangeState(call_func, WAIT_GOAL);
+        }
+        return true;
     }
 
     void Fsm::callReplanOnce() {
@@ -67,15 +135,20 @@ namespace fsm {
 
         RET_CODE ret_code = planner_ptr_->ReplanOnce(gi_.goal_p, gi_.goal_yaw, gi_.new_goal);
         if (ret_code == FAILED) {
-//            cout << YELLOW << " -- [Fsm] ReplanOnce failed." << RESET << endl;
-        } else { cout << GREEN << " -- [Fsm] ReplanOnce succeed." << RESET << endl; }
+            cout << YELLOW << " -- [Fsm] ReplanOnce failed." << RESET << endl;
+            setPlanningFail(true);
+        }
 
         if (ret_code == EMER) {
             ChangeState("ReplanTimerCallback", EMER_STOP);
         } else if (ret_code == NEW_TRAJ) {
             ChangeState("ReplanTimerCallback", GENERATE_TRAJ);
+        } else if (ret_code == NO_NEED) {
+            finish_plan = true;
+            setPlanningFail(false);
         } else if (ret_code == SUCCESS || ret_code == FINISH) {
             gi_.new_goal = false;
+            setPlanningFail(false);
             publishPolyTraj();
         }
 
@@ -90,11 +163,11 @@ namespace fsm {
         if (stop) {
             return;
         }
+        planner_ptr_->getRobotState(robot_state_);
+        updatePlannerState();
         static double fsm_start_time = ros_ptr_->getSimTime();
         double cur_t = (ros_ptr_->getSimTime() - fsm_start_time);
         static double last_print_t = 0.0;
-        planner_ptr_->getRobotState(robot_state_);
-
 
         if (cur_t - last_print_t > 1.0) {
             last_print_t = cur_t;
@@ -112,9 +185,6 @@ namespace fsm {
 
         switch (machine_state_) {
             case INIT: {
-                if (!started_) {
-                    return;
-                }
                 if ((!robot_state_.rcv || (ros_ptr_->getSimTime() - robot_state_.rcv_time) > 0.1)) {
                     cout << YELLOW << " -- [Fsm] No odom." << RESET << endl;
                 }
@@ -131,18 +201,10 @@ namespace fsm {
                 break;
             }
             case GENERATE_TRAJ: {
-                if (closeToGoal(0.1)) {
-                    ChangeState("MainFsmCallback", WAIT_GOAL);
-                    gi_.new_goal = false;
-                    finish_plan = true;
+                if (completeGoalIfReached("MainFsmCallback")) {
                     return;
                 }
                 int retcode = planner_ptr_->PlanFromRest(gi_.goal_p, gi_.goal_yaw, gi_.new_goal);
-                if (!planner_ptr_->goalValid()) {
-                    cout << YELLOW << " -- [Fsm] Goal is invalid, skip this goal." << RESET << endl;
-                    ChangeState("MainFsmCallback", WAIT_GOAL);
-                    return;
-                }
                 if (retcode == SUCCESS || retcode == FINISH) {
                     gi_.new_goal = false;
                     plan_from_rest_ = true;
@@ -150,18 +212,22 @@ namespace fsm {
                     if (retcode == FINISH) {
                         finish_plan = true;
                     }
+                    setPlanningFail(false);
 
                     publishPolyTraj();
 
                     ChangeState("MainFsmCallback", FOLLOW_TRAJ);
                 } else {
                     cout << YELLOW << " -- [Fsm] PlanFromRest failed, try replan." << RESET << endl;
-                    // ros::Duration(0.1).sleep();
+                    setPlanningFail(true);
                 }
                 replan_logs_.push_back(planner_ptr_->getLatestReplanLog());
                 break;
             }
             case FOLLOW_TRAJ: {
+                if (completeGoalIfReached("MainFsmCallback")) {
+                    return;
+                }
                 publishCurPoseToPath();
                 break;
             }
@@ -175,14 +241,14 @@ namespace fsm {
     }
 
     bool Fsm::closeToGoal(const double &thresh_dis) {
-        /// The close to goal should consider the the local shift
-        /// All goal should be in the known free on inf map.
-        /// The intermedia points should be in free space.
-        double dis = (robot_state_.p - gi_.goal_p).norm();
-        return dis < thresh_dis;
+        return (robot_state_.p - gi_.goal_p).norm() < thresh_dis;
     }
 
     void Fsm::setGoalPosiAndYaw(const Vec3f &p, const Quatf &q) {
+        goal_status_sent_ = false;
+        setPlanningFail(false);
+        finish_plan = false;
+        plan_from_rest_ = false;
 
         auto click_point = p;
         if (cfg_.click_height > -5) {
@@ -192,13 +258,12 @@ namespace fsm {
         if (planner_ptr_->getMap()->getNearestInfCellNot(GridType::OCCUPIED, click_point, gi_.goal_p, 3.0)) {
             cout << GREEN << " -- [Fsm] Get goal at " << RESET << gi_.goal_p.transpose() << endl;
         } else {
-            fmt::print(fg(fmt::color::indian_red), "Goal is deeply occupied, skip this goal.\n");
-            return;
+            gi_.goal_p = click_point;
+            fmt::print(fg(fmt::color::indian_red),
+                       "Goal is deeply occupied; planner will retry until the failure timeout.\n");
         }
 
-        if ((robot_state_.p - gi_.goal_p).norm() <
-            0.1) {
-            //                print(fg(color::gray), " -- [Rviz] Too close to goal, skip this target.\n");
+        if (completeGoalIfReached("GoalCallback")) {
             return;
         }
 
@@ -227,5 +292,8 @@ namespace fsm {
         fmt::print(fg(fmt::color::green), " -- [Fsm]: [{}] change state from [{}] to [{}].\n", call_func,
                    MACHINE_STATE_STR[int(machine_state_)], MACHINE_STATE_STR[int(new_state)]);
         machine_state_ = new_state;
+        if (new_state == WAIT_GOAL) {
+            setPlanningFail(false);
+        }
     }
 }

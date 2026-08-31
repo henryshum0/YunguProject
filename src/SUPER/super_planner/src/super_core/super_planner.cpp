@@ -82,7 +82,6 @@ namespace super_planner {
         gi_.goal_p = goal_p;
         gi_.goal_yaw = goal_yaw;
         gi_.new_goal = new_goal;
-        gi_.goal_valid = true;
         vec_Vec3f viz_pts{goal_p, robot_state_.p};
 
         {
@@ -173,7 +172,6 @@ namespace super_planner {
         gi_.goal_p = goal_p;
         gi_.goal_yaw = goal_yaw;
         gi_.new_goal = new_goal;
-        gi_.goal_valid = true;
         latest_replan.reset();
         latest_replan.setGoal(goal_p, goal_yaw, robot_state_);
 
@@ -605,7 +603,6 @@ namespace super_planner {
         // if need a geometry path
         if (temp_horizon > cfg_.resolution * 2) {
             /// start point TT + exp_traj start_WT
-//            double path_search_start_point_WT = guide_stamp.back() + guide_pos_traj.start_WT;
             // if the goal is close to the last point of the guide path, just add the goal to the guide path
             if ((guide_path.back() - gi_.goal_p).norm() < cfg_.resolution * 5) {
                 guide_stamp.push_back(guide_stamp.back() +
@@ -614,32 +611,6 @@ namespace super_planner {
                 // NO NEED
             } else {
                 vec_Vec3f new_path;
-                // project goal within the planning horizon
-//                const Vec3f dir = (gi_.goal_p - robot_state_.p).normalized();
-//                const double dis2goal = (gi_.goal_p - robot_state_.p).norm();
-//                Vec3f cadi_p = gi_.goal_p;
-//                if(dis2goal > cfg_.planning_horizon) {
-//                    double proj_l = cfg_.planning_horizon;
-//                    Vec3f cadi_p = robot_state_.p + dir * proj_l;
-//                    int max_iter = 100;
-//                    while(map_ptr_->isOccupiedInflate(cadi_p) && max_iter-- > 0) {
-//                        if(map_ptr_->getNearestInfCellNot(OCCUPIED, cadi_p, cadi_p, 1.0)) {
-//                            break;
-//                        }
-//                        proj_l -= 2.0;
-//                        if(proj_l < 1){
-//                            ros_ptr_->warn(" -- [SUPER] Project goal failed");
-//                            gi_.goal_valid = false;
-//                            return FAILED;
-//                        }
-//                        cadi_p = robot_state_.p + dir * proj_l;
-//                    }
-//                    if(max_iter <= 0) {
-//                        ros_ptr_->warn(" -- [SUPER] Project goal failed");
-//                        gi_.goal_valid = false;
-//                        return FAILED;
-//                    }
-//                }
                 if (!PathSearch(guide_path.back(), gi_.goal_p, temp_horizon, new_path)) {
                     ros_ptr_->warn(" -- [SUPER] PathSearch for new path failed");
                     return FAILED;
@@ -1159,10 +1130,6 @@ namespace super_planner {
         RET_CODE ret_code = astar_ptr_->pointToPointPathSearch(temp_start_point, goal, flag, temp_plannning_horizon,
                                                                path);
 
-        if(ret_code == INIT_ERROR){
-            gi_.goal_valid = false;
-            return false;
-        }
         //add may23, if failed on inf map, use prob map try again
 
         if (ret_code == NO_PATH) {

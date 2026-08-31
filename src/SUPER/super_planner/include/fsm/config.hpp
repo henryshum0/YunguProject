@@ -49,6 +49,9 @@ namespace fsm {
         bool click_yaw_en{};
         string cmd_topic, mpc_cmd_topic, click_goal_topic;
         double yaw_dot_max{};
+        /// How long (s) the planner must keep failing continuously before the
+        /// FAIL flag is published.
+        double planner_fail_time{2.0};
 
         Config() = default;
 
@@ -63,6 +66,7 @@ namespace fsm {
             loader.LoadParam("fsm/cmd_topic", cmd_topic, string("/planning/pos_cmd"));
             loader.LoadParam("fsm/mpc_cmd_topic", mpc_cmd_topic, string("/planning_cmd/mpc"));
             loader.LoadParam("fsm/click_goal_topic", click_goal_topic, string("/planning/click_goal_topic"));
+            loader.LoadParam("fsm/planner_fail_time", planner_fail_time, 2.0);
 
 
             loader.LoadParam("super_planner/yaw_dot_max", yaw_dot_max, 1.0, true);

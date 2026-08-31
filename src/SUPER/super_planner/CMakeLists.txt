@@ -24,7 +24,7 @@ string(TOUPPER $ENV{ROS_DISTRO} ROS_VERSION)
 message(STATUS "ROS version: ${ROS_VERSION}")
 
 # for CLION to search the package, user should change to his/her own relative location
-set(CMAKE_PREFIX_PATH ../../../install)
+set(CMAKE_PREFIX_PATH ../../../../install)
 include_directories(
         SYSTEM
         include
@@ -40,12 +40,23 @@ find_package(rclcpp REQUIRED)
 find_package(rog_map REQUIRED)
 find_package(mars_quadrotor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(rosidl_default_runtime REQUIRED)
+find_package(builtin_interfaces REQUIRED)
+
+#=================FOR messages ============================#
+rosidl_generate_interfaces(${PROJECT_NAME}
+        "msg/PlannerState.msg"
+        "msg/GoalStatus.msg"
+        DEPENDENCIES builtin_interfaces
+)
 
 
 set(includes
@@ -65,6 +76,7 @@ set(third_party_libs
 set(ros_libs
         rclcpp
         std_msgs
+        std_srvs
         mars_quadrotor_msgs
         sensor_msgs
         tf2_ros
@@ -74,6 +86,7 @@ set(ros_libs
         rog_map
         tf2_ros
         pcl_conversions
+        builtin_interfaces
 
 )
 
@@ -105,21 +118,24 @@ target_link_libraries(fsm_node PUBLIC
 ament_target_dependencies(fsm_node PUBLIC
         ${ros_libs}
 )
+# Link the generated PlannerState message library into fsm_node
+rosidl_get_typesupport_target(planner_msg_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(fsm_node PUBLIC ${planner_msg_target})
 
 #=================INSTALL all targets ============================#
 
 install(
         TARGETS
+        super
         fsm_node
         RUNTIME DESTINATION lib/${PROJECT_NAME}
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib
-        RUNTIME DESTINATION bin
         INCLUDES DESTINATION include
-        RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_export_include_directories(${includes})
+ament_export_dependencies(rosidl_default_runtime builtin_interfaces)
 
 install(DIRECTORY include/
         DESTINATION include/

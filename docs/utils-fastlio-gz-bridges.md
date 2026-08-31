@@ -2,7 +2,7 @@
 
 仿真栈(Gazebo ⇄ ROS 2 ⇄ FAST-LIO ⇄ PX4)之间的胶水层分布在三处:
 
-- **`src/lidar_bridge/`** — ROS 2 包(ament_python),双激光雷达数据流与转发的节点,由 `colcon build` 安装,经 `ros2 run lidar_bridge <node>` 启动。
+- **`src/lidar_bridge/`** — ROS 2 包(ament_cmake, C++ 实现),双激光雷达数据流与转发的节点,由 `colcon build` 安装,经 `ros2 run lidar_bridge <node>` 启动。
 - **`src/offboard/scripts/`** — FAST-LIO→PX4 桥与可视化辅助节点(由 start_fastlio.sh 直接 python3 启动,不随 offboard.launch.py)。
 - **`utils/`** — 顶层 shell 启动器(`start_sim.sh` / `start_fastlio.sh` / `stop_sim.sh` / `bridge.sh`)。
 

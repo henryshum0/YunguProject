@@ -1,0 +1,47 @@
+digraph ModuleDependencyGraph {
+  graph [
+    rankdir=TB,
+    bgcolor="white",
+    pad="0.25",
+    nodesep="0.8",
+    ranksep="1.45",
+    splines=polyline,
+    fontname="Helvetica"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    color="#28536B",
+    fillcolor="#EAF4F7",
+    fontname="Helvetica",
+    fontsize=12,
+    margin="0.20,0.12"
+  ];
+  edge [
+    color="#28536B",
+    fontname="Helvetica",
+    fontsize=9,
+    arrowsize=0.72
+  ];
+
+  Gazebo [label="Gazebo\ngz-sim", fillcolor="#FEF5E7", color="#CA6F1E"];
+  PX4 [label="PX4 SITL\nEKF2 + offboard control", fillcolor="#FDEDEC", color="#B03A2E"];
+  Adapter [label="gz_sensor_interface\nsensor + world-frame adapter", fillcolor="#F4F6F7", color="#566573"];
+  FastLio [label="FAST-LIO\nLiDAR-inertial odometry", fillcolor="#EBF5FB", color="#2874A6"];
+  Super [label="SUPER\nfsm_node trajectory planner", fillcolor="#E8F8F5", color="#148F77"];
+  Offboard [label="offboard_fsm\noffboard_node", fillcolor="#EAF2F8", color="#2E86C1"];
+  Goals [label="waypoint client / RViz", fillcolor="#FBFCFC", color="#7B7D7D"];
+
+  Gazebo -> PX4 [dir=both, label="GZ bridge:\nsensors / actuators"];
+  Gazebo -> Adapter [label="ROS-GZ bridge:\nLiDAR, IMU, truth odom"];
+  PX4 -> Adapter [label="vehicle odometry"];
+  Adapter -> FastLio [label="fused cloud + IMU"];
+  FastLio -> PX4 [label="external visual odometry"];
+  FastLio -> Offboard [label="LIO health"];
+  Adapter -> Super [label="/gz/point_cloud_super\n/gz/odom_super"];
+  Goals -> Offboard [label="/waypoint_pose"];
+  Offboard -> Super [label="/goal_pose\nreset service"];
+  Super -> Offboard [label="/planning/pos_cmd\ngoal + planner status"];
+  Offboard -> PX4 [label="trajectory setpoints"];
+  PX4 -> Offboard [label="local position, status, landing state"];
+}

@@ -1,0 +1,76 @@
+# ============================================================================
+# config/offboard/topics.yaml — centralized inter-module communication topics.
+# ============================================================================
+# Defines every ROS 2 topic exchanged between the modules of the stack:
+#   offboard fsm (offboard_node), SUPER (super_planner/fsm_node + super_bridge),
+#   FAST-LIO (fastlio_mapping), gz_sensor_interface and visualization.
+#
+# Each module has its own INPUT (subscribe) / OUTPUT (publish) topics; the
+# coordinate / data conversion between modules is done by the interaction
+# interface nodes (super_bridge, visual_tf, fastlio_visual, lidar_merge).
+# Read by offboard.launch.py (via config/sim_config.py get_value).
+
+# --- offboard fsm (offboard_node) -------------------------------------------
+offboard_fsm:
+  # INPUT
+  in:
+    local_pos:       /fmu/out/vehicle_local_position_v1     # PX4 local position (NED)
+    vehicle_status:  /fmu/out/vehicle_status_v4
+    vehicle_land_detected: /fmu/out/vehicle_land_detected   # PX4 landing detector
+    vehicle_odom:    /fmu/out/vehicle_odometry        # PX4 odom (NED)
+    pos_cmd:         /planning/pos_cmd                # from SUPER fsm_node
+    waypoint_buffer: /waypoint_buffer                 # goal_marker_node
+    waypoint_pose:   /waypoint_pose                   # goal_marker_node intake (RViz 2D goal)
+    takeoff_cmd:     /takeoff_cmd
+    land_cmd:        /land_cmd
+  # OUTPUT
+  out:
+    goal_pose:       /goal_pose                       # to SUPER fsm_node
+    pos_setpoint:    /fmu/in/trajectory_setpoint
+    planner_reset:   /fsm_node/reset             # service request to SUPER
+    waypoint_markers: /waypoint_markers
+
+# --- SUPER (super_planner / fsm_node) -----------------------------------------
+# SUPER's world cloud + odom are produced by gz_sensor_interface/super_lidar.
+super:
+  # INPUT
+  in:
+    goal_pose:       /goal_pose                       # from offboard fsm
+    cloud:           /gz/point_cloud_super       # world cloud from super_lidar
+    odom:            /gz/odom_super                   # world odom from super_lidar
+  # OUTPUT
+  out:
+    pos_cmd:         /planning/pos_cmd                # to offboard fsm
+    fsm_path:        /fsm/path
+    goal_status:     /fsm/goal_status
+    planner_state:   /fsm/planner_state
+    visualization:   "/visualization/{frontend_path,exp_traj,exp_sfc,ciri_debug_mkr,goal}"
+
+
+# --- FAST-LIO (fastlio_mapping) ----------------------------------------------
+fastlio:
+  # INPUT
+  in:
+    cloud:           /swan_gamma_v2/scan_horizontal/points_body
+    imu:             /livox/imu
+  # OUTPUT
+  out:
+    cloud_registered: /cloud_registered              # camera_init frame
+    odometry:         /Odometry                      # camera_init -> body
+    lio_state:        fastlio/lio_state              # FAST-LIO health (offboard_fsm)
+    # FAST-LIO odometry fed into PX4 EKF2 as external vision (published by
+    # offboard_fsm/fastlio_handler, the C++ replacement for fastlio_px4_bridge.py).
+    vehicle_visual_odometry: /fmu/in/vehicle_visual_odometry
+
+# --- visualization ------------------------------------------------------------
+visualization:
+  in:
+    fastlio_cloud:   /cloud_registered               # FAST-LIO camera_init
+    fastlio_odom:    /Odometry
+    lidar_slam_odom: /lidar_slam/odom
+    truth_odom:      /gz/ground_truth/odom
+  out:
+    fastlio_cloud:   /fastlio_cloud                  # world frame
+    fastlio_odom:    /fastlio_odom
+    gt_path:         /gt_path
+    birdview_cloud:  /birdview_cloud
