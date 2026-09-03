@@ -4,7 +4,7 @@ This launch is intentionally thin: it reads all tuning parameters from
 config/offboard/offboard_fsm.yaml and all inter-module topics from
 config/offboard/topics.yaml, then configures and starts the nodes:
 
-  - fastlio_mapping + fastlio_handler (FAST-LIO layer + PX4 visual-odometry bridge)
+  - optional fastlio_mapping + fastlio_handler (FAST-LIO + PX4 visual-odometry bridge)
   - offboard_node (state machine)
   - super_bridge (PX4 odom + fused cloud -> SUPER world cloud/odom)
   - goal_marker_node (waypoint ingestion + marking)
@@ -188,15 +188,19 @@ def generate_launch_description():
             for name, val in topic_args.items()
         ],
         DeclareLaunchArgument('use_sim_time', default_value=use_sim_time),
+        DeclareLaunchArgument(
+            'use_fastlio', default_value='true',
+            description='Launch FAST-LIO and its PX4 visual-odometry bridge.'),
         DeclareLaunchArgument('fastlio_config', default_value=default_fastlio_config),
         DeclareLaunchArgument('planner_config', default_value=fsm_config_path),
 
-        # FAST-LIO layer (always runs; consumes fused cloud + IMU from
-        # gz_sensor_interface, launched separately).
+        # Optional FAST-LIO layer; consumes fused cloud + IMU from
+        # gz_sensor_interface, launched separately.
         # FAST-LIO reads its input topics (fused cloud + IMU) from topics.yaml;
         # these override the defaults inside fastlio_swan_gamma_effect.yaml.
         Node(package='fast_lio', executable='fastlio_mapping', name='fastlio_mapping',
              output='screen',
+             condition=IfCondition(LaunchConfiguration('use_fastlio')),
              parameters=[
                  LaunchConfiguration('fastlio_config'),
                  {
@@ -212,6 +216,7 @@ def generate_launch_description():
         # scripts/fastlio_px4_bridge.py).
         Node(package='offboard_fsm', executable='fastlio_handler',
              name='fastlio_handler', output='screen',
+             condition=IfCondition(LaunchConfiguration('use_fastlio')),
              parameters=[{
                  'odom_topic': topic('fastlio.out.odometry', '/Odometry'),
                  'ev_topic': topic('fastlio.out.vehicle_visual_odometry',

@@ -1,0 +1,5 @@
+geometry_msgs/PolygonStamped search_area
+---
+bool success
+string message
+nav_msgs/Path waypoints

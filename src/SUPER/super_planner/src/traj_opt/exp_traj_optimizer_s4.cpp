@@ -536,7 +536,7 @@ bool ExpTrajOpt::setupProblemAndCheck() {
     if (opt_vars.default_init) {
         defaultInitialization();
     } else {
-        opt_vars.times *= 0.8;
+        opt_vars.times *= 1.0;
     }
 
     if (std::isnan(opt_vars.times.sum())) {

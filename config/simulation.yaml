@@ -1,5 +1,5 @@
 # ============================================================================
-# benchmark simulation configuration
+# yungu simulation configuration
 # ============================================================================
 # Central place to choose the Gazebo vehicle model, the map/world, and the GZ
 # topics bridged into ROS 2. This file is read by:

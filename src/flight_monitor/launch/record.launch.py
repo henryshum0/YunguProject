@@ -10,7 +10,7 @@ def generate_launch_description():
                               description='Goal click topic (geometry_msgs/PoseStamped)'),
         DeclareLaunchArgument('cmd_topic', default_value='/planning/pos_cmd',
                               description='SUPER command trajectory topic'),
-        DeclareLaunchArgument('odom_topic', default_value='/lidar_slam/odom',
+        DeclareLaunchArgument('odom_topic', default_value='/gz/odom_super',
                               description='Real drone odometry topic (nav_msgs/Odometry)'),
         DeclareLaunchArgument('log_dir', default_value='',
                               description='Log directory (empty = <project>/cmd_log)'),
@@ -31,7 +31,7 @@ def generate_launch_description():
             parameters=[{
                 'goal_topic': LaunchConfiguration('goal_topic'),
                 'cmd_topic': LaunchConfiguration('cmd_topic'),
-                'odom_topic': LaunchConfiguration('odom_topic'),
+                'odom_topic': '/gz/odom_super',
                 'log_dir': LaunchConfiguration('log_dir'),
                 'min_cmd_rate': LaunchConfiguration('min_cmd_rate'),
                 'viz_en': LaunchConfiguration('viz_en'),

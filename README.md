@@ -40,8 +40,8 @@ The stack runs in two layers (two terminals):
 #   IMU + truth odom)
 ros2 launch gz_sensor_interface sensor_sensors.launch.py
 
-# Terminal 3 — perception + planning + offboard (FAST-LIO always runs; SUPER uses
-#   PX4 odometry via super_lidar; offboard_fsm drives the mission)
+# Terminal 3 — perception + planning + offboard (FAST-LIO is enabled by default;
+#   SUPER uses PX4 odometry via super_lidar; offboard_fsm drives the mission)
 ros2 launch offboard offboard.launch.py
 
 # Terminal 4 — visualization (TF tree + /gt_path + /fastlio_cloud + RViz windows,
@@ -63,11 +63,13 @@ Every config value can be overridden without editing the file:
 | `GZ_VERSION` | `harmonic` | gz-transport version for `ros_gz_bridge` |
 | `HEADLESS=1` | *(unset)* | Run Gazebo without its GUI (server only) |
 | `rviz:=false`, `rviz_freelook:=false` | `true` | Toggle the two RViz windows in `visualization/visualization.launch.py` |
+| `use_fastlio:=false` | `true` | Do not launch `fastlio_mapping` or `fastlio_handler`; PX4 uses its normal estimator inputs instead of FAST-LIO external vision. |
 
 ```bash
 PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./utils/start_sim.sh
 HEADLESS=1 ./utils/start_sim.sh
 ros2 launch offboard offboard.launch.py
+ros2 launch offboard offboard.launch.py use_fastlio:=false
 ros2 launch visualization visualization.launch.py rviz:=false
 ```
 

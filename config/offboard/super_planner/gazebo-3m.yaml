@@ -3,7 +3,7 @@ fsm:
   click_goal_topic: "/goal_pose"
   click_height: -6
   click_yaw_en: true
-  replan_rate: 10.0
+  replan_rate: 20.0
   cmd_topic: "/planning/pos_cmd"
   mpc_cmd_topic: "/planning_cmd/poly_traj"
   timer_en: true
@@ -23,16 +23,16 @@ super_planner:
   corridor_bound_dis: 1.0
   # increasing the corridor length decreases the number of polynomials to solve
   # thus increase the smoothness with less constraints.
-  corridor_line_max_length: 8.0
+  corridor_line_max_length: 10.0
   safe_corridor_line_max_length: 8.0
   iris_iter_num: 2
   obs_skip_num: 2
   replan_forward_dt: 0.1
-  planning_horizon: 8.0
+  planning_horizon: 10.0
   sensing_horizon: -1
   receding_dis: 1.0
   robot_r: 0.6
-  yaw_dot_max: 1
+  yaw_dot_max: 2
   # Yaw mode: 1 heading to velocity, 2 heading to goal
   yaw_mode: 1
   mpc_horizon: 15
@@ -44,11 +44,11 @@ traj_opt:
 
   boundary:
     max_vel: 3.0
-    max_acc: 4.0
-    max_jerk: 60.0
+    max_acc: 3.0
+    max_jerk: 50.0
     max_omg: 2.6
-    max_acc_thr: 12.0
-    min_acc_thr: 0.0
+    max_acc_thr: 14.0
+    min_acc_thr: 5.0
     penna_margin: 0.05
 
   exp_traj:
@@ -57,17 +57,17 @@ traj_opt:
     energy_cost_type: 4
     block_energy_cost: false
     opt_accuracy: 5.0e-6
-    scale_factor: 1
-    integral_reso: 15
+    scale_factor: 2
+    integral_reso: 10
     smooth_eps: 0.1
-    penna_t: 1.0e+9
+    penna_t: 5.0e+6
     penna_pos: 2.0e+11
     penna_vel: 9.0e+9
-    penna_acc: 5.0e+11
+    penna_acc: 1.0e+12
     penna_jerk: -5.0e+9
     penna_attract: 3.0e+6
-    penna_omg: 3e+8
-    penna_thr: 8e+7
+    penna_omg: 1e+10
+    penna_thr: 1e+10
 
   backup_traj:
     uniform_time_en: true
@@ -77,12 +77,12 @@ traj_opt:
     block_energy_cost: true
     opt_accuracy: 1.0e-5
     scale_factor: 1.0
-    integral_reso: 12
+    integral_reso: 10
     smooth_eps: 0.01
-    penna_t: 100.0
-    penna_ts: 1.0e+6
+    penna_t: 70.0
+    penna_ts: 1.0e+5
     penna_pos: 1.0e+10
-    penna_vel: 1.0e+8
+    penna_vel: 1.0e+9
     penna_acc: 1.0e+8
     penna_jerk: -1.0e+6
     penna_omg: 1e+7
@@ -98,7 +98,7 @@ traj_opt:
 
 
 astar:
-  map_voxel_num: [ 500, 500, 100 ]
+  map_voxel_num: [ 100, 100, 50 ]
   visual_process: false
   allow_diag: true
   # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN
@@ -107,9 +107,9 @@ astar:
 
 
 rog_map:
-  resolution: 0.1
+  resolution: 0.3
   inflation_resolution: 0.4
-  inflation_step: 3
+  inflation_step: 2
   unk_inflation_en: false
   unk_inflation_step: 1
   map_size: [ 100, 100, 10 ]
@@ -155,7 +155,7 @@ rog_map:
     # The frame rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.
     frame_rate: 0
     # visualization range along the odom [m].
-    range: [ 15, 15,4 ]
+    range: [ 15, 15, 15 ]
     frame_id: "world"
     pub_unknown_map_en: false
 
