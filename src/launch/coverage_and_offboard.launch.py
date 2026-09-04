@@ -1,9 +1,9 @@
 """Start the coverage planner together with the offboard FSM stack.
 
 This is a workspace-level launch file and is intended to be run directly after
-sourcing the YunguProject overlay.  The included offboard launch continues to
-load its controller, topic, and simulation settings from ``config/`` at the
-workspace root.  Coverage planner mission/map settings are supplied through
+sourcing the YunguProject overlay. The included offboard launch continues to
+load its controller, topic, and simulation settings from
+``src/navigation/config/``. Coverage planner mission/map settings are supplied through
 ``config_file``.
 """
 
@@ -30,7 +30,7 @@ def generate_launch_description() -> LaunchDescription:
             "config_file",
             default_value=str(default_config_file),
             description=(
-                "Absolute path to a coverage_planner schema-1.1 JSON file. "
+                "Absolute path to a coverage_planner schema-1.2 JSON file. "
                 "Its map_file is resolved relative to that JSON."
             ),
         ),

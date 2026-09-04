@@ -87,21 +87,17 @@ def parse_config(
         root,
         "root",
         allowed={
-            "schema_version", "map_file", "frame_id", "search_area", "flight",
+            "schema_version", "map_file", "frame_id", "flight",
             "camera", "planner", "output_topics",
         },
-        required={"schema_version", "map_file", "search_area", "flight", "camera"},
+        required={"schema_version", "map_file", "flight", "camera"},
     )
     schema_version = _string(root, "schema_version", "root")
-    if schema_version != "1.1":
-        raise ConfigError("schema_version must be '1.1'")
+    if schema_version != "1.2":
+        raise ConfigError("schema_version must be '1.2'")
     map_reference = _string(root, "map_file", "root")
     parsed_map = map_config if isinstance(map_config, MapConfig) else parse_map_config(map_config)
     frame_id = _string(root, "frame_id", "root", default="map")
-
-    search_data = _nested_object(root, "search_area", "root")
-    _fields(search_data, "search_area", allowed={"points"}, required={"points"})
-    search_points = _polygon_points(search_data["points"], "search_area.points")
 
     flight_data = _nested_object(root, "flight", "root")
     _fields(
@@ -161,7 +157,6 @@ def parse_config(
         map_file=map_file or map_reference,
         frame_id=frame_id,
         origin=parsed_map.origin,
-        search_area_points=search_points,
         occupied_areas=parsed_map.occupied_areas,
         flight=flight,
         camera=camera,

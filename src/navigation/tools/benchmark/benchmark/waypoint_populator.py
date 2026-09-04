@@ -68,8 +68,8 @@ def serpentine(map_x: float, map_y: float, spacing: float, margin: float):
 def _default_config_path():
     root = find_project_root(Path(__file__).resolve())
     if root is None:
-        root = Path(__file__).resolve().parents[2]
-    cand = root / 'src' / 'benchmark' / 'config' / 'benchmark.yaml'
+        root = Path(__file__).resolve().parents[5]
+    cand = root / 'src' / 'navigation' / 'tools' / 'benchmark' / 'config' / 'benchmark.yaml'
     return str(cand) if cand.is_file() else None
 
 

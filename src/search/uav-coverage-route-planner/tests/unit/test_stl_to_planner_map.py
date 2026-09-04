@@ -10,14 +10,20 @@ import pytest
 from coverage_planner.io import parse_map_config
 
 
-WORKSPACE = Path(__file__).resolve().parents[4]
+WORKSPACE = Path(__file__).resolve().parents[5]
 UTILITY_PATH = WORKSPACE / "util" / "stl_to_planner_map.py"
-if not UTILITY_PATH.is_file():
-    pytest.skip("workspace STL conversion utility is not present", allow_module_level=True)
-_SPEC = importlib.util.spec_from_file_location("stl_to_planner_map", UTILITY_PATH)
-assert _SPEC is not None and _SPEC.loader is not None
-converter = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(converter)
+converter = None
+if UTILITY_PATH.is_file():
+    _SPEC = importlib.util.spec_from_file_location("stl_to_planner_map", UTILITY_PATH)
+    assert _SPEC is not None and _SPEC.loader is not None
+    converter = importlib.util.module_from_spec(_SPEC)
+    _SPEC.loader.exec_module(converter)
+
+
+pytestmark = pytest.mark.skipif(
+    converter is None,
+    reason="workspace STL conversion utility is not present",
+)
 
 
 def _cube(x: float, y: float, z: float, size: float, height: float):

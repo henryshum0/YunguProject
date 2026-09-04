@@ -31,7 +31,11 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY config docs launch rviz
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
+install(DIRECTORY docs launch rviz
   DESTINATION share/${PROJECT_NAME}
 )
 

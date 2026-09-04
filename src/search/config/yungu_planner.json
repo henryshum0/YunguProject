@@ -1,15 +1,10 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "map_file": "yungu_map.json",
   "frame_id": "map",
   "output_topics": {
     "waypoints": "/coverage_planner/waypoints",
     "markers": "/coverage_planner/markers"
-  },
-  "search_area": {
-    "points": [
-      [10.0, 10.0], [120.0, 10.0], [120.0, 80.0], [10.0, 80.0]
-    ]
   },
   "flight": {
     "altitude_m": 25.0,

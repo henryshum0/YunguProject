@@ -1,8 +1,8 @@
 # ============================================================================
-# config/offboard/offboard_fsm.yaml — offboard state machine parameters.
+# src/navigation/config/offboard/offboard_fsm.yaml — offboard state machine parameters.
 # ============================================================================
 # Tuning parameters for the PX4 offboard state machine (offboard_node in
-# src/offboard). Read by offboard.launch.py (via config/sim_config.py).
+# src/navigation/offboard_fsm). Read by offboard.launch.py.
 #
 # Module INPUT / OUTPUT topics are defined in topics.yaml; only tuning
 # parameters live here.
@@ -49,7 +49,8 @@ offboard_fsm:
 
   # --- SUPER planner integration (driven by this state machine) -------------
   # SUPER planner config: a file name (resolved against
-  # config/offboard/super_planner/, falling back to super_planner/config/) or an
+  # src/navigation/config/offboard/super_planner/, falling back to
+  # SUPER's super_planner/config/) or an
   # absolute path.
   planner_config: gazebo-3m.yaml
 
@@ -67,7 +68,7 @@ offboard_fsm:
 
   # Raw lidar cloud topic read by super_bridge (then republished to SUPER as
   # /cloud_registered_px4). Defaults to /<model>/scan/points from
-  # config/simulation.yaml; override e.g. with the fused base_link cloud
+  # src/navigation/config/simulation.yaml; override e.g. with the fused base_link cloud
   # /swan_gamma_v2/scan/points_fused. Leave empty to use the default.
   cloud_in_topic: "/swan_gamma_v2/scan/points_fused"
 
@@ -77,6 +78,7 @@ offboard_fsm:
   visualization: true
 
   # --- FAST-LIO integration --------------------------------------------------
-  # FAST-LIO params file: a file name resolved against config/offboard/, or an
+  # FAST-LIO params file: a file name resolved against
+  # src/navigation/config/offboard/, or an
   # absolute path.
   fastlio_config: fastlio_swan_gamma_effect.yaml

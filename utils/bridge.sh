@@ -2,7 +2,7 @@
 #
 # Launch the GZ <-> ROS bridge + TF bridge for the Yungu sim stack.
 # The topics to bridge, and whether to launch the parameter_bridge / TF bridge,
-# are read from config/simulation.yaml (the `bridge` section).
+# are read from src/navigation/config/simulation.yaml (the `bridge` section).
 #
 # Usage:
 #   ./bridge.sh            # bridge + TF only
@@ -14,12 +14,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SIM_CONFIG="${WORKSPACE}/config/simulation.yaml"
-SIM_CONFIG_HELPER="${WORKSPACE}/config/sim_config.py"
+NAVIGATION_CONFIG_DIR="${WORKSPACE}/src/navigation/config"
+SIM_CONFIG="${YUNGU_SIM_CONFIG:-${NAVIGATION_CONFIG_DIR}/simulation.yaml}"
+SIM_CONFIG_HELPER="${NAVIGATION_CONFIG_DIR}/sim_config.py"
 BRIDGE_YAML=""
 
 if [[ ! -f "${SIM_CONFIG}" || ! -f "${SIM_CONFIG_HELPER}" ]]; then
-  echo "ERROR: missing files for the bridge (simulation config, config helper)." >&2
+  echo "ERROR: missing navigation simulation config or config helper." >&2
   exit 1
 fi
 

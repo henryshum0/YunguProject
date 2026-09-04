@@ -22,9 +22,11 @@ from coverage_planner.routing.visibility import (
     _dijkstra,
     shortest_collision_free_path,
 )
-from coverage_planner.runtime import PlanningFailed, plan_from_config
+from coverage_planner.runtime import PlanningFailed, plan_for_search_area
 
 ROOT = Path(__file__).resolve().parents[2]
+CONFIG_DIR = ROOT.parent / "config"
+SEARCH_AREA = ((10.0, 10.0), (80.0, 10.0), (80.0, 60.0), (10.0, 60.0))
 
 
 def test_camera_footprint_and_lane_spacing() -> None:
@@ -83,14 +85,14 @@ def test_visibility_route_matches_expected_obstacle_aware_distance() -> None:
 
 @pytest.mark.parametrize("method", ["global_scanline", "bcd"])
 def test_end_to_end_planning_is_deterministic_and_returns_sparse_closed_route(method: str) -> None:
-    config = load_config(ROOT / "config/example_planner.json")
+    config = load_config(CONFIG_DIR / "example_planner.json")
     config = replace(config, planner=replace(
         config.planner,
         coverage_generation_method=method,  # type: ignore[arg-type]
         scan_direction_deg=90.0,
     ))
-    first = plan_from_config(config)
-    second = plan_from_config(config)
+    first = plan_for_search_area(config, SEARCH_AREA)
+    second = plan_for_search_area(config, SEARCH_AREA)
     assert first.planning_route == second.planning_route
     assert first.coverage_requirement_met
     assert first.coverage_generation_method == method
@@ -104,11 +106,11 @@ def test_end_to_end_planning_is_deterministic_and_returns_sparse_closed_route(me
 
 
 def test_required_coverage_failure_reports_patch_ids(monkeypatch) -> None:
-    config = load_config(ROOT / "config/example_planner.json")
+    config = load_config(CONFIG_DIR / "example_planner.json")
     failed = SimpleNamespace(
         coverage_requirement_met=False,
         unreachable_patch_ids=("patch_001", "patch_009"),
     )
     monkeypatch.setattr("coverage_planner.runtime.CoveragePlanner.plan", lambda *args, **kwargs: failed)
     with pytest.raises(PlanningFailed, match="patch_001, patch_009"):
-        plan_from_config(config)
+        plan_for_search_area(config, SEARCH_AREA)

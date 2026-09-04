@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from shapely.geometry import Polygon
-
 from coverage_planner.models.camera import CameraConfig
 from coverage_planner.models.semantic_map import (
     PolygonShape,
@@ -73,18 +71,16 @@ class StartupConfig:
     map_file: str
     frame_id: str
     origin: Origin
-    search_area_points: tuple[tuple[float, float], ...]
     occupied_areas: tuple[OccupiedArea, ...]
     flight: FlightConfig
     camera: CameraConfig
     planner: PlannerConfig
     output_topics: OutputTopics
 
-    @property
-    def search_geometry(self) -> Polygon:
-        return Polygon(self.search_area_points)
-
-    def to_semantic_map(self) -> SemanticMap:
+    def to_semantic_map(
+        self, search_area_points: tuple[tuple[float, float], ...],
+    ) -> SemanticMap:
+        """Build a semantic map for the search boundary supplied by the service."""
         properties = SemanticProperties(
             elevation_min_m=self.flight.ground_elevation_m,
             elevation_max_m=self.flight.ground_elevation_m,
@@ -94,4 +90,4 @@ class StartupConfig:
             SemanticNode(area.id, properties, PolygonShape(area.points))
             for area in self.occupied_areas
         )
-        return SemanticMap(SearchArea(self.search_area_points), nodes)
+        return SemanticMap(SearchArea(search_area_points), nodes)

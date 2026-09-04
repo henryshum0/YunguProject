@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon
 
 from coverage_planner.geometry import build_effective_search_area
 from coverage_planner.io import ConfigError, load_config, parse_config, parse_map_config
@@ -15,9 +15,8 @@ from coverage_planner.routing import select_flight_obstacles
 
 def valid_planner_payload() -> dict[str, object]:
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "map_file": "map.json",
-        "search_area": {"points": [[0, 0], [20, 0], [20, 10], [0, 10]]},
         "flight": {"altitude_m": 10},
         "camera": {
             "horizontal_fov_deg": 60,
@@ -37,14 +36,9 @@ def valid_map_payload() -> dict[str, object]:
     }
 
 
-def test_defaults_and_repeated_closing_point_are_normalized() -> None:
-    planner = valid_planner_payload()
-    planner["search_area"] = {
-        "points": [[0, 0], [20, 0], [20, 10], [0, 10], [0, 0]],
-    }
-    config = parse_config(planner, valid_map_payload())
+def test_defaults_are_loaded_without_a_search_area() -> None:
+    config = parse_config(valid_planner_payload(), valid_map_payload())
     assert config.frame_id == "map"
-    assert config.search_area_points == ((0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0))
     assert config.origin.x == 1.0
     assert config.flight.ground_elevation_m == 0.0
     assert config.flight.horizontal_clearance_m == 3.0
@@ -64,12 +58,10 @@ def test_defaults_and_repeated_closing_point_are_normalized() -> None:
     [
         (lambda value: value.update({"unexpected": 1}), "unknown fields"),
         (lambda value: value["camera"].update({"pitch_deg": -90}), "unknown fields"),
-        (lambda value: value.update({"schema_version": "1.0"}), "schema_version"),
+        (lambda value: value.update({"schema_version": "1.1"}), "schema_version"),
         (lambda value: value.pop("map_file"), "missing required fields"),
         (lambda value: value.update({"origin": {"x": 1, "y": 2}}), "unknown fields"),
-        (lambda value: value.update({"search_area": {
-            "points": [[0, 0], [10, 10], [0, 10], [10, 0]],
-        }}), "valid simple polygon"),
+        (lambda value: value.update({"search_area": {"points": []}}), "unknown fields"),
         (lambda value: value.update({"output_topics": {
             "waypoints": "waypoints", "markers": "/markers",
         }}), "absolute ROS topic name"),
@@ -134,8 +126,9 @@ def test_overlapping_occupied_areas_are_accepted_and_become_hard_obstacles() -> 
         {"id": "b", "points": [[8, 4], [14, 4], [14, 9], [8, 9]]},
     ]
     config = parse_config(valid_planner_payload(), map_payload)
-    semantic_map = config.to_semantic_map()
-    effective = build_effective_search_area(semantic_map, config.search_geometry)
+    points = ((0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0))
+    semantic_map = config.to_semantic_map(points)
+    effective = build_effective_search_area(semantic_map, Polygon(points))
     obstacles = select_flight_obstacles(
         semantic_map,
         flight_altitude_m=config.flight.altitude_m,

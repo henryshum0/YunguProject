@@ -1,8 +1,8 @@
 # coverage_planner
 
-`coverage_planner` is a ROS 2 Humble node that loads a single-UAV coverage map at startup and
-plans on demand. A successful service request publishes a sparse navigation `Path` and RViz
-markers from local ENU JSON geometry.
+`coverage_planner` is a ROS 2 Humble node that loads static map and planning settings at startup.
+Every search boundary, plan result, and optional topic publication is driven by the
+`PlanCoverage` service.
 
 The package targets Ubuntu 22.04, ROS 2 Humble, and Python 3.10. It uses system Python—no pip,
 virtual environment, or uv is required.
@@ -26,7 +26,7 @@ If this workspace was built with a stale virtual-environment interpreter, add
 
 ## Run and visualize
 
-The required `config_file` parameter is the planner (mission) JSON. Its `map_file` may be an
+The required `config_file` parameter is the planner settings JSON. Its `map_file` may be an
 absolute path or a path relative to the planner JSON:
 
 ```bash
@@ -82,20 +82,18 @@ ros2 launch coverage_planner coverage_planner_rviz.launch.py \
 
 ## Configuration files
 
-Planner JSON uses schema `1.1`. It contains mission-specific settings, including the coverage
-boundary; it does not contain `origin` or `occupied_areas`.
+Planner JSON uses schema `1.2`. It contains static flight, camera, route, and output settings;
+it does not contain `origin`, `occupied_areas`, or a search area. The service request is the
+only source of the search boundary.
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "map_file": "yungu_map.json",
   "frame_id": "map",
   "output_topics": {
     "waypoints": "/coverage_planner/waypoints",
     "markers": "/coverage_planner/markers"
-  },
-  "search_area": {
-    "points": [[-200.0, -100.0], [200.0, -100.0], [200.0, 100.0], [-200.0, 100.0]]
   },
   "flight": {"altitude_m": 25.0},
   "camera": {
@@ -144,7 +142,7 @@ additional Python packages. Run it from `/home/windshape/YunguProject`:
 ```bash
 python3 util/stl_to_planner_map.py \
   VisionFlow-PX4/Tools/simulation/gz/worlds/yungu_collider.stl \
-  --output src/uav-coverage-route-planner/config/yungu_map.json
+  --output src/search/config/yungu_map.json
 ```
 
 The Yungu world references the mesh at ENU origin with no scale or pose, so no coordinate

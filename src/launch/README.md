@@ -24,13 +24,13 @@ ros2 launch /home/windshape/YunguProject/src/launch/coverage_and_offboard.launch
 The included `offboard_fsm` launcher retains its existing workspace
 configuration files:
 
-- `config/simulation.yaml`
-- `config/offboard/offboard_fsm.yaml`
-- `config/offboard/topics.yaml`
-- `config/offboard/fastlio_swan_gamma_effect.yaml`
+- `src/navigation/config/simulation.yaml`
+- `src/navigation/config/offboard/offboard_fsm.yaml`
+- `src/navigation/config/offboard/topics.yaml`
+- `src/navigation/config/offboard/fastlio_swan_gamma_effect.yaml`
 
 In particular, its `use_sim_time` value is read from
-`config/offboard/offboard_fsm.yaml`; the combined launcher does not override it.
+`src/navigation/config/offboard/offboard_fsm.yaml`; the combined launcher does not override it.
 
 FAST-LIO is enabled by default. Disable it for controller/planner testing with
 `use_fastlio:=false`. The combined launch starts the coverage planning service

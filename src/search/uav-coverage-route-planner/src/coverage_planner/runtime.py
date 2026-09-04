@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from shapely.geometry import Polygon
+
 from coverage_planner.models.config import StartupConfig
 from coverage_planner.planner import CoveragePlanner, PlanResult
 
@@ -10,10 +12,14 @@ class PlanningFailed(RuntimeError):
     """Raised when planning completes without satisfying required coverage."""
 
 
-def plan_from_config(config: StartupConfig) -> PlanResult:
+def plan_for_search_area(
+    config: StartupConfig,
+    search_area_points: tuple[tuple[float, float], ...],
+) -> PlanResult:
+    """Plan only for a search boundary supplied by a service request."""
     result = CoveragePlanner().plan(
-        semantic_map=config.to_semantic_map(),
-        search_geometry=config.search_geometry,
+        semantic_map=config.to_semantic_map(search_area_points),
+        search_geometry=Polygon(search_area_points),
         camera=config.camera,
         flight_altitude_m=config.flight.altitude_m,
         start=(config.origin.x, config.origin.y, config.flight.altitude_m),

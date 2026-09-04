@@ -9,7 +9,7 @@
 // The base_link points are then rotated/translated into the world (ENU) frame by
 // the PX4 body->world pose.
 //
-// Topics are read from config/gz_sensor_interface.yaml (via
+// Topics are read from src/navigation/config/gz_sensor_interface.yaml (via
 // sensor_sensors.launch.py):
 //   in_cloud:  one of the four base_link outputs above
 //   in_odom:   /fmu/out/vehicle_odometry             (PX4 NED)

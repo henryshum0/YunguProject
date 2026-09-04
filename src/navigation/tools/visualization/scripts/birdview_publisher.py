@@ -10,7 +10,7 @@ and projected onto the XY plane in the ``world`` frame. The resulting
 ``sensor_msgs/PointCloud2`` is latched (transient-local) on ``/birdview_cloud``
 so RViz receives it whenever it subscribes (even after startup).
 
-Parameters (set via config/birdview.yaml through the offboard launch file):
+Parameters (set via src/navigation/config/visualization.yaml):
   image_path        absolute path to the PNG to display
   topic             output point cloud topic            (default: /birdview_cloud)
   frame_id          fixed frame of the overlay          (default: world)

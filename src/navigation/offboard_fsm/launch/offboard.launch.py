@@ -1,8 +1,9 @@
 """offboard.launch — bring up the perception + planning + offboard layer.
 
 This launch is intentionally thin: it reads all tuning parameters from
-config/offboard/offboard_fsm.yaml and all inter-module topics from
-config/offboard/topics.yaml, then configures and starts the nodes:
+src/navigation/config/offboard/offboard_fsm.yaml and all inter-module topics
+from src/navigation/config/offboard/topics.yaml, then configures and starts
+the nodes:
 
   - optional fastlio_mapping + fastlio_handler (FAST-LIO + PX4 visual-odometry bridge)
   - offboard_node (state machine)
@@ -28,16 +29,17 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 
 
-def _find_project_root():
-    """Locate the Yungu project root (ancestor containing config/simulation.yaml)."""
+def _find_navigation_config_dir():
+    """Locate the workspace navigation configuration directory."""
     env = os.environ.get('YUNGU_SIM_CONFIG')
     if env:
         p = Path(env)
         if p.is_file():
-            return p.parent.parent
+            return p.parent
     for parent in Path(__file__).resolve().parents:
-        if (parent / 'config' / 'simulation.yaml').is_file():
-            return parent
+        config_dir = parent / 'src' / 'navigation' / 'config'
+        if (config_dir / 'simulation.yaml').is_file():
+            return config_dir
     return None
 
 
@@ -64,13 +66,13 @@ def _dget(d, key, default=None):
 
 
 def generate_launch_description():
-    root = _find_project_root()
-    cfg_dir = root / 'config' / 'offboard' if root else None
+    navigation_config_dir = _find_navigation_config_dir()
+    cfg_dir = navigation_config_dir / 'offboard' if navigation_config_dir else None
 
     # ---- Load all config once -------------------------------------------------
     fsm = _load_yaml(cfg_dir / 'offboard_fsm.yaml').get('offboard_fsm', {}) if cfg_dir else {}
     topics = _load_yaml(cfg_dir / 'topics.yaml') if cfg_dir else {}
-    sim = _load_yaml(root / 'config' / 'simulation.yaml') if root else {}
+    sim = _load_yaml(navigation_config_dir / 'simulation.yaml') if navigation_config_dir else {}
     model = sim.get('model', 'swan_gamma_v2')
 
     def cfg(key, default=None):
@@ -80,18 +82,19 @@ def generate_launch_description():
         return _dget(topics, key, default)
 
     # ---- Derived paths --------------------------------------------------------
-    # FAST-LIO params: bare name resolves against config/offboard/.
+    # FAST-LIO params: bare name resolves against src/navigation/config/offboard/.
     fastlio_cfg_name = str(cfg('fastlio_config', 'fastlio_swan_gamma_effect.yaml'))
     default_fastlio_config = fastlio_cfg_name
-    if root is not None:
+    if navigation_config_dir is not None:
         cand = cfg_dir / fastlio_cfg_name
         if cand.is_file():
             default_fastlio_config = str(cand)
 
-    # SUPER planner config: bare name resolves against config/offboard/super_planner/.
+    # SUPER planner config: bare name resolves against
+    # src/navigation/config/offboard/super_planner/.
     planner_cfg_name = str(cfg('planner_config', 'gazebo-smooth.yaml'))
     default_planner_config = planner_cfg_name
-    if root is not None:
+    if navigation_config_dir is not None:
         cand = cfg_dir / 'super_planner' / planner_cfg_name
         if cand.is_file():
             default_planner_config = str(cand)
@@ -103,7 +106,8 @@ def generate_launch_description():
     # goal_height is applied by goal_marker_node (it stamps the RViz 2D goal's z),
     # so it no longer overrides the SUPER planner's click_height here.
     #
-    # SUPER's inter-module topics are sourced from config/offboard/topics.yaml and
+    # SUPER's inter-module topics are sourced from
+    # src/navigation/config/offboard/topics.yaml and
     # injected into the planner config so SUPER reads its topics centrally:
     #   fsm.click_goal_topic        <- super.in.goal_pose
     #   fsm.cmd_topic               <- super.out.pos_cmd
@@ -151,7 +155,8 @@ def generate_launch_description():
     use_sim_time = 'true' if cfg('use_sim_time', True) else 'false'
 
     # ---- Launch description ----------------------------------------------------
-    # Tuning parameters are read straight from config/offboard/offboard_fsm.yaml
+    # Tuning parameters are read straight from
+    # src/navigation/config/offboard/offboard_fsm.yaml
     # as native YAML types (float/int) so the nodes receive correctly-typed values.
     # Only the inter-module topics are exposed as launch args (overridable).
     num_args = {

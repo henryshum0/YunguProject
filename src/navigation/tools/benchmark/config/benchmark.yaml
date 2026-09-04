@@ -3,7 +3,7 @@
 # ============================================================================
 # Randomly generates a flat map (ground plane) with gate + pillar obstacles as
 # a Gazebo world (.sdf) for planner benchmarking.
-# Read by: benchmark/generate_map.py (src/benchmark).
+# Read by: benchmark/generate_map.py (src/navigation/tools/benchmark).
 # ----------------------------------------------------------------------------
 
 benchmark:
@@ -60,5 +60,5 @@ benchmark:
   world_name: benchmark
   # Output directory, relative to the project root. The default points into the
   # PX4 worlds dir so the sim can load it (set `world: benchmark` in
-  # config/simulation.yaml). Override with --output.
+  # src/navigation/config/simulation.yaml). Override with --output.
   output_dir: VisionFlow-PX4/Tools/simulation/gz/worlds

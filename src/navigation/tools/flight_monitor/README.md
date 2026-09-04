@@ -131,7 +131,7 @@ ros2 run flight_monitor plot_csv cmd_log/goal_002_20260805_163854.csv
 ros2 run flight_monitor plot_csv <file> --start 0.5 --end 1.5 --save out.png
 
 # or run without ROS
-python3 src/flight_monitor/flight_monitor/plot_csv.py <file>
+python3 src/navigation/tools/flight_monitor/flight_monitor/plot_csv.py <file>
 ```
 
 The plot is organized per axis for response comparison: **3 rows = X / Y / Z**
@@ -177,7 +177,7 @@ pandas, or Matlab for custom analysis.
 ## Package layout
 
 ```
-src/flight_monitor/
+src/navigation/tools/flight_monitor/
 ├── package.xml
 ├── setup.py
 ├── flight_monitor/

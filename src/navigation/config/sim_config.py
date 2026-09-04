@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Read the Yungu simulation configuration (config/simulation.yaml).
+"""Read the Yungu simulation configuration (src/navigation/config/simulation.yaml).
 
 Centralizes the Gazebo model, map/world, and the GZ topics bridged into ROS 2.
 start_sim.sh and the GZ<->ROS bridge read it through this helper so they do not
@@ -17,8 +17,7 @@ Usage:
         `parameter_bridge` config format, ready to be passed via
         `--ros-args -p config_file:=<file>`.
 
-The default config path is <project_root>/config/simulation.yaml, resolved
-relative to this script's location.
+The default config path is adjacent to this script in src/navigation/config.
 """
 
 import argparse

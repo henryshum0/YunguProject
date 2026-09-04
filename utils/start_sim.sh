@@ -10,7 +10,7 @@
 # the whole PX4/Gazebo process tree are terminated as well.
 #
 # Usage:
-#   ./start_sim.sh                                   # defaults from config/simulation.yaml
+#   ./start_sim.sh                                   # defaults from src/navigation/config/simulation.yaml
 #   PX4_MODEL=x500_lidar PX4_WORLD=yungu ./start_sim.sh   # override the config
 #   PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./start_sim.sh
 #   PX4_MODEL=gz_x500_lidar_yungu ./start_sim.sh     # legacy: full make target
@@ -20,7 +20,7 @@
 #   ./start_sim.sh --help                            # list available models and maps
 #   ./stop_sim.sh                                    # kill any leftover sim processes
 #
-# Model, map, GZ version and uXRCE port default to config/simulation.yaml
+# Model, map, GZ version and uXRCE port default to src/navigation/config/simulation.yaml
 # (env vars override). Model + Map combine into the PX4 make target
 # 'gz_<model>_<world>'. Run '--help' for the full list of models and maps.
 #
@@ -33,13 +33,14 @@ WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PX4_DIR="${WORKSPACE}/VisionFlow-PX4"
 BRIDGE_SCRIPT="${SCRIPT_DIR}/bridge.sh"
 STOP_SCRIPT="${SCRIPT_DIR}/stop_sim.sh"
-SIM_CONFIG="${WORKSPACE}/config/simulation.yaml"
-SIM_CONFIG_HELPER="${WORKSPACE}/config/sim_config.py"
+NAVIGATION_CONFIG_DIR="${WORKSPACE}/src/navigation/config"
+SIM_CONFIG="${YUNGU_SIM_CONFIG:-${NAVIGATION_CONFIG_DIR}/simulation.yaml}"
+SIM_CONFIG_HELPER="${NAVIGATION_CONFIG_DIR}/sim_config.py"
 
 [[ -f "${SIM_CONFIG}" ]] || { echo "ERROR: simulation config not found: ${SIM_CONFIG}" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not found on PATH" >&2; exit 1; }
 
-# Read the simulation defaults from config/simulation.yaml. Environment
+# Read the simulation defaults from src/navigation/config/simulation.yaml. Environment
 # variables still override the file when set (e.g. PX4_MODEL=... ./start_sim.sh).
 config_get() {
   python3 "${SIM_CONFIG_HELPER}" --config "${SIM_CONFIG}" get "$1"

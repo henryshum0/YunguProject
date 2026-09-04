@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import replace
 from math import cos, isfinite, radians, sin
 
 import rclpy
@@ -19,7 +18,7 @@ from coverage_planner.io import load_config
 from coverage_planner.models.config import StartupConfig
 from coverage_planner.models.waypoint import Waypoint
 from coverage_planner.planner import PlanResult
-from coverage_planner.runtime import plan_from_config
+from coverage_planner.runtime import plan_for_search_area
 
 
 def latched_qos() -> QoSProfile:
@@ -62,13 +61,14 @@ def build_path(
 
 def build_markers(
     config: StartupConfig,
+    search_area_points: Sequence[tuple[float, float]],
     route: Sequence[Waypoint],
     *,
     stamp: Time,
 ) -> MarkerArray:
     markers = MarkerArray()
     markers.markers.append(_line_strip_marker(
-        config.search_area_points,
+        search_area_points,
         frame_id=config.frame_id,
         stamp=stamp,
         namespace="search_area",
@@ -169,12 +169,12 @@ class CoveragePlannerNode(Node):
         self.marker_publisher = None
         self.plan_service = None
 
-    def plan_and_publish(self, config: StartupConfig | None = None) -> Path:
-        """Plan from the supplied config (or the configured JSON) and publish it."""
-        if config is None:
-            config = self._load_config()
-        result, path = self._plan(config)
-        markers = build_markers(config, result.planning_route, stamp=path.header.stamp)
+    def plan_and_publish(self, search_area_points: tuple[tuple[float, float], ...]) -> Path:
+        """Plan and publish the search boundary supplied by a service request."""
+        config = self._require_config()
+        result, path = self._plan(search_area_points)
+        markers = build_markers(
+            config, search_area_points, result.planning_route, stamp=path.header.stamp)
         self._ensure_publishers(config)
         self.waypoint_publisher.publish(path)
         self.marker_publisher.publish(markers)
@@ -183,11 +183,12 @@ class CoveragePlannerNode(Node):
             f"'{config.output_topics.waypoints}' in frame '{config.frame_id}'")
         return path
 
-    def _plan(self, config: StartupConfig | None = None) -> tuple[PlanResult, Path]:
+    def _plan(
+        self, search_area_points: tuple[tuple[float, float], ...],
+    ) -> tuple[PlanResult, Path]:
         """Plan and build a response path without publishing ROS output topics."""
-        if config is None:
-            config = self._load_config()
-        result = plan_from_config(config)
+        config = self._require_config()
+        result = plan_for_search_area(config, search_area_points)
         stamp = self.get_clock().now().to_msg()
         path = build_path(result.planning_route, frame_id=config.frame_id, stamp=stamp)
         self.result = result
@@ -226,6 +227,11 @@ class CoveragePlannerNode(Node):
                 "--ros-args -p config_file:=/absolute/path/to/config.json")
         return load_config(config_file)
 
+    def _require_config(self) -> StartupConfig:
+        if self.config is None:
+            raise RuntimeError("coverage planner startup has not completed")
+        return self.config
+
     def _handle_plan_coverage(self, request, response):
         """Plan the request's search area and optionally publish the sparse route."""
         if self.config is None:
@@ -235,11 +241,10 @@ class CoveragePlannerNode(Node):
         try:
             points = search_area_from_polygon(
                 request.search_area, expected_frame_id=self.config.frame_id)
-            config = replace(self.config, search_area_points=points)
             if request.publish_result:
-                path = self.plan_and_publish(config)
+                path = self.plan_and_publish(points)
             else:
-                _, path = self._plan(config)
+                _, path = self._plan(points)
             response.success = True
             action = "planned and published" if request.publish_result else "planned"
             response.message = f"{action} {len(path.poses)} sparse waypoints"

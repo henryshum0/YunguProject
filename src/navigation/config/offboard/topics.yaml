@@ -1,5 +1,5 @@
 # ============================================================================
-# config/offboard/topics.yaml — centralized inter-module communication topics.
+# src/navigation/config/offboard/topics.yaml — centralized inter-module communication topics.
 # ============================================================================
 # Defines every ROS 2 topic exchanged between the modules of the stack:
 #   offboard fsm (offboard_node), SUPER (super_planner/fsm_node + super_bridge),
@@ -8,7 +8,7 @@
 # Each module has its own INPUT (subscribe) / OUTPUT (publish) topics; the
 # coordinate / data conversion between modules is done by the interaction
 # interface nodes (super_bridge, visual_tf, fastlio_visual, lidar_merge).
-# Read by offboard.launch.py (via config/sim_config.py get_value).
+# Read by offboard.launch.py.
 
 # --- offboard fsm (offboard_node) -------------------------------------------
 offboard_fsm:

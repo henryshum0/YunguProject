@@ -24,6 +24,7 @@ from coverage_planner.ros_node import (
 from coverage_planner.runtime import PlanningFailed
 
 ROOT = Path(__file__).resolve().parents[2]
+CONFIG_DIR = ROOT.parent / "config"
 
 
 def route() -> tuple[Waypoint, ...]:
@@ -47,8 +48,13 @@ def test_path_preserves_sparse_order_altitude_and_heading() -> None:
 
 
 def test_markers_show_boundaries_obstacles_and_waypoint_points() -> None:
-    config = load_config(ROOT / "config/example_planner.json")
-    message = build_markers(config, route(), stamp=Time())
+    config = load_config(CONFIG_DIR / "example_planner.json")
+    message = build_markers(
+        config,
+        ((10.0, 10.0), (80.0, 10.0), (80.0, 60.0), (10.0, 60.0)),
+        route(),
+        stamp=Time(),
+    )
     assert len(message.markers) == 3
     search, obstacle, waypoints = message.markers
     assert search.type == Marker.LINE_STRIP
@@ -99,7 +105,7 @@ def test_invalid_config_creates_no_publishers(tmp_path: Path, monkeypatch) -> No
     try:
         node.set_parameters([Parameter("config_file", value=str(path))])
         with pytest.raises(ConfigError):
-            node.plan_and_publish()
+            node._load_config()
         assert node.waypoint_publisher is None
         assert node.marker_publisher is None
     finally:
@@ -110,17 +116,18 @@ def test_invalid_config_creates_no_publishers(tmp_path: Path, monkeypatch) -> No
 def test_coverage_failure_creates_no_publishers(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ROS_LOG_DIR", str(tmp_path / "ros-log"))
 
-    def fail_planning(config):
+    def fail_planning(config, points):
         raise PlanningFailed("required coverage was not achieved; failed patch IDs: patch_007")
 
-    monkeypatch.setattr("coverage_planner.ros_node.plan_from_config", fail_planning)
+    monkeypatch.setattr("coverage_planner.ros_node.plan_for_search_area", fail_planning)
     rclpy.init(args=[])
     node = CoveragePlannerNode()
     try:
         node.set_parameters([Parameter(
-            "config_file", value=str(ROOT / "config/example_planner.json"))])
+            "config_file", value=str(CONFIG_DIR / "example_planner.json"))])
+        node.config = load_config(CONFIG_DIR / "example_planner.json")
         with pytest.raises(PlanningFailed, match="patch_007"):
-            node.plan_and_publish()
+            node.plan_and_publish(((10.0, 10.0), (80.0, 10.0), (80.0, 60.0), (10.0, 60.0)))
         assert node.waypoint_publisher is None
         assert node.marker_publisher is None
     finally:

@@ -8,10 +8,10 @@ pillars) at random positions inside the cell. A clearing distance keeps a
 minimum center-to-center gap between obstacles (and the generator refuses
 positions that would make geometries overlap). The result is a Gazebo world
 ``.sdf`` (ground plane + sun + static obstacle models) which the PX4 sim can
-load via ``world: <world_name>`` in ``config/simulation.yaml``.
+load via ``world: <world_name>`` in ``src/navigation/config/simulation.yaml``.
 
 Usage:
-    python3 src/benchmark/benchmark/generate_map.py [--config PATH]
+    python3 src/navigation/tools/benchmark/benchmark/generate_map.py [--config PATH]
     ros2 run benchmark generate_map [--config PATH] [--output DIR] [--seed N]
 """
 
@@ -27,10 +27,10 @@ except ImportError:  # pragma: no cover
     sys.exit("ERROR: PyYAML is required. Install with: pip install PyYAML")
 
 
-def find_project_root(start: Path) -> Path:
-    """Closest ancestor of ``start`` containing config/simulation.yaml."""
+def find_project_root(start: Path) -> Path | None:
+    """Closest workspace ancestor containing navigation configuration."""
     for parent in (start, *start.parents):
-        if (parent / "config" / "simulation.yaml").is_file():
+        if (parent / "src" / "navigation" / "config" / "simulation.yaml").is_file():
             return parent
     return None
 
@@ -268,7 +268,7 @@ def main():
         description="Generate a flat Gazebo benchmark world with random gate/pillar obstacles.")
     parser.add_argument("--config", default=None,
                         help="Path to benchmark.yaml "
-                             "(default: <project>/src/benchmark/config/benchmark.yaml)")
+                             "(default: <project>/src/navigation/tools/benchmark/config/benchmark.yaml)")
     parser.add_argument("--output", default=None,
                         help="Override the output directory (default from config)")
     parser.add_argument("--seed", type=int, default=None,
@@ -278,9 +278,9 @@ def main():
     script = Path(__file__).resolve()
     root = find_project_root(script)
     if root is None:
-        root = script.parents[2]
+        root = script.parents[5]
     config_path = Path(args.config) if args.config else \
-        root / "src" / "benchmark" / "config" / "benchmark.yaml"
+        root / "src" / "navigation" / "tools" / "benchmark" / "config" / "benchmark.yaml"
     if not config_path.is_file():
         sys.exit(f"ERROR: config not found: {config_path}")
 
@@ -309,7 +309,8 @@ def main():
     print(f"  obstacles placed: {len(placed)} (gates={n_gates}, pillars={n_pillars}), "
           f"skipped={skipped}")
     print(f"  clearing distance: {cfg['clearing_distance']} m, seed: {cfg.get('seed')}")
-    print(f"  to load in the sim: set `world: {world_name}` in config/simulation.yaml")
+    print(f"  to load in the sim: set `world: {world_name}` in "
+          "src/navigation/config/simulation.yaml")
 
 
 if __name__ == "__main__":

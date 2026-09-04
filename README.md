@@ -58,7 +58,7 @@ Every config value can be overridden without editing the file:
 
 | Variable / arg | Default | Description |
 |---|---|---|
-| `PX4_MODEL`, `PX4_WORLD` | from `config/simulation.yaml` | Gazebo airframe + world (`PX4_MODEL=gz_<model>_<world>` legacy form also accepted) |
+| `PX4_MODEL`, `PX4_WORLD` | from `src/navigation/config/simulation.yaml` | Gazebo airframe + world (`PX4_MODEL=gz_<model>_<world>` legacy form also accepted) |
 | `XRCE_PORT` | `8888` | uXRCE-DDS port for the MicroXRCEAgent |
 | `GZ_VERSION` | `harmonic` | gz-transport version for `ros_gz_bridge` |
 | `HEADLESS=1` | *(unset)* | Run Gazebo without its GUI (server only) |
@@ -79,19 +79,21 @@ ros2 launch visualization visualization.launch.py rviz:=false
 
 ## Configuration
 
-All run-time config lives in [`config/`](config/) and is read via
-[`config/sim_config.py`](config/sim_config.py) — edits take effect on the next
-launch (no rebuild).
+Navigation run-time configuration lives in
+[`src/navigation/config/`](src/navigation/config/) and is read via
+[`src/navigation/config/sim_config.py`](src/navigation/config/sim_config.py) —
+edits take effect on the next launch (no rebuild). Coverage planner maps and
+missions live separately in [`src/search/config/`](src/search/config/).
 
 | File | Purpose | Key keys |
 |---|---|---|
-| [`config/simulation.yaml`](config/simulation.yaml) | Sim: model, world, gz version, uXRCE port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
-| [`config/offboard/topics.yaml`](config/offboard/topics.yaml) | Centralized inter-module communication topics (offboard fsm, SUPER, FAST-LIO, gz_sensor_interface, visualization) | `offboard_fsm.*`, `super.*`, `fastlio.*`, `gz_sensor_interface.*`, `visualization.*` |
-| [`config/offboard/offboard_fsm.yaml`](config/offboard/offboard_fsm.yaml) | Offboard state-machine + SUPER integration + FAST-LIO tuning | `use_sim_time`, `update_rate`, `arm_wait`, `arm_retry_*`, `planner_fail_retry_max`, `planner_reset_delay`, `default_height`, `takeoff_vel`, `landing_vel`, `waypoint_*`, `yaw_align_thresh`, `planner_config`, `goal_height`, `planner_cmd_hz`, `cloud_in_topic`, `visualization`, `fastlio_config` |
-| [`config/gz_sensor_interface.yaml`](config/gz_sensor_interface.yaml) | Gazebo sensor bridge topics / frames / extrinsics | `lidar_sensor.*`, `imu_bridge.*`, `truth_odom.*`, `super_lidar.*` |
-| [`config/visualization.yaml`](config/visualization.yaml) | Visualization TF / topics / birdview | `frames.*`, `visual_tf.*`, `gt_path.*`, `fastlio_visual.*`, `birdview.*`, `rviz.*` |
-| [`config/birdview.yaml`](config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
-| [`config/offboard/super_planner/`](config/offboard/super_planner/) | SUPER planner behaviour (A*, traj opt, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
+| [`src/navigation/config/simulation.yaml`](src/navigation/config/simulation.yaml) | Sim: model, world, gz version, uXRCE port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
+| [`src/navigation/config/offboard/topics.yaml`](src/navigation/config/offboard/topics.yaml) | Centralized inter-module communication topics (offboard fsm, SUPER, FAST-LIO, gz_sensor_interface, visualization) | `offboard_fsm.*`, `super.*`, `fastlio.*`, `gz_sensor_interface.*`, `visualization.*` |
+| [`src/navigation/config/offboard/offboard_fsm.yaml`](src/navigation/config/offboard/offboard_fsm.yaml) | Offboard state-machine + SUPER integration + FAST-LIO tuning | `use_sim_time`, `update_rate`, `arm_wait`, `arm_retry_*`, `planner_fail_retry_max`, `planner_reset_delay`, `default_height`, `takeoff_vel`, `landing_vel`, `waypoint_*`, `yaw_align_thresh`, `planner_config`, `goal_height`, `planner_cmd_hz`, `cloud_in_topic`, `visualization`, `fastlio_config` |
+| [`src/navigation/config/gz_sensor_interface.yaml`](src/navigation/config/gz_sensor_interface.yaml) | Gazebo sensor bridge topics / frames / extrinsics | `lidar_sensor.*`, `imu_bridge.*`, `truth_odom.*`, `super_lidar.*` |
+| [`src/navigation/config/visualization.yaml`](src/navigation/config/visualization.yaml) | Visualization TF / topics / birdview | `frames.*`, `visual_tf.*`, `gt_path.*`, `fastlio_visual.*`, `birdview.*`, `rviz.*` |
+| [`src/navigation/config/birdview.yaml`](src/navigation/config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
+| [`src/navigation/config/offboard/super_planner/`](src/navigation/config/offboard/super_planner/) | SUPER planner behaviour (A*, traj opt, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
 
 Set `offboard.visualization: false` for a fully headless run (no RViz, no
 birdview overlay, SUPER markers off). `goal_height` is the target altitude that
@@ -241,7 +243,7 @@ Notes:
   (same as FAST-LIO `camera_init` and PX4 ENU origin); `/gt_path` is shifted by
   the spawn offset so it lines up with `/fastlio_cloud` and `/gz/point_cloud_super`.
 - Ground-truth odometry `/odom` comes from the gz model-instance topic
-  `/model/swan_gamma_v2_0/odometry` (see `config/simulation.yaml`); it is used
+  `/model/swan_gamma_v2_0/odometry` (see `src/navigation/config/simulation.yaml`); it is used
   by the truth path `/gt_path` and `flight_monitor` comparisons.
 - FAST-LIO's `fastlio_handler` feeds PX4 EKF2 external vision
   (`/fmu/in/vehicle_visual_odometry`); the fused
