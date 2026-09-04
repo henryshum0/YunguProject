@@ -1,0 +1,84 @@
+# ============================================================================
+# src/navigation/config/offboard/offboard_fsm.yaml — offboard state machine parameters.
+# ============================================================================
+# Tuning parameters for the PX4 offboard state machine (offboard_node in
+# src/navigation/offboard_fsm). Read by offboard.launch.py.
+#
+# Module INPUT / OUTPUT topics are defined in topics.yaml; only tuning
+# parameters live here.
+#
+# Changes here take effect on the next `ros2 launch offboard offboard.launch.py`.
+
+offboard_fsm:
+  # Use the /clock simulation clock for all time handling (true for a Gazebo
+  # simulation, false to use the real system clock). Aligned with FAST-LIO.
+  use_sim_time: false
+
+  # State machine update rate [Hz]
+  update_rate: 100.0
+
+  # Wait after ARM before switching to OFFBOARD [s]
+  arm_wait: 2.0
+
+  # Arm retry policy: delay between attempts [s] and max attempts before
+  # falling back to INIT.
+  arm_retry_delay: 5.0
+  arm_retry_max: 3
+
+  # Delay [s] between planner restart requests while IDLE.
+  planner_reset_delay: 5.0
+
+  # Heading-to-goal tolerance [rad] for the can_move_ gate.
+  yaw_align_thresh: 0.35
+
+  # NED hover height after OFFBOARD (negative = up) [m]
+  default_height: 20.0
+
+  # Takeoff climb velocity [m/s] (direct PX4 vertical climb, no planner).
+  takeoff_vel: 2.0
+
+  # Landing descent velocity [m/s] and final landing height [m]
+  landing_vel: 0.5
+  landing_z: 0.15
+
+  # Waypoint following: buffered waypoints are flown one at a time. A waypoint
+  # is "reached" when within waypoint_reached_dist [m] horizontally; it then
+  # holds for waypoint_hold_time [s] before the next waypoint is sent to SUPER.
+  waypoint_reached_dist: 0.2
+  waypoint_hold_time: 0.0
+
+  # --- SUPER planner integration (driven by this state machine) -------------
+  # SUPER planner config: a file name (resolved against
+  # src/navigation/config/offboard/super_planner/, falling back to
+  # SUPER's super_planner/config/) or an
+  # absolute path.
+  planner_config: gazebo-3m.yaml
+
+  # Target flight height [m] for RViz 2D goals. goal_marker_node stamps this on
+  # the waypoint's z before forwarding it to the offboard waypoint buffer (the
+  # 2D goal carries no meaningful height).
+  goal_height: 5.0
+
+  # Cmd rate threshold for planner hand-over [Hz]
+  planner_cmd_hz: 80.0
+
+  # Delay before/after switching to the planner [s]
+  planner_enter_delay: 0.2
+  planner_exit_delay: 1.0
+
+  # Raw lidar cloud topic read by super_bridge (then republished to SUPER as
+  # /cloud_registered_px4). Defaults to /<model>/scan/points from
+  # src/navigation/config/simulation.yaml; override e.g. with the fused base_link cloud
+  # /swan_gamma_v2/scan/points_fused. Leave empty to use the default.
+  cloud_in_topic: "/swan_gamma_v2/scan/points_fused"
+
+  # Master visualization switch: controls SUPER's marker publishing. (The RViz
+  # windows + birdview live in the separate visualization package, launched via
+  # visualization.launch.py.)
+  visualization: true
+
+  # --- FAST-LIO integration --------------------------------------------------
+  # FAST-LIO params file: a file name resolved against
+  # src/navigation/config/offboard/, or an
+  # absolute path.
+  fastlio_config: fastlio_swan_gamma_effect.yaml

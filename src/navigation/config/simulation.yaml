@@ -1,0 +1,88 @@
+# ============================================================================
+# yungu simulation configuration
+# ============================================================================
+# Central place to choose the Gazebo vehicle model, the map/world, and the GZ
+# topics bridged into ROS 2. This file is read by:
+#   - utils/start_sim.sh                 -> model, world, gz_version, xrce_port
+#   - utils/bridge.sh                    -> bridge.*
+#
+# Environment variables still override the file, e.g.:
+#   PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./start_sim.sh
+# ----------------------------------------------------------------------------
+
+# Gazebo vehicle model (PX4 gz airframe, e.g. x500_lidar, x500, swan_gamma_v1)
+model: swan_gamma_v2
+
+# Gazebo map/world (.sdf in VisionFlow-PX4/Tools/simulation/gz/worlds)
+world: yungu
+
+# Gazebo distro (this system runs gz-sim 8 / Harmonic)
+gz_version: harmonic
+
+# UDP port for the uXRCE-DDS agent
+xrce_port: 8888
+
+# ----------------------------------------------------------------------------
+# GZ <-> ROS 2 bridge
+# ----------------------------------------------------------------------------
+bridge:
+  # Launch the ros_gz_bridge parameter_bridge for the topics below
+  enabled: true
+
+  # Launch the TF bridge (tf_bridge.py) that publishes the world/base_link and
+  # base_link/lidar_link transforms
+  tf_enabled: true
+
+  # GZ topics bridged into ROS 2 (ros_gz_bridge parameter_bridge config entries)
+  topics:
+    # Side LiDARs (mirror real hardware): left/right, transformed to base_link
+    # and fused by lidar_sensor. The old top-mounted lidar_3d was removed.
+    - ros_topic_name: "/swan_gamma_v2/scan_left/points"
+      gz_topic_name: "/swan_gamma_v2/scan_left/points"
+      ros_type_name: "sensor_msgs/msg/PointCloud2"
+      gz_type_name: "gz.msgs.PointCloudPacked"
+      direction: GZ_TO_ROS
+      subscriber_queue_size: 5
+      publisher_queue_size: 5
+
+    - ros_topic_name: "/swan_gamma_v2/scan_right/points"
+      gz_topic_name: "/swan_gamma_v2/scan_right/points"
+      ros_type_name: "sensor_msgs/msg/PointCloud2"
+      gz_type_name: "gz.msgs.PointCloudPacked"
+      direction: GZ_TO_ROS
+      subscriber_queue_size: 5
+      publisher_queue_size: 5
+
+    # Horizontal (level) LiDAR: temporary single-LiDAR source for SUPER
+    # (replaces the fused side-LiDAR cloud until fusion is reliable).
+    - ros_topic_name: "/swan_gamma_v2/scan_horizontal/points"
+      gz_topic_name: "/swan_gamma_v2/scan_horizontal/points"
+      ros_type_name: "sensor_msgs/msg/PointCloud2"
+      gz_type_name: "gz.msgs.PointCloudPacked"
+      direction: GZ_TO_ROS
+      subscriber_queue_size: 5
+      publisher_queue_size: 5
+
+    # IMU direct from gz (same sim clock as the lidar clouds — no PX4
+    # timestamp anchoring). /livox/imu_raw is monotonicized by imu_relay
+    # (ros2 run lidar_bridge imu_relay) before FAST-LIO consumes /livox/imu.
+    - ros_topic_name: "/livox/imu_raw"
+      gz_topic_name: "/world/yungu/model/swan_gamma_v2_0/link/base_link/sensor/imu_sensor/imu"
+      ros_type_name: "sensor_msgs/msg/Imu"
+      gz_type_name: "gz.msgs.IMU"
+      direction: GZ_TO_ROS
+      subscriber_queue_size: 10
+      publisher_queue_size: 10
+
+    # Gazebo ground truth odometry (for debug comparison vs FAST-LIO / PX4 fusion)
+    # NOTE: the benchmarkdemo branch's swan_gamma_v2 model no longer carries its
+    # own OdometryPublisher plugin; the one in swan_uav_v2 publishes to the
+    # model-instance topic /model/<model>_0/odometry (gz appends "_0" to the
+    # first instance), so bridge that instead of the top-level /odometry.
+    - ros_topic_name: "/odom"
+      gz_topic_name: "/model/swan_gamma_v2_0/odometry"
+      ros_type_name: "nav_msgs/msg/Odometry"
+      gz_type_name: "gz.msgs.Odometry"
+      direction: GZ_TO_ROS
+      subscriber_queue_size: 10
+      publisher_queue_size: 10

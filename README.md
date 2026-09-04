@@ -5,7 +5,7 @@ ROS 2 (Humble) drone autonomy stack for the Yungu flight test: Gazebo + PX4
 SITL simulation, the SUPER trajectory planner, optional FAST-LIO localization
 (mirrors real hardware) and a PX4 offboard state machine with waypoint
 following. Any external search/coverage planner can command the drone by
-publishing waypoints on `/waypoint_pose` — no launch or code changes. Once the
+calling the `/waypoint_buffer` queue service — no launch or code changes. Once the
 system is up you take off with a `/takeoff_cmd` message (direct PX4 climb);
 navigation between waypoints is planner-driven (SUPER), with automatic
 planner-failure recovery and direct PX4 landing.
@@ -40,8 +40,8 @@ The stack runs in two layers (two terminals):
 #   IMU + truth odom)
 ros2 launch gz_sensor_interface sensor_sensors.launch.py
 
-# Terminal 3 — perception + planning + offboard (FAST-LIO always runs; SUPER uses
-#   PX4 odometry via super_lidar; offboard_fsm drives the mission)
+# Terminal 3 — perception + planning + offboard (FAST-LIO is enabled by default;
+#   SUPER uses PX4 odometry via super_lidar; offboard_fsm drives the mission)
 ros2 launch offboard offboard.launch.py
 
 # Terminal 4 — visualization (TF tree + /gt_path + /fastlio_cloud + RViz windows,
@@ -58,16 +58,18 @@ Every config value can be overridden without editing the file:
 
 | Variable / arg | Default | Description |
 |---|---|---|
-| `PX4_MODEL`, `PX4_WORLD` | from `config/simulation.yaml` | Gazebo airframe + world (`PX4_MODEL=gz_<model>_<world>` legacy form also accepted) |
+| `PX4_MODEL`, `PX4_WORLD` | from `src/navigation/config/simulation.yaml` | Gazebo airframe + world (`PX4_MODEL=gz_<model>_<world>` legacy form also accepted) |
 | `XRCE_PORT` | `8888` | uXRCE-DDS port for the MicroXRCEAgent |
 | `GZ_VERSION` | `harmonic` | gz-transport version for `ros_gz_bridge` |
 | `HEADLESS=1` | *(unset)* | Run Gazebo without its GUI (server only) |
 | `rviz:=false`, `rviz_freelook:=false` | `true` | Toggle the two RViz windows in `visualization/visualization.launch.py` |
+| `use_fastlio:=false` | `true` | Do not launch `fastlio_mapping` or `fastlio_handler`; PX4 uses its normal estimator inputs instead of FAST-LIO external vision. |
 
 ```bash
 PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./utils/start_sim.sh
 HEADLESS=1 ./utils/start_sim.sh
 ros2 launch offboard offboard.launch.py
+ros2 launch offboard offboard.launch.py use_fastlio:=false
 ros2 launch visualization visualization.launch.py rviz:=false
 ```
 
@@ -77,19 +79,21 @@ ros2 launch visualization visualization.launch.py rviz:=false
 
 ## Configuration
 
-All run-time config lives in [`config/`](config/) and is read via
-[`config/sim_config.py`](config/sim_config.py) — edits take effect on the next
-launch (no rebuild).
+Navigation run-time configuration lives in
+[`src/navigation/config/`](src/navigation/config/) and is read via
+[`src/navigation/config/sim_config.py`](src/navigation/config/sim_config.py) —
+edits take effect on the next launch (no rebuild). Coverage planner maps and
+missions live separately in [`src/search/config/`](src/search/config/).
 
 | File | Purpose | Key keys |
 |---|---|---|
-| [`config/simulation.yaml`](config/simulation.yaml) | Sim: model, world, gz version, uXRCE port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
-| [`config/offboard/topics.yaml`](config/offboard/topics.yaml) | Centralized inter-module communication topics (offboard fsm, SUPER, FAST-LIO, gz_sensor_interface, visualization) | `offboard_fsm.*`, `super.*`, `fastlio.*`, `gz_sensor_interface.*`, `visualization.*` |
-| [`config/offboard/offboard_fsm.yaml`](config/offboard/offboard_fsm.yaml) | Offboard state-machine + SUPER integration + FAST-LIO tuning | `use_sim_time`, `update_rate`, `arm_wait`, `arm_retry_*`, `planner_fail_retry_max`, `planner_reset_delay`, `default_height`, `takeoff_vel`, `landing_vel`, `waypoint_*`, `yaw_align_thresh`, `planner_config`, `goal_height`, `planner_cmd_hz`, `cloud_in_topic`, `visualization`, `fastlio_config` |
-| [`config/gz_sensor_interface.yaml`](config/gz_sensor_interface.yaml) | Gazebo sensor bridge topics / frames / extrinsics | `lidar_sensor.*`, `imu_bridge.*`, `truth_odom.*`, `super_lidar.*` |
-| [`config/visualization.yaml`](config/visualization.yaml) | Visualization TF / topics / birdview | `frames.*`, `visual_tf.*`, `gt_path.*`, `fastlio_visual.*`, `birdview.*`, `rviz.*` |
-| [`config/birdview.yaml`](config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
-| [`config/offboard/super_planner/`](config/offboard/super_planner/) | SUPER planner behaviour (A*, traj opt, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
+| [`src/navigation/config/simulation.yaml`](src/navigation/config/simulation.yaml) | Sim: model, world, gz version, uXRCE port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
+| [`src/navigation/config/offboard/topics.yaml`](src/navigation/config/offboard/topics.yaml) | Centralized inter-module communication topics (offboard fsm, SUPER, FAST-LIO, gz_sensor_interface, visualization) | `offboard_fsm.*`, `super.*`, `fastlio.*`, `gz_sensor_interface.*`, `visualization.*` |
+| [`src/navigation/config/offboard/offboard_fsm.yaml`](src/navigation/config/offboard/offboard_fsm.yaml) | Offboard state-machine + SUPER integration + FAST-LIO tuning | `use_sim_time`, `update_rate`, `arm_wait`, `arm_retry_*`, `planner_fail_retry_max`, `planner_reset_delay`, `default_height`, `takeoff_vel`, `landing_vel`, `waypoint_*`, `yaw_align_thresh`, `planner_config`, `goal_height`, `planner_cmd_hz`, `cloud_in_topic`, `visualization`, `fastlio_config` |
+| [`src/navigation/config/gz_sensor_interface.yaml`](src/navigation/config/gz_sensor_interface.yaml) | Gazebo sensor bridge topics / frames / extrinsics | `lidar_sensor.*`, `imu_bridge.*`, `truth_odom.*`, `super_lidar.*` |
+| [`src/navigation/config/visualization.yaml`](src/navigation/config/visualization.yaml) | Visualization TF / topics / birdview | `frames.*`, `visual_tf.*`, `gt_path.*`, `fastlio_visual.*`, `birdview.*`, `rviz.*` |
+| [`src/navigation/config/birdview.yaml`](src/navigation/config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
+| [`src/navigation/config/offboard/super_planner/`](src/navigation/config/offboard/super_planner/) | SUPER planner behaviour (A*, traj opt, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
 
 Set `offboard.visualization: false` for a fully headless run (no RViz, no
 birdview overlay, SUPER markers off). `goal_height` is the target altitude that
@@ -130,22 +134,22 @@ ros2 topic pub --once /land_cmd std_msgs/msg/Bool "{data: true}"
 
 This is the **only** interface a search/planning algorithm needs. Once the
 stack is up, send a `/takeoff_cmd` to take off; the drone climbs directly to
-`default_height` and enters `IDLE`. Then command it by publishing a
-`geometry_msgs/PoseStamped`.
+`default_height` and enters `IDLE`. Queue route batches through the waypoint-buffer service.
 
 ### Inputs
 
-| Topic | Type | Purpose |
+| Endpoint | Type | Purpose |
 |---|---|---|
-| `/waypoint_pose` | `PoseStamped` | **Batch waypoint input (recommended).** Queued in the offboard waypoint buffer and flown one at a time. RViz's "2D Goal Pose" tool is re-targeted here. |
+| `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | **Batch waypoint input (recommended).** Atomically queues ordered `PoseStamped[]` waypoints. |
+| `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | Aborts the active waypoint, clears queued waypoints, holds position, and resets SUPER. |
+| `/waypoint_pose` | `PoseStamped` | RViz/manual single-waypoint input, bridged to the queue service by `goal_marker_node`. |
 | `/goal_pose` | `PoseStamped` | **Direct single goal.** Also the internal channel offboard uses to hand the current navigation waypoint to SUPER. |
 | `/takeoff_cmd` | `std_msgs/Bool` | **Take off** once the system is ready (`true`). The drone arms and climbs with direct PX4 control to `default_height`. |
 | `/land_cmd` | `std_msgs/Bool` | **Land** (`true`). Interrupts `ARMING`, `TAKEOFF`, `IDLE`, or `MOVE` and performs a direct PX4 landing. Ignored in `INIT` and while already landing. |
 | `/waypoint_markers` | `MarkerArray` | Feedback: green = queued, yellow = currently pursued, cyan line = route. |
 
-> QoS caveat: `/waypoint_pose` is `best_effort`/`keep_last(1)` — publish at
-> **≥ 0.5 s intervals** and confirm acceptance via the offboard log
-> (`Waypoint buffered (#N)`) or `/waypoint_markers`.
+> `/waypoint_pose` remains `best_effort`/`keep_last(1)` for RViz/manual use. Algorithms
+> should use `/waypoint_buffer` so a complete route is accepted atomically.
 
 ```python
 import rclpy
@@ -239,7 +243,7 @@ Notes:
   (same as FAST-LIO `camera_init` and PX4 ENU origin); `/gt_path` is shifted by
   the spawn offset so it lines up with `/fastlio_cloud` and `/gz/point_cloud_super`.
 - Ground-truth odometry `/odom` comes from the gz model-instance topic
-  `/model/swan_gamma_v2_0/odometry` (see `config/simulation.yaml`); it is used
+  `/model/swan_gamma_v2_0/odometry` (see `src/navigation/config/simulation.yaml`); it is used
   by the truth path `/gt_path` and `flight_monitor` comparisons.
 - FAST-LIO's `fastlio_handler` feeds PX4 EKF2 external vision
   (`/fmu/in/vehicle_visual_odometry`); the fused

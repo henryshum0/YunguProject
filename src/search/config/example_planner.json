@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.2",
+  "map_file": "example_map.json",
+  "frame_id": "map",
+  "output_topics": {
+    "waypoints": "/coverage_planner/waypoints",
+    "markers": "/coverage_planner/markers"
+  },
+  "flight": {
+    "altitude_m": 25.0,
+    "ground_elevation_m": 0.0,
+    "horizontal_clearance_m": 3.0
+  },
+  "camera": {
+    "horizontal_fov_deg": 60.0,
+    "vertical_fov_deg": 45.0,
+    "side_overlap": 0.3,
+    "target_width_m": 2.5,
+    "target_length_m": 6.0,
+    "target_height_m": 2.5,
+    "image_boundary_margin_ratio": 0.05
+  },
+  "planner": {
+    "coverage_generation_method": "global_scanline",
+    "scan_direction_deg": null,
+    "route_optimization_method": "auto",
+    "completion_strategy": "local_insertion",
+    "minimum_coverage_ratio": 0.99,
+    "return_to_origin": true
+  }
+}

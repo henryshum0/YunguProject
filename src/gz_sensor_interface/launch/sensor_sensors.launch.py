@@ -1,13 +1,14 @@
 """gz_sensor_interface launch — bring up the simulation-interaction layer.
 
 Launches the Gazebo sensor bridge + coordinate conversions for the swan_gamma
-drone (topics/params read from config/gz_sensor_interface.yaml):
+drone (topics/params read from src/navigation/config/gz_sensor_interface.yaml):
   - lidar_sensor : transform left/right/horizontal LiDARs into base_link and
                    publish four body-frame outputs (merged/left/right/top)
   - imu_bridge   : /livox/imu_raw -> /livox/imu (monotonic stamps)
   - truth_odom   : /odom -> /gz/ground_truth/odom
 """
 import os
+from pathlib import Path
 
 import yaml
 
@@ -29,11 +30,22 @@ def _cfg(path, key, default=None):
         return default
 
 
+def _navigation_config_path() -> Path:
+    """Return the workspace navigation sensor configuration path."""
+    override = os.environ.get("YUNGU_SIM_CONFIG")
+    if override:
+        candidate = Path(override).resolve().parent / "gz_sensor_interface.yaml"
+        if candidate.is_file():
+            return candidate
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "src" / "navigation" / "config" / "gz_sensor_interface.yaml"
+        if candidate.is_file():
+            return candidate
+    return Path("src/navigation/config/gz_sensor_interface.yaml")
+
+
 def generate_launch_description():
-    # config/gz_sensor_interface.yaml sits 4 levels up from this launch file.
-    config_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'config',
-                     'gz_sensor_interface.yaml'))
+    config_path = str(_navigation_config_path())
     model = _cfg(config_path, 'model', 'swan_gamma_v2')
 
     raw_left = _cfg(config_path, 'lidar_sensor.input_left',
