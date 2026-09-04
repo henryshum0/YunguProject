@@ -10,6 +10,8 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
+#include "offboard_fsm/srv/queue_waypoints.hpp"
+
 namespace offboard
 {
 
@@ -20,8 +22,7 @@ namespace offboard
  * Owns the RViz goal intake and its visualisation:
  *   - subscribes /waypoint_pose (geometry_msgs/PoseStamped) — the RViz
  *     "2D Goal Pose" tool re-targeted to /waypoint_pose;
- *   - buffers the accepted waypoints and forwards each one to
- *     /waypoint_buffer, where the offboard state machine stores and flies them;
+ *   - queues accepted waypoints through the offboard waypoint-buffer service;
  *   - publishes the buffered/current waypoints as markers on /waypoint_markers
  *     so RViz shows the pending route.
  *
@@ -35,16 +36,16 @@ public:
         : Node("goal_marker", options)
     {
         waypoint_topic_ = declare_parameter("waypoint_topic", waypoint_topic_);
-        waypoint_buffer_topic_ = declare_parameter("waypoint_buffer_topic", waypoint_buffer_topic_);
+        waypoint_queue_service_ =
+            declare_parameter("waypoint_queue_service", waypoint_queue_service_);
         marker_topic_ = declare_parameter("waypoint_marker_topic", marker_topic_);
         marker_rate_ = declare_parameter("waypoint_marker_rate", marker_rate_);
         goal_height_ = declare_parameter("goal_height", goal_height_);
         max_buffered_ = static_cast<std::size_t>(
             declare_parameter("waypoint_buffer_max", static_cast<int>(max_buffered_)));
 
-        // Waypoint buffer publisher (reliable so the offboard node never drops one).
-        buffer_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>(
-            waypoint_buffer_topic_, rclcpp::QoS(10).reliable());
+        waypoint_queue_client_ = create_client<offboard_fsm::srv::QueueWaypoints>(
+            waypoint_queue_service_);
 
         // Waypoint markers (latched + regular republish).
         marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
@@ -64,7 +65,7 @@ public:
 
         RCLCPP_INFO(get_logger(),
                     "Goal marker node started. %s -> %s, markers on %s",
-                    waypoint_topic_.c_str(), waypoint_buffer_topic_.c_str(),
+                    waypoint_topic_.c_str(), waypoint_queue_service_.c_str(),
                     marker_topic_.c_str());
     }
 
@@ -81,15 +82,31 @@ private:
             wp->pose.position.z = goal_height_;
         }
 
-        // Keep a local view of the goals we have handed to the state machine so
-        // we can draw the pending route markers (green) and the newest goal (yellow).
-        buffer_.push_back(*wp);
-        if (buffer_.size() > max_buffered_) {
-            buffer_.pop_front();
+        if (!waypoint_queue_client_->service_is_ready()) {
+            RCLCPP_WARN(get_logger(), "Waypoint queue service %s is unavailable",
+                        waypoint_queue_service_.c_str());
+            return;
         }
-
-        // Forward the waypoint to the offboard node's waypoint buffer.
-        buffer_pub_->publish(*wp);
+        auto request = std::make_shared<offboard_fsm::srv::QueueWaypoints::Request>();
+        request->waypoints.push_back(*wp);
+        waypoint_queue_client_->async_send_request(
+            request,
+            [this, wp](rclcpp::Client<offboard_fsm::srv::QueueWaypoints>::SharedFuture future) {
+                try {
+                    const auto response = future.get();
+                    if (!response->success || response->queued_count != 1U) {
+                        RCLCPP_WARN(get_logger(), "Waypoint queue request failed: %s",
+                                    response->message.c_str());
+                        return;
+                    }
+                    buffer_.push_back(*wp);
+                    if (buffer_.size() > max_buffered_) {
+                        buffer_.pop_front();
+                    }
+                } catch (const std::exception &error) {
+                    RCLCPP_WARN(get_logger(), "Waypoint queue request threw: %s", error.what());
+                }
+            });
     }
 
     void markerTimerCallback()
@@ -172,13 +189,13 @@ private:
     }
 
     std::string waypoint_topic_{"/waypoint_pose"};
-    std::string waypoint_buffer_topic_{"/waypoint_buffer"};
+    std::string waypoint_queue_service_{"/waypoint_buffer"};
     std::string marker_topic_{"/waypoint_markers"};
     double marker_rate_{10.0};
     double goal_height_{5.0};
     std::size_t max_buffered_{200};
 
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr buffer_pub_;
+    rclcpp::Client<offboard_fsm::srv::QueueWaypoints>::SharedPtr waypoint_queue_client_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_;
     rclcpp::TimerBase::SharedPtr marker_timer_;

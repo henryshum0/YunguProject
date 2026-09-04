@@ -5,20 +5,14 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 
 from coverage_planner.srv import PlanCoverage
+from offboard_fsm.srv import ClearWaypoints, QueueWaypoints
 from skills import (
+    ClearWaypointsPrimitive,
     MovePrimitive,
     PlanSearchPrimitive,
     SkillExecutionError,
     SkillTimeoutError,
 )
-
-
-class FakePublisher:
-    def __init__(self) -> None:
-        self.messages = []
-
-    def publish(self, message) -> None:
-        self.messages.append(message)
 
 
 class FakeFuture:
@@ -57,27 +51,78 @@ class FakeClient:
 class FakeNode:
     def __init__(self, client=None) -> None:
         self.client = client
-        self.publisher = FakePublisher()
-        self.publisher_topic = None
         self.service_name = None
-
-    def create_publisher(self, message_type, topic, qos):
-        self.publisher_topic = topic
-        return self.publisher
 
     def create_client(self, service_type, service_name):
         self.service_name = service_name
         return self.client
 
 
-def test_move_publishes_every_pose_to_reliable_waypoint_buffer() -> None:
-    node = FakeNode()
-    primitive = MovePrimitive(node)
+def _queue_response(count: int, *, success: bool = True) -> QueueWaypoints.Response:
+    response = QueueWaypoints.Response()
+    response.success = success
+    response.queued_count = count
+    response.message = "queue rejected" if not success else "queued"
+    return response
+
+
+def _clear_response(count: int, *, success: bool = True) -> ClearWaypoints.Response:
+    response = ClearWaypoints.Response()
+    response.success = success
+    response.cleared_count = count
+    response.message = "clear rejected" if not success else "cleared"
+    return response
+
+
+def test_move_queues_every_pose_with_waypoint_buffer_service(monkeypatch) -> None:
+    client = FakeClient(_queue_response(2))
+    node = FakeNode(client)
+    monkeypatch.setattr(
+        "skills.primitives.move.rclpy.spin_until_future_complete",
+        lambda node, future, timeout_sec: None,
+    )
     goals = (PoseStamped(), PoseStamped())
+    primitive = MovePrimitive(node)
     assert primitive.name == "move"
     assert primitive.call(goals) == 2
-    assert node.publisher_topic == "/waypoint_buffer"
-    assert node.publisher.messages == list(goals)
+    assert primitive.queue_service == "/waypoint_buffer"
+    assert node.service_name == "/waypoint_buffer"
+    assert client.requests[0].waypoints == list(goals)
+
+
+def test_move_reports_unavailable_or_rejected_queue_service(monkeypatch) -> None:
+    unavailable = MovePrimitive(FakeNode(FakeClient(available=False)))
+    with pytest.raises(SkillTimeoutError, match="unavailable"):
+        unavailable.call((PoseStamped(),))
+
+    client = FakeClient(_queue_response(0, success=False))
+    monkeypatch.setattr(
+        "skills.primitives.move.rclpy.spin_until_future_complete",
+        lambda node, future, timeout_sec: None,
+    )
+    rejected = MovePrimitive(FakeNode(client))
+    with pytest.raises(SkillExecutionError, match="rejected"):
+        rejected.call((PoseStamped(),))
+
+
+def test_clear_waypoints_returns_removed_count_and_times_out(monkeypatch) -> None:
+    client = FakeClient(_clear_response(3))
+    node = FakeNode(client)
+    monkeypatch.setattr(
+        "skills.primitives.clear_waypoints.rclpy.spin_until_future_complete",
+        lambda node, future, timeout_sec: None,
+    )
+    primitive = ClearWaypointsPrimitive(node)
+    assert primitive.name == "clear_waypoints"
+    assert primitive.call() == 3
+    assert primitive.clear_service == "/waypoint_buffer/clear"
+    assert node.service_name == "/waypoint_buffer/clear"
+
+    timed_out_client = FakeClient(_clear_response(0), done=False)
+    timed_out = ClearWaypointsPrimitive(FakeNode(timed_out_client))
+    with pytest.raises(SkillTimeoutError, match="did not respond"):
+        timed_out.call()
+    assert timed_out_client.future.cancelled
 
 
 def test_plan_search_returns_coverage_service_waypoints(monkeypatch) -> None:
@@ -96,6 +141,23 @@ def test_plan_search_returns_coverage_service_waypoints(monkeypatch) -> None:
     assert node.service_name == "/coverage_planner/plan_coverage"
     assert client.requests[0].search_area.header.frame_id == "map"
     assert len(client.requests[0].search_area.polygon.points) == 4
+    assert client.requests[0].publish_result is False
+
+
+def test_plan_search_can_request_published_visualization(monkeypatch) -> None:
+    response = PlanCoverage.Response()
+    response.success = True
+    client = FakeClient(response)
+    monkeypatch.setattr(
+        "skills.primitives.plan_search.rclpy.spin_until_future_complete",
+        lambda node, future, timeout_sec: None,
+    )
+    primitive = PlanSearchPrimitive(FakeNode(client))
+    primitive.call(
+        ((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)),
+        publish_result=True,
+    )
+    assert client.requests[0].publish_result is True
 
 
 def test_search_reports_backend_rejection(monkeypatch) -> None:

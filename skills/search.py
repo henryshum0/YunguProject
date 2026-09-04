@@ -20,12 +20,14 @@ class SearchSkill(Skill[SearchArea, Path]):
         *,
         frame_id: str = "map",
         service_name: str = "/coverage_planner/plan_coverage",
-        goal_topic: str = "/waypoint_buffer",
+        queue_service: str = "/waypoint_buffer",
+        clear_service: str = "/waypoint_buffer/clear",
     ) -> None:
         self._search = PlanSearchPrimitive(
             node, frame_id=frame_id, service_name=service_name)
         self._navigate = NavigateSkill(
-            node, frame_id=frame_id, goal_topic=goal_topic)
+            node, frame_id=frame_id, queue_service=queue_service,
+            clear_service=clear_service)
 
     @property
     def name(self) -> str:
@@ -36,16 +38,17 @@ class SearchSkill(Skill[SearchArea, Path]):
         return self._search.service_name
 
     @property
-    def goal_topic(self) -> str:
-        return self._navigate.goal_topic
+    def queue_service(self) -> str:
+        return self._navigate.queue_service
 
     def call(
         self,
         request: SearchArea,
         *,
-        timeout_sec: float | None = 10.0,
+        timeout_sec: float | None = 30.0,
     ) -> Path:
         """Plan a search area and queue its ENU path with ``NavigateSkill``."""
-        path = self._search.call(request, timeout_sec=timeout_sec)
+        path = self._search.call(
+            request, publish_result=True, timeout_sec=timeout_sec)
         self._navigate.call_poses(path.poses, timeout_sec=timeout_sec)
         return path

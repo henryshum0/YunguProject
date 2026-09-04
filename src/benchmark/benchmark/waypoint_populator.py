@@ -9,14 +9,14 @@ This is a standalone node (run independently from the offboard stack):
 
 The path sweeps the field from TOP to BOTTOM, alternating LEFT-to-RIGHT /
 RIGHT-to-LEFT between consecutive rows (a lawnmower pattern). Each waypoint is
-published one at a time to the offboard node's waypoint buffer topic
-(``/waypoint_buffer`` by default, reliable QoS), so the offboard node buffers
-and flies them in order. Pointing ``--topic /waypoint_pose`` instead routes the
-waypoints through the goal marker node (same as RViz 2D Goal Pose clicks).
+submitted in one request to the offboard node's waypoint-buffer service
+(``/waypoint_buffer`` by default), so the offboard node queues and flies them
+in order.
 
 Options:
   --config PATH     benchmark.yaml (default: <pkg>/config/benchmark.yaml)
-  --topic NAME      buffer/ingestion topic to publish to
+  --queue-service NAME
+                    waypoint-buffer service to enqueue the route
                     (default: /waypoint_buffer)
   --frame-id NAME   waypoint frame (default: world)
   --map-x M         field width  [m] (default: from benchmark.yaml)
@@ -25,7 +25,6 @@ Options:
   --margin M        inset from the field edges [m] (default: 1.0)
   --z M             waypoint altitude [m] (default: 5.0)
   --start-delay S   seconds to wait after start before publishing (default: 5.0)
-  --interval S      seconds between waypoint publishes (default: 0.05)
 """
 
 import argparse
@@ -34,8 +33,8 @@ from pathlib import Path
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from geometry_msgs.msg import PoseStamped
+from offboard_fsm.srv import QueueWaypoints
 
 try:
     from .generate_map import find_project_root, load_config
@@ -75,32 +74,24 @@ def _default_config_path():
 
 
 class WaypointPopulator(Node):
-    def __init__(self, topic, frame_id, map_x, map_y, spacing, margin, z,
-                 start_delay, interval):
+    def __init__(self, queue_service, frame_id, map_x, map_y, spacing, margin, z,
+                 start_delay):
         super().__init__('waypoint_populator')
-        self._topic = topic
+        self._queue_service = queue_service
         self._frame_id = frame_id
         self._z = float(z)
-        self._interval = float(interval)
         self._pts = serpentine(float(map_x), float(map_y),
                                float(spacing), float(margin))
-        self._idx = 0
-        self._started = False
+        self._submitted = False
         self._timer = None
 
-        # Reliable/volatile so the offboard node's reliable /waypoint_buffer
-        # subscription never drops a waypoint.
-        self.pub_ = self.create_publisher(
-            PoseStamped, self._topic,
-            QoSProfile(depth=10,
-                       reliability=ReliabilityPolicy.RELIABLE,
-                       durability=DurabilityPolicy.VOLATILE))
+        self.queue_client = self.create_client(QueueWaypoints, self._queue_service)
 
         self.get_logger().info(
             f"Serpentine waypoint populator: {len(self._pts)} waypoints over "
             f"{float(map_x):.1f} x {float(map_y):.1f} m (spacing "
             f"{float(spacing):.2f}, margin {float(margin):.1f}, z {self._z:.1f}) "
-            f"-> {self._topic}")
+            f"-> service {self._queue_service}")
 
         if not self._pts:
             self.get_logger().error(
@@ -111,68 +102,42 @@ class WaypointPopulator(Node):
         self._timer = self.create_timer(float(start_delay), self._on_tick)
 
     def _on_tick(self):
-        if not self._started:
-            # First tick: switch from the start-delay timer to the per-waypoint
-            # interval timer.
-            self._started = True
-            if self._timer is not None:
-                self._timer.cancel()
-            if self.pub_.get_subscription_count() == 0:
-                # Nobody is listening yet (the offboard node may still be
-                # coming up / being discovered). Wait for a subscriber so no
-                # waypoint is dropped.
-                self.get_logger().info(
-                    f"No subscriber on {self._topic} yet - waiting for the "
-                    "offboard node to connect ...")
-                self._timer = self.create_timer(0.5, self._check_subscribers)
-                return
-            self._begin_publish()
+        if self._submitted:
             return
-
-        if self._idx >= len(self._pts):
-            self._finish()
+        if not self.queue_client.service_is_ready():
+            self.get_logger().info(
+                f"Waypoint queue service {self._queue_service} is not ready; waiting ...")
             return
-        self._publish_one()
-
-    def _check_subscribers(self):
-        if self.pub_.get_subscription_count() > 0:
-            self.get_logger().info("Subscriber connected; starting.")
-            if self._timer is not None:
-                self._timer.cancel()
-            self._begin_publish()
-
-    def _begin_publish(self):
-        self.get_logger().info(
-            f"Publishing {len(self._pts)} waypoints to {self._topic} ...")
-        if self._interval <= 0.0:
-            while self._idx < len(self._pts):
-                self._publish_one()
-            self._finish()
-            return
-        self._timer = self.create_timer(self._interval, self._on_tick)
-
-    def _publish_one(self):
-        x, y = self._pts[self._idx]
-        msg = PoseStamped()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = self._frame_id
-        msg.pose.position.x = float(x)
-        msg.pose.position.y = float(y)
-        msg.pose.position.z = self._z
-        msg.pose.orientation.w = 1.0
-        self.pub_.publish(msg)
-        self.get_logger().info(
-            f"Waypoint {self._idx + 1}/{len(self._pts)}: "
-            f"({x:.2f}, {y:.2f}, {self._z:.1f})")
-        self._idx += 1
-
-    def _finish(self):
+        request = QueueWaypoints.Request()
+        stamp = self.get_clock().now().to_msg()
+        for x, y in self._pts:
+            waypoint = PoseStamped()
+            waypoint.header.stamp = stamp
+            waypoint.header.frame_id = self._frame_id
+            waypoint.pose.position.x = float(x)
+            waypoint.pose.position.y = float(y)
+            waypoint.pose.position.z = self._z
+            waypoint.pose.orientation.w = 1.0
+            request.waypoints.append(waypoint)
+        self._submitted = True
         if self._timer is not None:
             self._timer.cancel()
             self._timer = None
+        self.queue_client.call_async(request).add_done_callback(self._queue_response)
+
+    def _queue_response(self, future):
+        try:
+            response = future.result()
+        except Exception as error:
+            self.get_logger().error(f"Waypoint queue request failed: {error}")
+            return
+        if not response.success or response.queued_count != len(self._pts):
+            self.get_logger().error(
+                f"Waypoint queue rejected the route: {response.message} "
+                f"({response.queued_count}/{len(self._pts)} accepted)")
+            return
         self.get_logger().info(
-            f"All {len(self._pts)} waypoints published to {self._topic}; "
-            "the offboard node's waypoint buffer is now populated.")
+            f"Queued all {response.queued_count} waypoints on {self._queue_service}.")
 
 
 def main(args=None):
@@ -182,10 +147,8 @@ def main(args=None):
     parser.add_argument('--config', default=None,
                         help='Path to benchmark.yaml '
                              '(default: <pkg>/config/benchmark.yaml)')
-    parser.add_argument('--topic', default='/waypoint_buffer',
-                        help='Buffer/ingestion topic to publish to '
-                             '(default: /waypoint_buffer; /waypoint_pose also '
-                             'works and routes through the goal marker node)')
+    parser.add_argument('--queue-service', default='/waypoint_buffer',
+                        help='Waypoint queue service (default: /waypoint_buffer)')
     parser.add_argument('--frame-id', default='world',
                         help='Fixed frame of the waypoints (default: world)')
     parser.add_argument('--map-x', type=float, default=None,
@@ -199,11 +162,8 @@ def main(args=None):
     parser.add_argument('--z', type=float, default=5.0,
                         help='Waypoint altitude [m] (default: 5.0)')
     parser.add_argument('--start-delay', type=float, default=5.0,
-                        help='Seconds to wait after start before publishing '
+                        help='Seconds to wait after start before queueing '
                              '(default: 5.0)')
-    parser.add_argument('--interval', type=float, default=0.05,
-                        help='Seconds between waypoint publishes '
-                             '(default: 0.05)')
     opts = parser.parse_args(args)
 
     # Map size: CLI flags win; otherwise read from benchmark.yaml.
@@ -225,9 +185,8 @@ def main(args=None):
         sys.exit('ERROR: map size must be positive')
 
     rclpy.init(args=[])
-    node = WaypointPopulator(opts.topic, opts.frame_id, map_x, map_y,
-                             opts.spacing, opts.margin, opts.z,
-                             opts.start_delay, opts.interval)
+    node = WaypointPopulator(opts.queue_service, opts.frame_id, map_x, map_y,
+                             opts.spacing, opts.margin, opts.z, opts.start_delay)
     try:
         rclpy.spin(node)
     finally:

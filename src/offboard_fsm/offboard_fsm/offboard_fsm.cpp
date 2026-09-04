@@ -35,8 +35,10 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     planner_reset_service_ = declare_parameter("planner_reset_service", planner_reset_service_);
     takeoff_cmd_topic_ = declare_parameter("takeoff_cmd_topic", takeoff_cmd_topic_);
     land_cmd_topic_ = declare_parameter("land_cmd_topic", land_cmd_topic_);
-    const std::string waypoint_buffer_topic =
-        declare_parameter("waypoint_buffer_topic", "/waypoint_buffer");
+    waypoint_queue_service_ =
+        declare_parameter("waypoint_queue_service", waypoint_queue_service_);
+    clear_waypoints_service_ =
+        declare_parameter("clear_waypoints_service", clear_waypoints_service_);
     waypoint_reached_dist_ =
         declare_parameter("waypoint_reached_dist", waypoint_reached_dist_);
     const double waypoint_hold_time =
@@ -51,12 +53,20 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
         planner_reset_service_, goal_status_topic_);
 
     waypoints_ = std::make_unique<WaypointHandler>(
-        *this, waypoint_buffer_topic, waypoint_reached_dist_, waypoint_hold_time,
+        *this, waypoint_reached_dist_, waypoint_hold_time,
         [this]() { return px4_->getLocalPosition(); });
 
     land_srv_ = create_service<std_srvs::srv::Trigger>(
         "~/land",
         std::bind(&OffboardNode::landCallback, this,
+                  std::placeholders::_1, std::placeholders::_2));
+    waypoint_queue_srv_ = create_service<offboard_fsm::srv::QueueWaypoints>(
+        waypoint_queue_service_,
+        std::bind(&OffboardNode::queueWaypointsCallback, this,
+                  std::placeholders::_1, std::placeholders::_2));
+    clear_waypoints_srv_ = create_service<offboard_fsm::srv::ClearWaypoints>(
+        clear_waypoints_service_,
+        std::bind(&OffboardNode::clearWaypointsCallback, this,
                   std::placeholders::_1, std::placeholders::_2));
 
     takeoff_cmd_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -77,6 +87,40 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
                 "Offboard state machine started (planner-driven). "
                 "Listening on %s, planner active threshold = %.1f Hz",
                 cmd_topic_.c_str(), planner_cmd_hz_);
+}
+
+void OffboardNode::queueWaypointsCallback(
+    const std::shared_ptr<offboard_fsm::srv::QueueWaypoints::Request> req,
+    std::shared_ptr<offboard_fsm::srv::QueueWaypoints::Response> res)
+{
+    if (req->waypoints.empty()) {
+        res->success = false;
+        res->message = "waypoint queue request must contain at least one waypoint";
+        res->queued_count = 0;
+        return;
+    }
+    res->queued_count = static_cast<uint32_t>(waypoints_->enqueue(req->waypoints));
+    res->success = true;
+    res->message = "queued " + std::to_string(res->queued_count) + " waypoint(s)";
+}
+
+void OffboardNode::clearWaypointsCallback(
+    const std::shared_ptr<offboard_fsm::srv::ClearWaypoints::Request> /*req*/,
+    std::shared_ptr<offboard_fsm::srv::ClearWaypoints::Response> res)
+{
+    res->cleared_count = static_cast<uint32_t>(waypoints_->clearPending());
+    active_goal_ = geometry_msgs::msg::PoseStamped();
+    super_->clearGoalStatus();
+    stuck_recovery_attempted_ = false;
+
+    if (state_ == State::MOVE) {
+        captureHold();
+        setState(State::IDLE);
+        restartPlanner();
+    }
+
+    res->success = true;
+    res->message = "cleared " + std::to_string(res->cleared_count) + " waypoint(s)";
 }
 
 void OffboardNode::setState(State s)

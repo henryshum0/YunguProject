@@ -6,7 +6,6 @@ namespace offboard
 {
 
 WaypointHandler::WaypointHandler(rclcpp::Node &node,
-                                 const std::string &buffer_topic,
                                  double reached_dist,
                                  double hold_time,
                                  LocalPosGetter local_pos_getter)
@@ -15,17 +14,18 @@ WaypointHandler::WaypointHandler(rclcpp::Node &node,
       hold_time_(hold_time),
       local_pos_getter_(std::move(local_pos_getter))
 {
-    buffer_sub_ = node_.create_subscription<geometry_msgs::msg::PoseStamped>(
-        buffer_topic, rclcpp::QoS(10).reliable(),
-        std::bind(&WaypointHandler::waypointCallback, this, std::placeholders::_1));
 }
 
-void WaypointHandler::waypointCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+size_t WaypointHandler::enqueue(const std::vector<geometry_msgs::msg::PoseStamped> &waypoints)
 {
-    buffer_.push_back(*msg);
-    RCLCPP_INFO(node_.get_logger(), "Waypoint buffered (#%zu): (%.2f, %.2f, %.2f)",
-                buffer_.size(),
-                msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
+    for (const auto &waypoint : waypoints) {
+        buffer_.push_back(waypoint);
+        RCLCPP_INFO(node_.get_logger(), "Waypoint buffered (#%zu): (%.2f, %.2f, %.2f)",
+                    buffer_.size(),
+                    waypoint.pose.position.x, waypoint.pose.position.y,
+                    waypoint.pose.position.z);
+    }
+    return waypoints.size();
 }
 
 bool WaypointHandler::advanceToNext()
@@ -73,7 +73,7 @@ void WaypointHandler::tick(bool active)
 
 size_t WaypointHandler::clearPending()
 {
-    const size_t pending = buffer_.size();
+    const size_t pending = buffer_.size() + (current_ ? 1U : 0U);
     buffer_.clear();
     current_.reset();
     wp_reached_ = false;

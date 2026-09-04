@@ -178,7 +178,10 @@ def generate_launch_description():
     topic_args = {
         'cmd_topic': str(topic('super.out.pos_cmd', '/planning/pos_cmd')),
         'goal_topic': str(topic('super.in.goal_pose', '/goal_pose')),
-        'waypoint_buffer_topic': str(topic('offboard_fsm.in.waypoint_buffer', '/waypoint_buffer')),
+        'waypoint_queue_service': str(topic(
+            'offboard_fsm.services.queue_waypoints', '/waypoint_buffer')),
+        'clear_waypoints_service': str(topic(
+            'offboard_fsm.services.clear_waypoints', '/waypoint_buffer/clear')),
         'cloud_in_topic': default_cloud_in,
     }
 
@@ -239,7 +242,8 @@ def generate_launch_description():
                 'land_detected_topic': topic('offboard_fsm.in.vehicle_land_detected',
                                              '/fmu/out/vehicle_land_detected'),
                 'goal_topic': LaunchConfiguration('goal_topic'),
-                'waypoint_buffer_topic': LaunchConfiguration('waypoint_buffer_topic'),
+                'waypoint_queue_service': LaunchConfiguration('waypoint_queue_service'),
+                'clear_waypoints_service': LaunchConfiguration('clear_waypoints_service'),
                 'planner_state_topic': topic('super.out.planner_state', 'fsm/planner_state'),
                 'goal_status_topic': topic('super.out.goal_status', 'fsm/goal_status'),
                 'lio_state_topic': topic('fastlio.out.lio_state', 'fastlio/lio_state'),
@@ -254,14 +258,14 @@ def generate_launch_description():
         # (/gz/point_cloud_super + /lidar_slam/odom); offboard no longer runs a
         # super_bridge.
 
-        # Goal marker node (waypoint ingestion + marking -> waypoint buffer).
+        # Goal marker node (waypoint ingestion + marking -> waypoint queue service).
         # Stamps the RViz 2D goal's height with goal_height before forwarding.
         Node(
             package='offboard_fsm', executable='goal_marker_node', name='goal_marker_node',
             output='screen',
             parameters=[{
                 'waypoint_topic': topic('offboard_fsm.in.waypoint_pose', '/waypoint_pose'),
-                'waypoint_buffer_topic': LaunchConfiguration('waypoint_buffer_topic'),
+                'waypoint_queue_service': LaunchConfiguration('waypoint_queue_service'),
                 'waypoint_marker_topic': topic('offboard_fsm.out.waypoint_markers',
                                                '/waypoint_markers'),
                 'waypoint_marker_rate': 10.0,

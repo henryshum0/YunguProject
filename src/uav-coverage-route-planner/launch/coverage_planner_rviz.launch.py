@@ -11,7 +11,9 @@ from launch_ros.actions import Node
 
 def generate_launch_description() -> LaunchDescription:
     share_directory = Path(get_package_share_directory("coverage_planner"))
-    default_config = share_directory / "config" / "example_planner.json"
+    # The Yungu mission configuration resolves its adjacent yungu_map.json,
+    # making it the useful default for the project-level launchers.
+    default_config = share_directory / "config" / "yungu_planner.json"
     rviz_config = share_directory / "rviz" / "coverage_planner.rviz"
     return LaunchDescription([
         DeclareLaunchArgument(

@@ -158,7 +158,7 @@ def search_area_from_polygon(
 
 
 class CoveragePlannerNode(Node):
-    """Plans from JSON at startup and accepts live four-corner service requests."""
+    """Loads map settings at startup and plans only on service requests."""
 
     def __init__(self) -> None:
         super().__init__("coverage_planner")
@@ -173,38 +173,50 @@ class CoveragePlannerNode(Node):
         """Plan from the supplied config (or the configured JSON) and publish it."""
         if config is None:
             config = self._load_config()
-        result = plan_from_config(config)
-        stamp = self.get_clock().now().to_msg()
-        path = build_path(result.planning_route, frame_id=config.frame_id, stamp=stamp)
-        markers = build_markers(config, result.planning_route, stamp=stamp)
-        if self.waypoint_publisher is None:
-            qos = latched_qos()
-            self.waypoint_publisher = self.create_publisher(
-                Path, config.output_topics.waypoints, qos)
-            self.marker_publisher = self.create_publisher(
-                MarkerArray, config.output_topics.markers, qos)
+        result, path = self._plan(config)
+        markers = build_markers(config, result.planning_route, stamp=path.header.stamp)
+        self._ensure_publishers(config)
         self.waypoint_publisher.publish(path)
         self.marker_publisher.publish(markers)
-        self.config = config
-        self.result = result
         self.get_logger().info(
             f"published {len(path.poses)} sparse waypoints on "
             f"'{config.output_topics.waypoints}' in frame '{config.frame_id}'")
         return path
 
+    def _plan(self, config: StartupConfig | None = None) -> tuple[PlanResult, Path]:
+        """Plan and build a response path without publishing ROS output topics."""
+        if config is None:
+            config = self._load_config()
+        result = plan_from_config(config)
+        stamp = self.get_clock().now().to_msg()
+        path = build_path(result.planning_route, frame_id=config.frame_id, stamp=stamp)
+        self.result = result
+        return result, path
+
     def start(self) -> None:
-        """Publish the configured area once and expose the replanning service."""
+        """Validate the startup JSON and expose the on-demand planning service."""
         from coverage_planner.srv import PlanCoverage
 
-        self.plan_and_publish()
+        self.config = self._load_config()
+        self._ensure_publishers(self.config)
         self.plan_service = self.create_service(
             PlanCoverage,
             "~/plan_coverage",
             self._handle_plan_coverage,
         )
         self.get_logger().info(
-            "waiting for four-corner coverage requests on "
-            "'/coverage_planner/plan_coverage'")
+            "ready for four-corner coverage requests on "
+            "'/coverage_planner/plan_coverage'; routes publish only when requested")
+
+    def _ensure_publishers(self, config: StartupConfig) -> None:
+        """Create output publishers once without publishing an initial result."""
+        if self.waypoint_publisher is not None:
+            return
+        qos = latched_qos()
+        self.waypoint_publisher = self.create_publisher(
+            Path, config.output_topics.waypoints, qos)
+        self.marker_publisher = self.create_publisher(
+            MarkerArray, config.output_topics.markers, qos)
 
     def _load_config(self) -> StartupConfig:
         config_file = self.get_parameter("config_file").get_parameter_value().string_value
@@ -215,7 +227,7 @@ class CoveragePlannerNode(Node):
         return load_config(config_file)
 
     def _handle_plan_coverage(self, request, response):
-        """Plan the request's search area and return the sparse route to the caller."""
+        """Plan the request's search area and optionally publish the sparse route."""
         if self.config is None:
             response.success = False
             response.message = "coverage planner startup has not completed"
@@ -223,9 +235,14 @@ class CoveragePlannerNode(Node):
         try:
             points = search_area_from_polygon(
                 request.search_area, expected_frame_id=self.config.frame_id)
-            path = self.plan_and_publish(replace(self.config, search_area_points=points))
+            config = replace(self.config, search_area_points=points)
+            if request.publish_result:
+                path = self.plan_and_publish(config)
+            else:
+                _, path = self._plan(config)
             response.success = True
-            response.message = f"planned {len(path.poses)} sparse waypoints"
+            action = "planned and published" if request.publish_result else "planned"
+            response.message = f"{action} {len(path.poses)} sparse waypoints"
             response.waypoints = path
         except Exception as exc:  # noqa: BLE001 - service errors must not terminate the node
             response.success = False

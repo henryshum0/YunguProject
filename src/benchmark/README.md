@@ -72,12 +72,12 @@ ros2 run benchmark waypoint_populator
 # Options
 ros2 run benchmark waypoint_populator \
     --spacing 2.5 --margin 1.0 --z 5.0 \
-    --start-delay 5.0 --interval 0.05
+    --start-delay 5.0
 ```
 
-By default the waypoints go to the offboard node's buffer topic
-(`/waypoint_buffer`, reliable QoS). To route them through the goal marker node
-instead (same path as RViz "2D Goal Pose" clicks), pass `--topic /waypoint_pose`.
+By default the route is submitted atomically to the offboard waypoint-buffer service
+(`/waypoint_buffer`). Override it with `--queue-service NAME`. RViz's `2D Goal Pose`
+tool still sends individual manual goals through `/waypoint_pose`.
 Map size is read from `config/benchmark.yaml`; override with `--map-x/--map-y`.
 
 ## Config keys (`config/benchmark.yaml`)

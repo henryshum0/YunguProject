@@ -7,10 +7,11 @@ from skills.base import (
     SkillTimeoutError,
 )
 from skills.navigate import NavigateSkill
-from skills.primitives import MovePrimitive, PlanSearchPrimitive
+from skills.primitives import ClearWaypointsPrimitive, MovePrimitive, PlanSearchPrimitive
 from skills.search import SearchSkill
 
 __all__ = [
+    "ClearWaypointsPrimitive",
     "MovePrimitive",
     "NavigateSkill",
     "PlanSearchPrimitive",

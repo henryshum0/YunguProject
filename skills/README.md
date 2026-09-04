@@ -16,14 +16,15 @@ Use the primitives from an orchestrator node:
 
 ```python
 from rclpy.node import Node
-from skills import MovePrimitive, NavigateSkill, PlanSearchPrimitive
+from skills import ClearWaypointsPrimitive, MovePrimitive, NavigateSkill, PlanSearchPrimitive
 
 node = Node("mission_orchestrator")
 search = PlanSearchPrimitive(node, frame_id="map")
 path = search.call(((10.0, 10.0), (120.0, 10.0), (120.0, 80.0), (10.0, 80.0)))
 
-move = MovePrimitive(node)  # reliable /waypoint_buffer by default
+move = MovePrimitive(node)  # /waypoint_buffer queue service by default
 count = move.call(path.poses)
+cleared = ClearWaypointsPrimitive(node).call()
 ```
 
 `NavigateSkill` is the coordinate-based interface to `MovePrimitive`. Its waypoints use
@@ -43,8 +44,12 @@ navigate.call([
 ```
 
 The skill transforms NED waypoints to ENU and stores the ENU heading in each generated
-`PoseStamped` quaternion before publishing to `/waypoint_buffer`. It returns after publication,
-not after physical arrival. The current offboard FSM navigates based on waypoint position.
+`PoseStamped` quaternion before queuing the batch through `/waypoint_buffer`. It returns after
+the service accepts the route, not after physical arrival. The current offboard FSM navigates
+based on waypoint position. Before queuing, it waits up to 10 seconds for the `offboard_fsm`
+service and raises `SkillTimeoutError` if the lower-level node is not ready. Call
+`navigate.clear()` to abort the active route and remove all queued waypoints through
+`/waypoint_buffer/clear`.
 
 `SearchSkill` composes the planner and navigation interfaces: it requests a four-corner ENU
 search area, queues the returned ENU `Path` through `NavigateSkill`, then returns that path.
@@ -57,10 +62,13 @@ path = search_and_navigate.call(((10.0, 10.0), (120.0, 10.0), (120.0, 80.0), (10
 ```
 
 `PlanSearchPrimitive` calls `/coverage_planner/plan_coverage`, waits for its response, and returns
-the sparse `nav_msgs/msg/Path`. Its poses already use ENU positions and ROS ENU-yaw quaternions,
-matching ENU output from `NavigateSkill`. It requires exactly four finite, distinct ENU corners
-in the configured map frame. `MovePrimitive` only publishes `PoseStamped` goals to the running
-`offboard_fsm`; it returns once they have been published, not when the vehicle finishes flying.
+the sparse `nav_msgs/msg/Path`. It defaults to a non-publishing preview; pass
+`publish_result=True` to refresh the planner waypoint and marker topics. `SearchSkill` does this
+automatically before queueing its route. Its poses already use ENU positions and ROS ENU-yaw
+quaternions, matching ENU output from `NavigateSkill`. It requires exactly four finite, distinct
+ENU corners in the configured map frame. `MovePrimitive` submits `PoseStamped` batches to the running
+`offboard_fsm` queue service; it returns once they have been accepted, not when the vehicle
+finishes flying. Planner, queue, and clear-service readiness failures raise `SkillTimeoutError`.
 
 Both primitives accept alternate ROS names through their constructors. Calls raise
 `SkillTimeoutError` when the planner service is unavailable or does not respond, and

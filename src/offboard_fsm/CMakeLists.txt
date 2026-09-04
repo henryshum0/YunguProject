@@ -12,6 +12,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(px4_msgs REQUIRED)
@@ -24,6 +25,14 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(super_planner REQUIRED)
 find_package(fast_lio REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/QueueWaypoints.srv"
+  "srv/ClearWaypoints.srv"
+  DEPENDENCIES geometry_msgs
+)
+
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 # State-machine state handlers (each state lives in its own file).
 set(OFFBOARD_STATE_SOURCES
@@ -62,6 +71,7 @@ ament_target_dependencies(offboard_node
   super_planner
   fast_lio
 )
+target_link_libraries(offboard_node "${cpp_typesupport_target}")
 
 # --- FAST-LIO -> PX4 visual odometry bridge (C++ replacement for the legacy
 #     scripts/fastlio_px4_bridge.py) ---
@@ -91,6 +101,7 @@ ament_target_dependencies(goal_marker_node
   geometry_msgs
   visualization_msgs
 )
+target_link_libraries(goal_marker_node "${cpp_typesupport_target}")
 
 # (super_bridge moved to gz_sensor_interface/super_lidar -> /gz/point_cloud_super)
 
@@ -120,6 +131,7 @@ ament_target_dependencies(offboard_component
   super_planner
   fast_lio
 )
+target_link_libraries(offboard_component "${cpp_typesupport_target}")
 
 rclcpp_components_register_node(offboard_component
   PLUGIN "offboard::OffboardNode"
@@ -141,6 +153,7 @@ install(DIRECTORY
 )
 
 ament_export_include_directories(include)
-ament_export_dependencies(rclcpp rclcpp_components px4_msgs mars_quadrotor_msgs std_srvs)
+ament_export_dependencies(rclcpp rclcpp_components px4_msgs mars_quadrotor_msgs std_srvs
+  rosidl_default_runtime)
 
 ament_package()

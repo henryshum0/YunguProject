@@ -1,7 +1,8 @@
 # coverage_planner
 
-`coverage_planner` is a ROS 2 Humble node that plans a single-UAV coverage route once at
-startup. It publishes a sparse navigation `Path` and RViz markers from local ENU JSON geometry.
+`coverage_planner` is a ROS 2 Humble node that loads a single-UAV coverage map at startup and
+plans on demand. A successful service request publishes a sparse navigation `Path` and RViz
+markers from local ENU JSON geometry.
 
 The package targets Ubuntu 22.04, ROS 2 Humble, and Python 3.10. It uses system Python—no pip,
 virtual environment, or uv is required.
@@ -33,7 +34,8 @@ ros2 run coverage_planner coverage_planner_node --ros-args \
   -p config_file:=$(ros2 pkg prefix coverage_planner)/share/coverage_planner/config/example_planner.json
 ```
 
-The node plans and publishes once, then remains alive so late subscribers receive its latched
+The node validates its configuration and waits for a planning request; it does not publish a
+route or markers at startup. After a successful request, late subscribers receive the latched
 result:
 
 ```bash
@@ -47,7 +49,8 @@ The node also exposes `~/plan_coverage`, which resolves to
 `/coverage_planner/plan_coverage`. Its type is `coverage_planner/srv/PlanCoverage`.
 Send exactly four unclosed ENU corners in `search_area` as a `geometry_msgs/PolygonStamped` whose
 `header.frame_id` exactly matches the configured map frame. A successful response returns the
-sparse `nav_msgs/Path` and refreshes the latched waypoint and marker topics. The point `z` values
+sparse `nav_msgs/Path`. Set `publish_result: true` to also refresh the latched waypoint and
+marker topics; it defaults to `false`, which is a non-publishing preview. The point `z` values
 are ignored; route altitude still comes from the planner JSON.
 
 ```bash
@@ -55,7 +58,7 @@ ros2 service call /coverage_planner/plan_coverage coverage_planner/srv/PlanCover
   "{search_area: {header: {frame_id: map}, polygon: {points: [
     {x: 10.0, y: 10.0}, {x: 120.0, y: 10.0},
     {x: 120.0, y: 80.0}, {x: 10.0, y: 80.0}
-  ]}}}"
+  ]}}, publish_result: false}"
 ```
 
 The response has `success`, `message`, and `waypoints`. Invalid frames, anything other than four
@@ -158,8 +161,9 @@ coverage-lane endpoints, connector or obstacle-avoidance vertices, and optional 
 boundary, red occupied boundaries, and blue waypoint points. Both use reliable,
 transient-local, keep-last-1 QoS.
 
-If either JSON cannot be loaded or validated, planning fails, or required coverage is infeasible,
-the node logs a fatal error, publishes neither topic, and exits nonzero.
+If either JSON cannot be loaded or validated, the node logs a fatal error, publishes neither
+topic, and exits nonzero. Invalid or infeasible service requests return `success: false` without
+publishing a new result; the node remains available for the next request.
 
 ## Test
 

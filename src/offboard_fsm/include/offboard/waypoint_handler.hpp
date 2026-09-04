@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -20,11 +21,11 @@ public:
     using LocalPosGetter = std::function<std::shared_ptr<const px4_msgs::msg::VehicleLocalPosition>()>;
 
     explicit WaypointHandler(rclcpp::Node &node,
-                             const std::string &buffer_topic,
                              double reached_dist,
                              double hold_time,
                              LocalPosGetter local_pos_getter);
 
+    size_t enqueue(const std::vector<geometry_msgs::msg::PoseStamped> &waypoints);
     void tick(bool active);
 
     bool advanceToNext();
@@ -52,10 +53,7 @@ public:
     bool hasReachedCurrent() const { return wp_reached_; }
 
 private:
-    void waypointCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
-
     rclcpp::Node &node_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr buffer_sub_;
     double reached_dist_;
     double hold_time_;
     LocalPosGetter local_pos_getter_;

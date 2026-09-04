@@ -7,6 +7,8 @@
 #include <std_srvs/srv/trigger.hpp>
 #include <std_msgs/msg/bool.hpp>
 
+#include "offboard_fsm/srv/clear_waypoints.hpp"
+#include "offboard_fsm/srv/queue_waypoints.hpp"
 #include "offboard/px4_handler.hpp"
 #include "offboard/super_handler.hpp"
 #include "offboard/waypoint_handler.hpp"
@@ -55,12 +57,16 @@ private:
     std::string planner_reset_service_{"/fsm_node/reset"};
     std::string takeoff_cmd_topic_{"/takeoff_cmd"};
     std::string land_cmd_topic_{"/land_cmd"};
+    std::string waypoint_queue_service_{"/waypoint_buffer"};
+    std::string clear_waypoints_service_{"/waypoint_buffer/clear"};
 
     std::unique_ptr<Px4Handler> px4_;
     std::unique_ptr<SuperHandler> super_;
     std::unique_ptr<WaypointHandler> waypoints_;
 
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_srv_;
+    rclcpp::Service<offboard_fsm::srv::QueueWaypoints>::SharedPtr waypoint_queue_srv_;
+    rclcpp::Service<offboard_fsm::srv::ClearWaypoints>::SharedPtr clear_waypoints_srv_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr takeoff_cmd_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr land_cmd_sub_;
     rclcpp::TimerBase::SharedPtr timer_;
@@ -96,6 +102,12 @@ private:
     void timerCallback();
     void landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
                       std::shared_ptr<std_srvs::srv::Trigger::Response> res);
+    void queueWaypointsCallback(
+        const std::shared_ptr<offboard_fsm::srv::QueueWaypoints::Request> req,
+        std::shared_ptr<offboard_fsm::srv::QueueWaypoints::Response> res);
+    void clearWaypointsCallback(
+        const std::shared_ptr<offboard_fsm::srv::ClearWaypoints::Request> req,
+        std::shared_ptr<offboard_fsm::srv::ClearWaypoints::Response> res);
     void takeoffCmdCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void landCmdCallback(const std_msgs::msg::Bool::SharedPtr msg);
 

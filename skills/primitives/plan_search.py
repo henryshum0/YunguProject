@@ -40,8 +40,19 @@ class PlanSearchPrimitive(Primitive[SearchArea, Path]):
     def service_name(self) -> str:
         return self._service_name
 
-    def call(self, request: SearchArea, *, timeout_sec: float | None = 10.0) -> Path:
-        """Wait for the planner service, then return its sparse waypoint path."""
+    def call(
+        self,
+        request: SearchArea,
+        *,
+        publish_result: bool = False,
+        timeout_sec: float | None = 30.0,
+    ) -> Path:
+        """Wait for the planner service, then return its sparse waypoint path.
+
+        ``publish_result=False`` is a dry run: the route is returned only in the
+        service response. Set it when a planner `Path`/marker visualization is
+        desired as well.
+        """
         corners = _validated_corners(request)
         if not self._client.wait_for_service(timeout_sec=timeout_sec):
             raise SkillTimeoutError(
@@ -51,6 +62,7 @@ class PlanSearchPrimitive(Primitive[SearchArea, Path]):
         service_request.search_area.polygon.points = [
             Point32(x=x, y=y, z=0.0) for x, y in corners
         ]
+        service_request.publish_result = bool(publish_result)
         future = self._client.call_async(service_request)
         rclpy.spin_until_future_complete(self._node, future, timeout_sec=timeout_sec)
         if not future.done():
