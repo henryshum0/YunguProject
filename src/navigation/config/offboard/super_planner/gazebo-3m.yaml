@@ -112,14 +112,14 @@ rog_map:
   inflation_step: 2
   unk_inflation_en: false
   unk_inflation_step: 1
-  map_size: [ 100, 100, 10 ]
+  map_size: [ 100, 100, 20 ]
   # If the map rolling is disable, the map origin [m] should be set.
   fix_map_origin: [ 0,0,1.5 ]
   frontier_extraction_en: false
 
   # Virtual ceil and ground
-  virtual_ceil_height: 15
-  virtual_ground_height: -2
+  virtual_ceil_height: 30
+  virtual_ground_height: 15
 
   load_pcd_en: false
 

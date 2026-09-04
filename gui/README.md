@@ -26,6 +26,21 @@ All values are editable for namespaced or remapped systems.
 - **Take off** and **Land** publish the existing `Bool(data=True)` commands only after a confirmation
   dialog.
 
+## Coverage map selection
+
+The Coverage Search tab defaults to
+`src/search/config/yungu_map.json`. It renders the map origin and occupied footprints directly
+from the planner-compatible JSON; no image file or additional Python package is required.
+
+Use **Browse…** to select another map JSON and **Reload** after editing one. The selected map is a
+visual aid only: it does not reconfigure the running coverage planner. Select the same map used by
+the planner's startup configuration to avoid planning against a different obstacle layout.
+
+Click two opposite points on the map to create an axis-aligned ENU rectangle. The GUI fills the
+four service corners in southwest, southeast, northeast, northwest order; you can still edit those
+values manually. **Reset selection** clears only the search rectangle. Successful Plan only and
+Plan and queue requests overlay their returned sparse waypoint route in blue.
+
 Run the non-graphical import check with:
 
 ```bash

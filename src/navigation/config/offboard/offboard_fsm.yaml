@@ -32,7 +32,7 @@ offboard_fsm:
   yaw_align_thresh: 0.35
 
   # NED hover height after OFFBOARD (negative = up) [m]
-  default_height: 25.0
+  default_height: 20.0
 
   # Takeoff climb velocity [m/s] (direct PX4 vertical climb, no planner).
   takeoff_vel: 2.0
