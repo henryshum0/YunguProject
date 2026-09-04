@@ -12,7 +12,7 @@
 | 系统 | 职责 | 产出/接口 |
 |---|---|---|
 | **coverage-search-planner** | 离线生成覆盖搜索航线（扫描方向、航线集合、避障连接、覆盖复核、航点细分） | `flight_plan.json`（ENU 米制航点 + 航段协议） |
-| **YunguProject（本仓库）** | 在线执行：PX4/FAST-LIO 定位、SUPER 点对点避障规划、offboard 状态机 | 消费 `/waypoint_pose`（world ENU），飞抵每个航点 |
+| **YunguProject（本仓库）** | 在线执行：PX4/FAST-LIO 定位、SUPER 点对点避障规划、offboard 状态机 | 消费 `/waypoint_buffer` `QueueWaypoints` 服务（world ENU），飞抵每个航点 |
 
 两者解耦点：**`flight_plan.json` 文件**。上游只需知道目标区域和地图语义，
 下游只需逐点导航，互不依赖对方的运行环境。
@@ -27,7 +27,7 @@ coverage-search-planner (离线)          YunguProject (在线)
 │ flight_plan.json        │────转换────▶│ csp_adapter (本指南第 4 节) │
 │  (ENU 航点+航段)         │  坐标系对齐  │      │                     │
 └─────────────────────────┘            │      ▼                     │
-                                       │ /waypoint_pose ──→ offboard │
+                                       │ /waypoint_buffer 服务 ──→ offboard │
                                        │        └──→ SUPER 避障规划    │
                                        │             └──→ PX4 执行     │
                                        └─────────────────────────────┘
@@ -120,14 +120,15 @@ world 系（2026-08-19 实测），所以起飞点读数直接 ≈ 模型 spawn 
 
 1. **加载并校验** `flight_plan.json`（第 2 节校验项）
 2. **坐标系变换**：`p_world = Rz * p_planner + T`（默认 Rz = 恒等）
-3. **按 sequence 顺序逐点发布** `PoseStamped` 到 `/waypoint_pose`
-   （world ENU，`orientation` 由 `heading_deg` 换算 yaw：`yaw = heading_deg * π/180`）
+3. **按 sequence 顺序批量提交** `PoseStamped[]` 到 `/waypoint_buffer` 的
+   `offboard_fsm/srv/QueueWaypoints` 服务（world ENU，`orientation` 由
+   `heading_deg` 换算 yaw：`yaw = heading_deg * π/180`）
 4. **尊重航段语义**：
    - 每个 `turn_in_place=true` 的航点：发布后等 `hold_time_s` 再发下一点
      （本仓库 offboard 的 `waypoint_hold_time` 是全局限定，建议在适配器内做）
    - 不跳过 `obstacle_avoidance` 段（SUPER 还会在航段间做局部避障）
 5. **进度反馈**：订阅 `/waypoint_markers`（绿=排队、黄=执行中）或
-   `/lidar_slam/odom`，确认航点到达后再发下一个（防止 `/waypoint_pose` 缓冲溢出）
+   `/lidar_slam/odom`；需要取消任务时调用 `/waypoint_buffer/clear` 服务。
 6. 到达最后一个航点（`speed_mps == 0` 的 `return_home` 终点）后：
    调用 `ros2 service call /offboard/land std_srvs/srv/Trigger` 降落
 
@@ -140,11 +141,12 @@ import math
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
+from offboard_fsm.srv import QueueWaypoints
 
 class CspAdapter(Node):
     def __init__(self, plan_path: str, t_x: float, t_y: float, t_z: float):
         super().__init__("csp_adapter")
-        self.pub = self.create_publisher(PoseStamped, "/waypoint_pose", 10)
+        self.queue_client = self.create_client(QueueWaypoints, "/waypoint_buffer")
         plan = json.load(open(plan_path))
         assert plan["schema_version"] == "3.0"
         assert plan["summary"]["mission_status"] == "ready", "计划不可执行"
@@ -152,13 +154,16 @@ class CspAdapter(Node):
         self.T = (t_x, t_y, t_z)
         self.waypoints = plan["waypoints"]          # 已按 sequence 排序
         self.turn_points = {w["id"]: w for w in self.waypoints if w["turn_in_place"]}
-        self.timer = self.create_timer(0.5, self.tick)  # ≥0.5s 发布间隔（QoS 约束）
+        self.timer = self.create_timer(0.5, self.tick)
         self.idx = 0
 
     def tick(self):
         if self.idx >= len(self.waypoints):
             self.timer.cancel()
             self.get_logger().info("全部航点已发布完毕")
+            return
+        if not self.queue_client.service_is_ready():
+            self.get_logger().warning("waypoint queue service is unavailable")
             return
         wp = self.waypoints[self.idx]
         msg = PoseStamped()
@@ -170,7 +175,9 @@ class CspAdapter(Node):
         yaw = math.radians(wp["heading_deg"])
         msg.pose.orientation.z = math.sin(yaw / 2.0)
         msg.pose.orientation.w = math.cos(yaw / 2.0)
-        self.pub.publish(msg)
+        request = QueueWaypoints.Request()
+        request.waypoints.append(msg)
+        self.queue_client.call_async(request)
         self.get_logger().info(f"waypoint #{self.idx+1}/{len(self.waypoints)} "
                                f"({wp['x']:.1f}, {wp['y']:.1f}, {wp['z']:.1f})")
         # turn_in_place 航点：等待 hold_time_s 再推进（简化：暂停 1 次发布周期）
@@ -233,9 +240,9 @@ ros2 service call /offboard/land std_srvs/srv/Trigger
 
 ## 6. 注意事项
 
-- **QoS**：`/waypoint_pose` 订阅端为 `best_effort` + `keep_last(1)`，
-  发布间隔 ≥ 0.5 s，并确认 offboard 日志出现 `Waypoint buffered (#N)`；
-  缓冲队列是 FIFO，逐点执行（`waypoint_reached_dist` 判定到达）。
+- **队列服务**：`/waypoint_buffer` 原子接收 `PoseStamped[]`，服务成功响应后才表示
+  路线已入队；缓冲队列是 FIFO，逐点执行（`waypoint_reached_dist` 判定到达）。需要
+  取消当前及后续目标时调用 `/waypoint_buffer/clear`。
 - **不要改协议语义**：不按航点推断检测状态、不跳过航段、不自动改变
   ENU 轴方向/单位；`mission_status != ready` 时禁止执行。
 - **高度一致性**：planner 的 `flight_altitude_m`（示例 25 m）应满足

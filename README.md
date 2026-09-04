@@ -5,7 +5,7 @@ ROS 2 (Humble) drone autonomy stack for the Yungu flight test: Gazebo + PX4
 SITL simulation, the SUPER trajectory planner, optional FAST-LIO localization
 (mirrors real hardware) and a PX4 offboard state machine with waypoint
 following. Any external search/coverage planner can command the drone by
-publishing waypoints on `/waypoint_pose` — no launch or code changes. Once the
+calling the `/waypoint_buffer` queue service — no launch or code changes. Once the
 system is up you take off with a `/takeoff_cmd` message (direct PX4 climb);
 navigation between waypoints is planner-driven (SUPER), with automatic
 planner-failure recovery and direct PX4 landing.
@@ -132,22 +132,22 @@ ros2 topic pub --once /land_cmd std_msgs/msg/Bool "{data: true}"
 
 This is the **only** interface a search/planning algorithm needs. Once the
 stack is up, send a `/takeoff_cmd` to take off; the drone climbs directly to
-`default_height` and enters `IDLE`. Then command it by publishing a
-`geometry_msgs/PoseStamped`.
+`default_height` and enters `IDLE`. Queue route batches through the waypoint-buffer service.
 
 ### Inputs
 
-| Topic | Type | Purpose |
+| Endpoint | Type | Purpose |
 |---|---|---|
-| `/waypoint_pose` | `PoseStamped` | **Batch waypoint input (recommended).** Queued in the offboard waypoint buffer and flown one at a time. RViz's "2D Goal Pose" tool is re-targeted here. |
+| `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | **Batch waypoint input (recommended).** Atomically queues ordered `PoseStamped[]` waypoints. |
+| `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | Aborts the active waypoint, clears queued waypoints, holds position, and resets SUPER. |
+| `/waypoint_pose` | `PoseStamped` | RViz/manual single-waypoint input, bridged to the queue service by `goal_marker_node`. |
 | `/goal_pose` | `PoseStamped` | **Direct single goal.** Also the internal channel offboard uses to hand the current navigation waypoint to SUPER. |
 | `/takeoff_cmd` | `std_msgs/Bool` | **Take off** once the system is ready (`true`). The drone arms and climbs with direct PX4 control to `default_height`. |
 | `/land_cmd` | `std_msgs/Bool` | **Land** (`true`). Interrupts `ARMING`, `TAKEOFF`, `IDLE`, or `MOVE` and performs a direct PX4 landing. Ignored in `INIT` and while already landing. |
 | `/waypoint_markers` | `MarkerArray` | Feedback: green = queued, yellow = currently pursued, cyan line = route. |
 
-> QoS caveat: `/waypoint_pose` is `best_effort`/`keep_last(1)` — publish at
-> **≥ 0.5 s intervals** and confirm acceptance via the offboard log
-> (`Waypoint buffered (#N)`) or `/waypoint_markers`.
+> `/waypoint_pose` remains `best_effort`/`keep_last(1)` for RViz/manual use. Algorithms
+> should use `/waypoint_buffer` so a complete route is accepted atomically.
 
 ```python
 import rclpy

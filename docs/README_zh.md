@@ -198,16 +198,17 @@ RViz 的 "2D Goal Pose" 工具已改向发布到 `/waypoint_pose`（在
 
 | 话题 | 类型 | QoS | 用途 |
 |---|---|---|---|
-| `/waypoint_pose` | `geometry_msgs/PoseStamped` | 订阅端 best_effort/volatile | **批量航点输入（推荐）**。每条消息进入 offboard 航点缓冲队列，逐点执行。 |
+| `/waypoint_pose` | `geometry_msgs/PoseStamped` | 订阅端 best_effort/volatile | RViz/手动单航点输入，由 `goal_marker_node` 转发到队列服务。 |
 | `/goal_pose` | `geometry_msgs/PoseStamped` | 订阅端 best_effort/volatile | **直接单点目标**。与 SUPER click-goal 订阅同一话题；offboard 内部也在此发布，把当前航点逐个交给 SUPER。 |
-| `/waypoint_buffer` | `geometry_msgs/PoseStamped` | reliable | 内部通道（`goal_marker_node` → offboard 节点）。不要直接往这里发。 |
+| `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | 服务 | **批量航点输入（推荐）**。原子地接收有序 `PoseStamped[]` 队列。 |
+| `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | 服务 | 中止当前航点、清空剩余队列、悬停并重置 SUPER。 |
 | `/waypoint_markers` | `visualization_msgs/MarkerArray` | transient_local | 航点缓冲反馈：绿球 = 排队中，黄球 = 正在执行，青色线 = 航线。 |
 
 数据流：
 
 ```
-    /waypoint_pose ──→ goal_marker_node ──→ /waypoint_buffer ──→ offboard 节点
-  (你的搜索算法)                              (FIFO 队列)              │
+    /waypoint_pose ──→ goal_marker_node ──→ /waypoint_buffer 服务 ──→ offboard 节点
+  (RViz/手动输入)                               (FIFO 队列)              │
                                                                       ↓
                                                        /goal_pose（逐个发送）
                                                                       ↓
@@ -242,9 +243,8 @@ rclpy.init()
 rclpy.spin(GoalPublisher())
 ```
 
-**QoS 注意：** `/waypoint_pose` 的订阅端是 `best_effort` + `keep_last(1)`——
-连发速度超过节点处理速度会丢消息。请以**≥ 0.5 s 间隔**发布（如上例），并通过
-offboard 日志（`Waypoint buffered (#N)`）或 `/waypoint_markers` 确认入队成功。
+**QoS 注意：** `/waypoint_pose` 的订阅端是 `best_effort` + `keep_last(1)`，仅适合
+RViz/手动输入。算法应调用 `/waypoint_buffer` 的 `QueueWaypoints` 服务，一次提交完整航线。
 
 ### 状态反馈话题
 
@@ -343,8 +343,7 @@ EKF2 完全采纳视觉里程计，融合链路按预期工作。
 [`docs/coverage-search-integration.md`](docs/coverage-search-integration.md)。
 
 核心思路：把计划中的航点转换到 world ENU 系（规划器本地 ENU 原点与
-Gazebo world 原点之间是一个常数平移 `T`），然后按顺序逐点发布到
-`/waypoint_pose`（间隔 ≥ 0.5 s，尊重 `turn_in_place` / `hold_time_s`，
-不跳过 `obstacle_avoidance` 航段）。文档内含协议要点、坐标系标定方法、
+Gazebo world 原点之间是一个常数平移 `T`），然后按顺序批量调用
+`/waypoint_buffer` 的 `QueueWaypoints` 服务（尊重 `turn_in_place` /
+`hold_time_s`，不跳过 `obstacle_avoidance` 航段）。文档内含协议要点、坐标系标定方法、
 适配器骨架代码与完整运行步骤。
-
