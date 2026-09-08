@@ -7,7 +7,7 @@ the nodes:
 
   - optional fastlio_mapping + fastlio_handler (FAST-LIO + PX4 visual-odometry bridge)
   - offboard_node (state machine)
-  - super_bridge (PX4 odom + fused cloud -> SUPER world cloud/odom)
+  - super_bridge (PX4 odom + horizontal LiDAR cloud -> SUPER world cloud/odom)
   - goal_marker_node (waypoint ingestion + marking)
   - fsm_node (super_planner)
 
@@ -29,18 +29,22 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 
 
-def _find_navigation_config_dir():
-    """Locate the workspace navigation configuration directory."""
+def _find_config_dirs():
+    """Locate the workspace navigation and simulation configuration directories."""
     env = os.environ.get('YUNGU_SIM_CONFIG')
     if env:
-        p = Path(env)
-        if p.is_file():
-            return p.parent
+        simulation_file = Path(env).resolve()
+        if simulation_file.is_file():
+            for parent in simulation_file.parents:
+                navigation_config = parent / 'src' / 'navigation' / 'config'
+                if (navigation_config / 'offboard').is_dir():
+                    return navigation_config, simulation_file.parent
     for parent in Path(__file__).resolve().parents:
-        config_dir = parent / 'src' / 'navigation' / 'config'
-        if (config_dir / 'simulation.yaml').is_file():
-            return config_dir
-    return None
+        navigation_config = parent / 'src' / 'navigation' / 'config'
+        simulation_config = parent / 'src' / 'simulation' / 'config'
+        if (navigation_config / 'offboard').is_dir() and (simulation_config / 'simulation.yaml').is_file():
+            return navigation_config, simulation_config
+    return None, None
 
 
 def _load_yaml(path):
@@ -66,13 +70,13 @@ def _dget(d, key, default=None):
 
 
 def generate_launch_description():
-    navigation_config_dir = _find_navigation_config_dir()
+    navigation_config_dir, simulation_config_dir = _find_config_dirs()
     cfg_dir = navigation_config_dir / 'offboard' if navigation_config_dir else None
 
     # ---- Load all config once -------------------------------------------------
     fsm = _load_yaml(cfg_dir / 'offboard_fsm.yaml').get('offboard_fsm', {}) if cfg_dir else {}
     topics = _load_yaml(cfg_dir / 'topics.yaml') if cfg_dir else {}
-    sim = _load_yaml(navigation_config_dir / 'simulation.yaml') if navigation_config_dir else {}
+    sim = _load_yaml(simulation_config_dir / 'simulation.yaml') if simulation_config_dir else {}
     model = sim.get('model', 'swan_gamma_v2')
 
     def cfg(key, default=None):
@@ -99,8 +103,8 @@ def generate_launch_description():
         if cand.is_file():
             default_planner_config = str(cand)
 
-    # Fused cloud read by super_bridge (gz_sensor_interface always fuses).
-    default_cloud_in = str(cfg('cloud_in_topic', f'/{model}/scan/points_fused'))
+    # Horizontal body-frame cloud produced by gz_sensor_interface/lidar_sensor.
+    default_cloud_in = str(cfg('cloud_in_topic', f'/{model}/scan_horizontal/points_body'))
 
     # ---- Planner-config overrides ----------------------------------------------
     # goal_height is applied by goal_marker_node (it stamps the RViz 2D goal's z),
@@ -202,9 +206,9 @@ def generate_launch_description():
         DeclareLaunchArgument('fastlio_config', default_value=default_fastlio_config),
         DeclareLaunchArgument('planner_config', default_value=fsm_config_path),
 
-        # Optional FAST-LIO layer; consumes fused cloud + IMU from
+        # Optional FAST-LIO layer; consumes the horizontal body-frame cloud + IMU from
         # gz_sensor_interface, launched separately.
-        # FAST-LIO reads its input topics (fused cloud + IMU) from topics.yaml;
+        # FAST-LIO reads its input topics (horizontal cloud + IMU) from topics.yaml;
         # these override the defaults inside fastlio_swan_gamma_effect.yaml.
         Node(package='fast_lio', executable='fastlio_mapping', name='fastlio_mapping',
              output='screen',
@@ -215,7 +219,7 @@ def generate_launch_description():
                      # FAST-LIO reads these under the `common` namespace (it does
                      # not declare/use a top-level use_sim_time, so leave that out).
                      'common.lid_topic': topic('fastlio.in.cloud',
-                                               '/swan_gamma_v2/scan/points_fused'),
+                                               '/swan_gamma_v2/scan_horizontal/points_body'),
                      'common.imu_topic': topic('fastlio.in.imu', '/livox/imu'),
                  },
              ]),

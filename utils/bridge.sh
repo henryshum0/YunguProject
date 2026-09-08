@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 #
 # Launch the GZ <-> ROS bridge + TF bridge for the Yungu sim stack.
-# The topics to bridge, and whether to launch the parameter_bridge / TF bridge,
-# are read from src/navigation/config/simulation.yaml (the `bridge` section).
+# The topics to bridge, and whether to launch the parameter_bridge / image bridge / TF bridge,
+# are read from src/simulation/config/simulation.yaml (the `bridge` section).
 #
 # Usage:
 #   ./bridge.sh            # bridge + TF only
 #
 # Prerequisites: ROS 2 (Humble) sourced or installed at /opt/ros/humble,
-# ros_gz_bridge installed, and the gz-sim server running (e.g. via start_sim.sh).
+# ros_gz_bridge + ros_gz_image installed, and the gz-sim server running (e.g. via start_sim.sh).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
-NAVIGATION_CONFIG_DIR="${WORKSPACE}/src/navigation/config"
-SIM_CONFIG="${YUNGU_SIM_CONFIG:-${NAVIGATION_CONFIG_DIR}/simulation.yaml}"
-SIM_CONFIG_HELPER="${NAVIGATION_CONFIG_DIR}/sim_config.py"
+SIMULATION_CONFIG_DIR="${WORKSPACE}/src/simulation/config"
+SIM_CONFIG="${YUNGU_SIM_CONFIG:-${SIMULATION_CONFIG_DIR}/simulation.yaml}"
+SIM_CONFIG_HELPER="${SIMULATION_CONFIG_DIR}/sim_config.py"
 BRIDGE_YAML=""
 
 if [[ ! -f "${SIM_CONFIG}" || ! -f "${SIM_CONFIG_HELPER}" ]]; then
-  echo "ERROR: missing navigation simulation config or config helper." >&2
+  echo "ERROR: missing simulation config or config helper." >&2
   exit 1
 fi
 
@@ -73,6 +73,17 @@ if [[ "${bridge_enabled}" == "true" ]]; then
   echo "Starting GZ -> ROS bridge using ${BRIDGE_YAML} (topics from ${SIM_CONFIG}) ..."
   ros2 run ros_gz_bridge parameter_bridge --ros-args -p config_file:="${BRIDGE_YAML}" &
   pids+=("$!")
+
+  mapfile -t image_topics < <(python3 "${SIM_CONFIG_HELPER}" --config "${SIM_CONFIG}" image-bridge-topics)
+  if [[ "${#image_topics[@]}" -gt 0 ]]; then
+    if ! ros2 pkg executables ros_gz_image 2>/dev/null | grep -qx 'ros_gz_image image_bridge'; then
+      echo "ERROR: ros_gz_image/image_bridge is required for configured camera topics. Install ros-humble-ros-gz-image." >&2
+      exit 1
+    fi
+    echo "Starting GZ -> ROS image bridge for: ${image_topics[*]}"
+    ros2 run ros_gz_image image_bridge "${image_topics[@]}" &
+    pids+=("$!")
+  fi
 else
   echo "GZ<->ROS bridge disabled (bridge.enabled=false in ${SIM_CONFIG}); skipping parameter_bridge."
 fi

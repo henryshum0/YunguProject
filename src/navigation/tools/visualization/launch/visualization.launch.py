@@ -1,6 +1,6 @@
 """visualization.launch — bring up the visualization layer.
 
-Launches (topics/params read from src/navigation/config/visualization.yaml):
+Launches (topics/params read from src/simulation/config/visualization.yaml):
   - visual_tf         : TF tree anchored at the drone launch-origin world frame
   - gt_path           : Gazebo truth -> /gt_path in the launch-origin world
   - fastlio_visual    : FAST-LIO cloud/odom republished in the visualization world
@@ -55,21 +55,21 @@ def _airframe_spawn(project_root, model):
 
 
 def _find_workspace_root() -> Path:
-    """Locate the workspace containing src/navigation/config."""
+    """Locate the workspace containing the simulation configuration."""
     override = os.environ.get("YUNGU_SIM_CONFIG")
     if override:
         simulation_config = Path(override).resolve()
         if simulation_config.is_file():
             return simulation_config.parents[3]
     for parent in Path(__file__).resolve().parents:
-        if (parent / "src" / "navigation" / "config" / "visualization.yaml").is_file():
+        if (parent / "src" / "simulation" / "config" / "visualization.yaml").is_file():
             return parent
     return Path(__file__).resolve().parents[4]
 
 
 def generate_launch_description():
     project_root = _find_workspace_root()
-    config_path = str(project_root / 'src' / 'navigation' / 'config' / 'visualization.yaml')
+    config_path = str(project_root / 'src' / 'simulation' / 'config' / 'visualization.yaml')
 
     # Spawn offset (drone launch origin in gz) from the airframe; overridable.
     spawn = _airframe_spawn(project_root, 'swan_gamma_v2')
@@ -84,7 +84,7 @@ def generate_launch_description():
 
     world_frame = _cfg(config_path, 'frames.world', 'world')
 
-    # Birdview overlay (src/navigation/config/visualization.yaml; disabled by default).
+    # Birdview overlay (src/simulation/config/visualization.yaml; disabled by default).
     bv_enabled = str(_cfg(config_path, 'birdview.enabled', True)).lower() == 'true'
     bv_image = _cfg(config_path, 'birdview.image', 'resources/yungu_birdview.png')
     if not os.path.isabs(bv_image):

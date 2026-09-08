@@ -60,5 +60,5 @@ benchmark:
   world_name: benchmark
   # Output directory, relative to the project root. The default points into the
   # PX4 worlds dir so the sim can load it (set `world: benchmark` in
-  # src/navigation/config/simulation.yaml). Override with --output.
+  # src/simulation/config/simulation.yaml). Override with --output.
   output_dir: VisionFlow-PX4/Tools/simulation/gz/worlds

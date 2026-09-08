@@ -10,6 +10,7 @@ from gui.map_view import (
     Bounds,
     MapLoadError,
     bounds_for,
+    heading_endpoint,
     load_planner_map,
     make_viewport,
     rectangle_from_clicks,
@@ -61,6 +62,13 @@ def test_viewport_preserves_enu_axes_and_round_trips() -> None:
     assert east_north[0] > west_south[0]
     assert east_north[1] < west_south[1]
     assert viewport.to_enu(viewport.to_canvas((3.5, -2.0))) == pytest.approx((3.5, -2.0))
+
+
+def test_heading_endpoint_uses_enu_yaw() -> None:
+    assert heading_endpoint((1.0, 2.0), 0.0, 5.0) == pytest.approx((6.0, 2.0))
+    assert heading_endpoint((1.0, 2.0), 90.0, 5.0) == pytest.approx((1.0, 7.0))
+    with pytest.raises(ValueError, match="positive"):
+        heading_endpoint((1.0, 2.0), 0.0, 0.0)
 
 
 def test_bounds_and_route_overlay_points_include_ros_path_coordinates() -> None:

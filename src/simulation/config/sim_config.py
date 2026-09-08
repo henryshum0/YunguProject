@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Read the Yungu simulation configuration (src/navigation/config/simulation.yaml).
+"""Read the Yungu simulation configuration (src/simulation/config/simulation.yaml).
 
 Centralizes the Gazebo model, map/world, and the GZ topics bridged into ROS 2.
 start_sim.sh and the GZ<->ROS bridge read it through this helper so they do not
@@ -17,7 +17,10 @@ Usage:
         `parameter_bridge` config format, ready to be passed via
         `--ros-args -p config_file:=<file>`.
 
-The default config path is adjacent to this script in src/navigation/config.
+    sim_config.py [--config PATH] image-bridge-topics
+        Print one Gazebo image topic per line for ros_gz_image/image_bridge.
+
+The default config path is adjacent to this script in src/simulation/config.
 """
 
 import argparse
@@ -85,6 +88,8 @@ def main():
 
     sub.add_parser('bridge-config',
                    help='print the ros_gz_bridge topic config YAML')
+    sub.add_parser('image-bridge-topics',
+                   help='print configured Gazebo image topics, one per line')
 
     args = parser.parse_args()
     cfg = _load(args.config)
@@ -97,6 +102,11 @@ def main():
             sys.exit("ERROR: 'bridge.topics' must be a list of topic bridge entries")
         print(yaml.safe_dump(topics, default_flow_style=False,
                              sort_keys=False).rstrip())
+    elif args.cmd == 'image-bridge-topics':
+        topics = _resolve_key(cfg, 'bridge.image_topics')
+        if not isinstance(topics, list) or not all(isinstance(topic, str) and topic for topic in topics):
+            sys.exit("ERROR: 'bridge.image_topics' must be a list of non-empty topic names")
+        print('\n'.join(topics))
 
 
 if __name__ == '__main__':

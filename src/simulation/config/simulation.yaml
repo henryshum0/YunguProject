@@ -35,26 +35,7 @@ bridge:
 
   # GZ topics bridged into ROS 2 (ros_gz_bridge parameter_bridge config entries)
   topics:
-    # Side LiDARs (mirror real hardware): left/right, transformed to base_link
-    # and fused by lidar_sensor. The old top-mounted lidar_3d was removed.
-    - ros_topic_name: "/swan_gamma_v2/scan_left/points"
-      gz_topic_name: "/swan_gamma_v2/scan_left/points"
-      ros_type_name: "sensor_msgs/msg/PointCloud2"
-      gz_type_name: "gz.msgs.PointCloudPacked"
-      direction: GZ_TO_ROS
-      subscriber_queue_size: 5
-      publisher_queue_size: 5
-
-    - ros_topic_name: "/swan_gamma_v2/scan_right/points"
-      gz_topic_name: "/swan_gamma_v2/scan_right/points"
-      ros_type_name: "sensor_msgs/msg/PointCloud2"
-      gz_type_name: "gz.msgs.PointCloudPacked"
-      direction: GZ_TO_ROS
-      subscriber_queue_size: 5
-      publisher_queue_size: 5
-
-    # Horizontal (level) LiDAR: temporary single-LiDAR source for SUPER
-    # (replaces the fused side-LiDAR cloud until fusion is reliable).
+    # Horizontal (level) LiDAR: the sole mapping/planning cloud source.
     - ros_topic_name: "/swan_gamma_v2/scan_horizontal/points"
       gz_topic_name: "/swan_gamma_v2/scan_horizontal/points"
       ros_type_name: "sensor_msgs/msg/PointCloud2"
@@ -86,3 +67,9 @@ bridge:
       direction: GZ_TO_ROS
       subscriber_queue_size: 10
       publisher_queue_size: 10
+
+  # Gazebo image topics are bridged by ros_gz_image/image_bridge rather than
+  # parameter_bridge. The front camera is fixed ahead of/below base_link and
+  # faces forward with a 60-degree downward pitch.
+  image_topics:
+    - /swan_gamma_v2/front_camera/image

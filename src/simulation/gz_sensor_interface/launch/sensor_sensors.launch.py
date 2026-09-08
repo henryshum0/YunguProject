@@ -1,9 +1,8 @@
 """gz_sensor_interface launch — bring up the simulation-interaction layer.
 
 Launches the Gazebo sensor bridge + coordinate conversions for the swan_gamma
-drone (topics/params read from src/navigation/config/gz_sensor_interface.yaml):
-  - lidar_sensor : transform left/right/horizontal LiDARs into base_link and
-                   publish four body-frame outputs (merged/left/right/top)
+drone (topics/params read from src/simulation/config/gz_sensor_interface.yaml):
+  - lidar_sensor : transform the horizontal LiDAR into base_link
   - imu_bridge   : /livox/imu_raw -> /livox/imu (monotonic stamps)
   - truth_odom   : /odom -> /gz/ground_truth/odom
 """
@@ -30,38 +29,28 @@ def _cfg(path, key, default=None):
         return default
 
 
-def _navigation_config_path() -> Path:
-    """Return the workspace navigation sensor configuration path."""
+def _simulation_config_path() -> Path:
+    """Return the workspace simulation sensor configuration path."""
     override = os.environ.get("YUNGU_SIM_CONFIG")
     if override:
         candidate = Path(override).resolve().parent / "gz_sensor_interface.yaml"
         if candidate.is_file():
             return candidate
     for parent in Path(__file__).resolve().parents:
-        candidate = parent / "src" / "navigation" / "config" / "gz_sensor_interface.yaml"
+        candidate = parent / "src" / "simulation" / "config" / "gz_sensor_interface.yaml"
         if candidate.is_file():
             return candidate
-    return Path("src/navigation/config/gz_sensor_interface.yaml")
+    return Path("src/simulation/config/gz_sensor_interface.yaml")
 
 
 def generate_launch_description():
-    config_path = str(_navigation_config_path())
+    config_path = str(_simulation_config_path())
     model = _cfg(config_path, 'model', 'swan_gamma_v2')
 
-    raw_left = _cfg(config_path, 'lidar_sensor.input_left',
-                    f'/{model}/scan_left/points')
-    raw_right = _cfg(config_path, 'lidar_sensor.input_right',
-                     f'/{model}/scan_right/points')
     raw_h = _cfg(config_path, 'lidar_sensor.input_horizontal',
                  f'/{model}/scan_horizontal/points')
-    merged = _cfg(config_path, 'lidar_sensor.output_merged',
-                  f'/{model}/scan/points_fused')
-    body_left = _cfg(config_path, 'lidar_sensor.output_left',
-                     f'/{model}/scan_left/points_body')
-    body_right = _cfg(config_path, 'lidar_sensor.output_right',
-                      f'/{model}/scan_right/points_body')
-    body_top = _cfg(config_path, 'lidar_sensor.output_top',
-                    f'/{model}/scan_horizontal/points_body')
+    body_h = _cfg(config_path, 'lidar_sensor.output_horizontal',
+                  f'/{model}/scan_horizontal/points_body')
 
 
     return LaunchDescription([
@@ -71,18 +60,8 @@ def generate_launch_description():
             package='gz_sensor_interface', executable='lidar_sensor', name='lidar_sensor',
             output='screen',
             parameters=[{
-                'input_left': raw_left,
-                'input_right': raw_right,
                 'input_horizontal': raw_h,
-                'output_merged': merged,
-                'output_left': body_left,
-                'output_right': body_right,
-                'output_top': body_top,
-                'time_sync_tol': _cfg(config_path, 'lidar_sensor.time_sync_tol', 0.05),
-                'left.t': _cfg(config_path, 'lidar_sensor.left.t', [0.0, 0.40, 0.05]),
-                'left.roll': _cfg(config_path, 'lidar_sensor.left.roll', -0.6),
-                'right.t': _cfg(config_path, 'lidar_sensor.right.t', [0.0, -0.40, 0.05]),
-                'right.roll': _cfg(config_path, 'lidar_sensor.right.roll', 0.6),
+                'output_horizontal': body_h,
                 'horizontal.t': _cfg(config_path, 'lidar_sensor.horizontal.t',
                                      [0.0, 0.0, 0.16]),
                 'horizontal.roll': _cfg(config_path, 'lidar_sensor.horizontal.roll', 0.0),
@@ -117,7 +96,6 @@ def generate_launch_description():
                 'out_odom': _cfg(config_path, 'super_lidar.out_odom', '/gz/odom_super'),
             }],
         ),
-        # Note: super_lidar's in_cloud defaults to the topic matching cloud_source
-        # (one of lidar_sensor's four base_link outputs). The `in_cloud` config
-        # value (if set) always overrides.
+        # The horizontal body-frame cloud is the default SUPER input. The
+        # configured in_cloud value (if set) always overrides it.
     ])

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from math import isfinite
+from math import cos, isfinite, radians, sin
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -110,6 +110,17 @@ def rectangle_from_clicks(first: Point, second: Point) -> tuple[Point, Point, Po
     if min_x == max_x or min_y == max_y:
         raise ValueError("map clicks must define a non-zero-area rectangle")
     return ((min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y))
+
+
+def heading_endpoint(point: Point, heading_deg: float, length: float) -> Point:
+    """Return an ENU point ``length`` metres along an ENU heading."""
+    x, y = _finite_point(point, "goal point")
+    if not isfinite(float(heading_deg)):
+        raise ValueError("goal heading must be finite")
+    if not isfinite(float(length)) or length <= 0.0:
+        raise ValueError("heading-arrow length must be positive and finite")
+    heading = radians(float(heading_deg) % 360.0)
+    return x + float(length) * cos(heading), y + float(length) * sin(heading)
 
 
 def route_points(path: Any) -> tuple[Point, ...]:
