@@ -1,276 +1,197 @@
-
 # YunguProject
 
-ROS 2 (Humble) drone autonomy stack for the Yungu flight test: Gazebo + PX4
-SITL simulation, the SUPER trajectory planner, optional FAST-LIO localization
-(mirrors real hardware) and a PX4 offboard state machine with waypoint
-following. Any external search/coverage planner can command the drone by
-calling the `/waypoint_buffer` queue service — no launch or code changes. Once the
-system is up you take off with a `/takeoff_cmd` message (direct PX4 climb);
-navigation between waypoints is planner-driven (SUPER), with automatic
-planner-failure recovery and direct PX4 landing.
+YunguProject is a ROS 2 Humble autonomy workspace for a simulated PX4 UAV. It
+combines Gazebo and PX4 SITL, LiDAR localization, obstacle-aware trajectory
+planning, coverage-route planning, and an operator GUI. The default
+environment is the Yungu map and `swan_gamma_v2` vehicle.
 
-## Prerequisites
+## How the stack fits together
 
-- Ubuntu 22.04 with **ROS 2 Humble** (gz-sim 8 / Harmonic), including `ros-humble-ros-gz-image`
-- The PX4 fork is a git submodule: clone with `--recursive`
-- Before running the Yungu map, put `yungu.glb` under
-  `VisionFlow-PX4/Tools/simulation/gz/worlds`
+The workspace is layered so that operators and mission applications use the
+top layers, while the ROS packages remain independently usable for development
+and integration.
 
-## Setup
+```text
+Skills GUI (gui.py)
+        │ take off / land, click-to-navigate, click-to-search
+        ▼
+Python skill interfaces (skills/)
+        │ NavigateSkill / SearchSkill, ENU/NED conversion, readiness checks
+        ▼
+ROS interfaces
+        │ PlanCoverage ──► sparse ENU Path ──► QueueWaypoints
+        ▼
+Search                 Navigation                         Simulation
+coverage_planner  →  offboard_fsm → SUPER → PX4    ←  Gazebo / sensor bridge
+                         ▲        ▲
+                    FAST-LIO   LiDAR/odometry
+```
+
+A coverage request is planned by `coverage_planner`, returned as a sparse ENU
+`Path`, accepted atomically by `offboard_fsm`, then flown by SUPER and PX4
+offboard control. Planning does **not** queue or publish a route by itself;
+`SearchSkill` or the GUI's **Plan and queue** action performs that explicit
+second step.
+
+## Workspace layout
+
+| Location | Responsibility |
+|---|---|
+| [`gui/`](gui/) and [`gui.py`](gui.py) | Tkinter operator/test GUI: flight controls, live camera and operations map, navigation, and coverage search. |
+| [`skills/`](skills/) | Plain Python ROS client interfaces: `NavigateSkill`, `SearchSkill`, and their primitives. |
+| [`src/navigation/`](src/navigation/) | Flight execution: `offboard_fsm`, SUPER, FAST-LIO, Livox driver, PX4 messages, and navigation tools. |
+| [`src/search/`](src/search/) | `coverage_planner` plus independent Yungu map and planner configuration. |
+| [`src/simulation/`](src/simulation/) | Gazebo-facing sensor interface and simulation configuration. |
+| [`src/launch/`](src/launch/) | Cross-package launch orchestration, including coverage planner plus offboard FSM. |
+| [`utils/`](utils/) | Simulation lifecycle and bridge helpers, including STL-to-planner-map conversion. |
+| [`VisionFlow-PX4/`](VisionFlow-PX4/) | PX4 fork/submodule, Gazebo worlds, and vehicle models. |
+
+## First successful run
+
+### 1. Build the workspace
+
+Ubuntu 22.04 with ROS 2 Humble is the supported platform. Clone recursively so
+the PX4 submodule is available. Place `yungu.glb` under
+`VisionFlow-PX4/Tools/simulation/gz/worlds` before launching the Yungu world.
 
 ```bash
 git clone --recursive https://github.com/henryshum0/YunguProject.git
 cd YunguProject
-./install_deps.sh                  # system + ROS + Python deps (idempotent)
+./install_deps.sh
 colcon build --symlink-install
+source /opt/ros/humble/setup.bash
 source install/setup.bash
 ```
 
-## Running
+### 2. Start the runtime layers
 
-The stack runs in two layers (two terminals):
+Use separate terminals, sourcing ROS and the workspace overlay in each one.
 
 ```bash
-# Terminal 1 — simulation stack: Gazebo + PX4 SITL + MicroXRCEAgent + gz bridge
+source /opt/ros/humble/setup.bash
+source /path/to/YunguProject/install/setup.bash
+```
+
+Replace `/path/to/YunguProject` with this workspace path, then run one of the
+following commands in each prepared terminal:
+
+```bash
+# Terminal 1: Gazebo, PX4 SITL, MicroXRCE agent, and Gazebo bridges.
 ./utils/start_sim.sh
 
-# Terminal 2 — simulation-interaction layer (lidar_sensor transforms the
-#   horizontal LiDAR into base_link; also relays IMU + truth odometry)
+# Terminal 2: LiDAR, IMU, and ground-truth sensor bridging.
 ros2 launch gz_sensor_interface sensor_sensors.launch.py
 
-# Terminal 3 — perception + planning + offboard (FAST-LIO is enabled by default;
-#   SUPER uses PX4 odometry via super_lidar; offboard_fsm drives the mission)
-ros2 launch offboard offboard.launch.py
+# Terminal 3: offboard FSM, SUPER, and the coverage-planning service.
+ros2 launch "$PWD/src/launch/coverage_and_offboard.launch.py"
 
-# Terminal 4 — visualization (TF tree + /gt_path + /fastlio_cloud + RViz windows,
-#   all aligned in the drone launch-origin world frame)
+# Terminal 4 (optional): RViz and birdview tools.
 ros2 launch visualization visualization.launch.py
-```
 
-Stop with `Ctrl+C`; if anything lingers (e.g. `gz-server` detached into its
-own session), run `./utils/stop_sim.sh`. Logs go to `/tmp/yungu_sim/`.
-
-### Per-run overrides
-
-Every config value can be overridden without editing the file:
-
-| Variable / arg | Default | Description |
-|---|---|---|
-| `PX4_MODEL`, `PX4_WORLD` | from `src/simulation/config/simulation.yaml` | Gazebo airframe + world (`PX4_MODEL=gz_<model>_<world>` legacy form also accepted) |
-| `XRCE_PORT` | `8888` | uXRCE-DDS port for the MicroXRCEAgent |
-| `GZ_VERSION` | `harmonic` | gz-transport version for `ros_gz_bridge` |
-| `HEADLESS=1` | *(unset)* | Run Gazebo without its GUI (server only) |
-| `rviz:=false`, `rviz_freelook:=false` | `true` | Toggle the two RViz windows in `visualization/visualization.launch.py` |
-| `use_fastlio:=false` | `true` | Do not launch `fastlio_mapping` or `fastlio_handler`; PX4 uses its normal estimator inputs instead of FAST-LIO external vision. |
-
-```bash
-PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./utils/start_sim.sh
-HEADLESS=1 ./utils/start_sim.sh
-ros2 launch offboard offboard.launch.py
-ros2 launch offboard offboard.launch.py use_fastlio:=false
-ros2 launch visualization visualization.launch.py rviz:=false
-```
-
-Start the skills test GUI from the workspace root with:
-
-```bash
+# Terminal 5: operator GUI.
 python3 gui.py
 ```
 
-The launcher sources ROS Humble and the workspace overlay automatically. Pass
-`--check` to verify GUI imports without opening a window.
+The combined launcher starts `offboard_fsm` and `coverage_planner` but does not
+create a coverage plan. In the GUI, choose a rectangle on the map and use
+**Plan only** to preview it or **Plan and queue** to submit it for flight. The
+GUI's selected map is display-only; choose the same map used by the planner
+configuration when testing a route.
 
-`visualization.launch.py` brings up the birdview overlay + two RViz windows
-(top-down birdview planning view, free-rotate 3D debug view), plus the TF tree
-(`visual_tf`), `/gt_path` and `/fastlio_cloud`.
+Stop with `Ctrl+C`. If a Gazebo process remains, run `./utils/stop_sim.sh`.
+Simulation logs are written to `/tmp/yungu_sim/`.
 
-The simulated `swan_gamma_v2` has one level LiDAR for FAST-LIO/SUPER and a
-front RGB camera at `(0.30, 0.00, -0.13)` m relative to `base_link`, pitched 60°
-down to keep the airframe out of view. `utils/start_sim.sh` bridges its image onto
-`/swan_gamma_v2/front_camera/image`; open the Skills GUI's **Front camera** tab
-to preview it. The gripper-mounted RealSense remains independent.
+## Use the top-level interfaces
 
-## Configuration
+### GUI
 
-Navigation run-time configuration lives in
-[`src/navigation/config/offboard/`](src/navigation/config/offboard/). Gazebo,
-sensor-interface, visualization, and PX4 simulation configuration lives in
-[`src/simulation/config/`](src/simulation/config/) and is read via
-[`src/simulation/config/sim_config.py`](src/simulation/config/sim_config.py).
-Edits take effect on the next launch (no rebuild). Coverage planner maps and
-missions live separately in [`src/search/config/`](src/search/config/).
+Run `python3 gui.py` from the workspace root after a successful build. It
+loads the ROS environment automatically and provides:
 
-| File | Purpose | Key keys |
-|---|---|---|
-| [`src/simulation/config/simulation.yaml`](src/simulation/config/simulation.yaml) | Sim: model, world, gz version, uXRCE port, GZ→ROS bridge topics | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
-| [`src/navigation/config/offboard/topics.yaml`](src/navigation/config/offboard/topics.yaml) | Centralized inter-module communication topics (offboard fsm, SUPER, FAST-LIO, gz_sensor_interface, visualization) | `offboard_fsm.*`, `super.*`, `fastlio.*`, `gz_sensor_interface.*`, `visualization.*` |
-| [`src/navigation/config/offboard/offboard_fsm.yaml`](src/navigation/config/offboard/offboard_fsm.yaml) | Offboard state-machine + SUPER integration + FAST-LIO tuning | `use_sim_time`, `update_rate`, `arm_wait`, `arm_retry_*`, `planner_fail_retry_max`, `planner_reset_delay`, `default_height`, `takeoff_vel`, `landing_vel`, `waypoint_*`, `yaw_align_thresh`, `planner_config`, `goal_height`, `planner_cmd_hz`, `cloud_in_topic`, `visualization`, `fastlio_config` |
-| [`src/simulation/config/gz_sensor_interface.yaml`](src/simulation/config/gz_sensor_interface.yaml) | Gazebo sensor bridge topics / frames / extrinsics | `lidar_sensor.*`, `imu_bridge.*`, `truth_odom.*`, `super_lidar.*` |
-| [`src/simulation/config/visualization.yaml`](src/simulation/config/visualization.yaml) | Visualization TF / topics / birdview | `frames.*`, `visual_tf.*`, `gt_path.*`, `fastlio_visual.*`, `birdview.*`, `rviz.*` |
-| [`src/simulation/config/birdview.yaml`](src/simulation/config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
-| [`src/navigation/config/offboard/super_planner/`](src/navigation/config/offboard/super_planner/) | SUPER planner behaviour (A*, traj opt, ROG-Map) | `fsm.click_height`, `super_planner.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
+- confirmed takeoff and land actions;
+- ENU/NED waypoint entry and click-to-navigate selection;
+- two-click coverage-rectangle planning and optional route queueing;
+- a persistent Yungu map with vehicle pose and authoritative waypoint queue;
+- a persistent live front-camera preview.
 
-Set `offboard.visualization: false` for a fully headless run (no RViz, no
-birdview overlay, SUPER markers off). `goal_height` is the target altitude that
-`goal_marker_node` stamps on RViz "2D Goal Pose" waypoints before forwarding
-them to the offboard state machine.
+The GUI is an operator/test client only: it does not replace planning,
+collision checking, or offboard control. See [`gui/README.md`](gui/README.md)
+for controls, map behavior, and camera requirements.
 
-## Flight states & takeoff/landing
+### Python skills
 
-The `offboard_node` runs a planner-driven state machine. On start it waits in
-`INIT` until odometry, FAST-LIO and the planner are all healthy and the
-vehicle is on the ground and disarmed; it then switches PX4 to **OFFBOARD**
-mode and waits for a takeoff command.
+`skills/` is a normal Python package, not a colcon package. It connects to ROS
+nodes already running in the background and checks service readiness before
+sending a request.
 
-![Offboard FSM state machine](docs/assets/offboard_fsm_state_machine.png)
+- `NavigateSkill` accepts one or more `(x, y, z, heading_deg)` waypoints in
+  ENU or NED, converts them to ENU `PoseStamped` messages, and queues them.
+- `SearchSkill` sends four ENU coverage corners to the planner, queues the
+  returned path only after planning succeeds, and returns that path.
+- Lower-level primitives are available when an application needs planning,
+  queueing, or clearing separately.
 
-The image is generated from [`docs/assets/offboard_fsm_state_machine.dot`](docs/assets/offboard_fsm_state_machine.dot).
+Both coverage paths and ENU navigation waypoints use ROS ENU orientation:
+`x=east`, `y=north`, `z=up`, with yaw zero facing east and positive rotation
+counter-clockwise. Read complete API examples in
+[`skills/README.md`](skills/README.md).
 
-| State | Behaviour |
-|---|---|
-| `INIT` | Verifies odometry / FAST-LIO (`fastlio/lio_state.running`) / planner (`fsm/planner_state`) readiness, sets OFFBOARD, then waits for `/takeoff_cmd`. If the FSM restarts while already airborne in OFFBOARD with a ready planner, it resumes in `IDLE`. |
-| `ARMING` | Arms, retrying every `arm_retry_delay` (5 s) up to `arm_retry_max` (3) times; on exhaustion returns to `INIT`. |
-| `TAKEOFF` | Direct PX4 vertical climb (no planner) to `default_height` at `takeoff_vel`; on reaching altitude → `IDLE`. |
-| `IDLE` | Holds position, restarts SUPER when it is not in `WAIT_GOAL`, and manages terminal goal statuses: `REACHED` / `CLOSE` complete the current goal; `STUCK` skips it and clears the buffer after consecutive stuck goals. With a pending goal and aligned heading, it publishes the goal and enters `MOVE`. |
-| `MOVE` | Forwards SUPER's `PositionCommand` to PX4. Terminal goal status, planner failure, or local waypoint completion returns it to `IDLE`; absent planner commands hold the current position. |
-| `LAND` | Direct PX4 landing (no planner) to `landing_z` at `landing_vel`, then disarms and returns to `INIT`. |
-
-Take off / land at any time:
-
-```bash
-# Take off (only accepted once the system is ready in INIT)
-ros2 topic pub --once /takeoff_cmd std_msgs/msg/Bool "{data: true}"
-
-# Land (interrupts ARMING, TAKEOFF, IDLE, or MOVE)
-ros2 topic pub --once /land_cmd std_msgs/msg/Bool "{data: true}"
-```
-
-## Point-to-point navigation (interface for search algorithms)
-
-This is the **only** interface a search/planning algorithm needs. Once the
-stack is up, send a `/takeoff_cmd` to take off; the drone climbs directly to
-`default_height` and enters `IDLE`. Queue route batches through the waypoint-buffer service.
-
-### Inputs
+### ROS mission interfaces
 
 | Endpoint | Type | Purpose |
 |---|---|---|
-| `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | **Batch waypoint input (recommended).** Atomically queues ordered `PoseStamped[]` waypoints. |
-| `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | Aborts the active waypoint, clears queued waypoints, holds position, and resets SUPER. |
-| `/waypoint_buffer/status` | `nav_msgs/msg/Path` | Latched live queue snapshot: active waypoint first, followed by pending waypoints in execution order. |
-| `/waypoint_pose` | `PoseStamped` | RViz/manual single-waypoint input, bridged to the queue service by `goal_marker_node`. |
-| `/goal_pose` | `PoseStamped` | **Direct single goal.** Also the internal channel offboard uses to hand the current navigation waypoint to SUPER. |
-| `/takeoff_cmd` | `std_msgs/Bool` | **Take off** once the system is ready (`true`). The drone arms and climbs with direct PX4 control to `default_height`. |
-| `/land_cmd` | `std_msgs/Bool` | **Land** (`true`). Interrupts `ARMING`, `TAKEOFF`, `IDLE`, or `MOVE` and performs a direct PX4 landing. Ignored in `INIT` and while already landing. |
-| `/waypoint_markers` | `MarkerArray` | Feedback: green = queued, yellow = currently pursued, cyan line = route. |
+| `/coverage_planner/plan_coverage` | `coverage_planner/srv/PlanCoverage` | Plan four ENU rectangle corners and return a sparse route. |
+| `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | Atomically append an ordered waypoint batch. |
+| `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | Abort the active target and remove pending waypoints. |
+| `/waypoint_buffer/status` | `nav_msgs/msg/Path` | Latched queue snapshot: active target, then pending targets. |
+| `/takeoff_cmd` | `std_msgs/msg/Bool` | Begin offboard arming and takeoff when the FSM is ready. |
+| `/land_cmd` | `std_msgs/msg/Bool` | Interrupt navigation and land. |
+| `/waypoint_pose` | `geometry_msgs/msg/PoseStamped` | RViz/manual single-goal input, bridged to the queue service. |
 
-> `/waypoint_pose` remains `best_effort`/`keep_last(1)` for RViz/manual use. Algorithms
-> should use `/waypoint_buffer` so a complete route is accepted atomically.
+For the state-machine lifecycle, direct ROS examples, feedback topics, and
+failure behavior, use the [operations reference](docs/operations.md).
 
-```python
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped
+## Package responsibilities
 
-class GoalPublisher(Node):
-    def __init__(self):
-        super().__init__("goal_publisher")
-        self.pub = self.create_publisher(PoseStamped, "/waypoint_pose", 10)
-        self.timer = self.create_timer(1.0, self.publish_goal)
+### Simulation and perception
 
-    def publish_goal(self):
-        msg = PoseStamped()
-        msg.header.frame_id = "world"                 # ENU world frame, z up
-        msg.pose.position.x, msg.pose.position.y = 10.0, 5.0   # east, north
-        msg.pose.position.z = 5.0                     # up [m]
-        msg.pose.orientation.w = 1.0                  # yaw follows flight direction
-        self.pub.publish(msg)
+- `gz_sensor_interface` converts and relays Gazebo LiDAR, IMU, and odometry.
+- `FAST_LIO` supplies LiDAR-inertial odometry; `livox_ros_driver2` supports the
+  physical LiDAR path.
+- `VisionFlow-PX4` supplies PX4 SITL, the Yungu Gazebo world, vehicle models,
+  and the bridged front-camera image stream.
 
-rclpy.init()
-rclpy.spin(GoalPublisher())
-```
+### Navigation and execution
 
-### Feedback
+- `offboard_fsm` owns arming, takeoff, landing, queue services, and the
+  ENU-to-PX4-NED boundary.
+- SUPER (`super_planner`, `rog_map`, and supporting packages) plans local safe
+  trajectories from each active waypoint.
+- `px4_msgs` and `mars_quadrotor_msgs` provide ROS message definitions.
 
-| Topic | Type | Description |
-|---|---|---|
-| `/gz/odom_super` | `Odometry` | PX4 EKF local odometry converted from NED to ENU by `super_lidar`; the state feedback consumed by SUPER |
-| `/cloud_registered` | `PointCloud2` | World-frame lidar cloud (ROG-Map input) |
-| `/planning/pos_cmd` | `PositionCommand` | SUPER's commanded trajectory (pos/vel/acc/yaw/yaw_dot), ~100 Hz |
-| `fsm/planner_state` | `super_planner/PlannerState` | High-level planner FSM state (`init` / `wait_goal` / `move` / `fail`) |
-| `fastlio/lio_state` | `fast_lio/LioState` | FAST-LIO odometry health (`init` / `running` / `error`) |
-| `/fmu/out/vehicle_local_position_v1` | `VehicleLocalPosition` | Raw PX4 local position (NED) |
-| `/fmu/out/vehicle_status_v4` | `VehicleStatus` | Arming / nav state |
+### Search and operator tooling
 
-### Frames & waypoint behaviour
+- `coverage_planner` plans obstacle-aware single-UAV coverage routes from the
+  configured map and a requested search rectangle. Its package README covers
+  the service and JSON schema: [`src/search/uav-coverage-route-planner/README.md`](src/search/uav-coverage-route-planner/README.md).
+- `visualization`, `flight_monitor`, and `benchmark` provide RViz/birdview,
+  recording, and planner-evaluation utilities.
+- [`src/launch/README.md`](src/launch/README.md) documents the combined
+  coverage-planner/offboard launcher.
 
-- Waypoints, goals and planner output are **ENU world frame** (`frame_id:
-  "world"`, x=east, y=north, z=up); ENU→NED conversion (yaw included) happens
-  inside the offboard node.
-- A waypoint is reached by **horizontal** distance (`waypoint_reached_dist`),
-  then held for `waypoint_hold_time` before the next one is handed to SUPER.
-- Waypoint parameters double as launch args, e.g.
-  `ros2 launch offboard offboard.launch.py waypoint_reached_dist:=2.0
-  waypoint_hold_time:=1.0`.
+## Configuration and further documentation
 
-### Landing
+Configuration is grouped by owner:
 
-The drone lands with a direct PX4 descent (no planner) at `landing_vel` down
-to `landing_z`, then disarms. The `/land_cmd` topic or legacy `~/land` service
-works from `ARMING`, `TAKEOFF`, `IDLE`, or `MOVE`:
+- [`src/simulation/config/`](src/simulation/config/) for Gazebo, bridge,
+  sensor, and visualization settings;
+- [`src/navigation/config/offboard/`](src/navigation/config/offboard/) for
+  offboard FSM, shared topic names, and SUPER settings;
+- [`src/search/config/`](src/search/config/) for planner mission settings and
+  reusable map geometry.
 
-```bash
-ros2 topic pub --once /land_cmd std_msgs/msg/Bool "{data: true}"
-ros2 service call /offboard/land std_srvs/srv/Trigger   # legacy, same effect
-```
-
-### Recording & evaluation
-
-```bash
-# Terminal 3 — recorder + live plot (starts on the first goal)
-ros2 launch flight_monitor record.launch.py
-# Plot a saved segment afterwards (defaults to the newest CSV in cmd_log/)
-ros2 run flight_monitor plot_csv
-```
-
-Each goal click writes `cmd_log/goal_<NNN>_<timestamp>.csv` (goal position +
-commanded trajectory + real odometry).
-
-## Module dependency graph
-
-![Module dependency graph](docs/assets/module_dependency_graph.png)
-
-The image is generated from [`docs/assets/module_dependency_graph.dot`](docs/assets/module_dependency_graph.dot).
-
-| Package | Role |
-|---|---|
-| `gz_sensor_interface` | Simulation-interaction: `lidar_sensor`, `imu_bridge`, `truth_odom`, and `super_lidar` (world-frame cloud/odometry for SUPER) |
-| `offboard_fsm` | `offboard_node` state machine, `goal_marker_node`, and `fastlio_handler` (FAST-LIO → PX4 external-vision bridge) |
-| `SUPER` (`super_planner`, `rog_map`, `mission_planner`) | SUPER planner (`fsm_node`) |
-| `FAST_LIO` | LiDAR-inertial odometry (`fastlio_mapping`) |
-| `visualization` | Visualization: `visual_tf`, `gt_path`, `fastlio_visual`, `birdview_publisher`, RViz windows |
-| `flight_monitor` | `cmd_record` recorder + `plot_csv` |
-| `px4_msgs`, `mars_quadrotor_msgs` | ROS 2 message definitions |
-| `benchmark` | Random gate/pillar obstacle-map generator for planner benchmarks |
-
-Notes:
-
-- The visualization `world` frame is anchored at the drone launch position
-  (same as FAST-LIO `camera_init` and PX4 ENU origin); `/gt_path` is shifted by
-  the spawn offset so it lines up with `/fastlio_cloud` and `/gz/point_cloud_super`.
-- Ground-truth odometry `/odom` comes from the gz model-instance topic
-  `/model/swan_gamma_v2_0/odometry` (see `src/simulation/config/simulation.yaml`); it is used
-  by the truth path `/gt_path` and `flight_monitor` comparisons.
-- FAST-LIO's `fastlio_handler` feeds PX4 EKF2 external vision
-  (`/fmu/in/vehicle_visual_odometry`); the fused
-  `/fmu/out/vehicle_odometry` then drives SUPER through `super_lidar`.
-
-## External planner integration
-
-The point-to-point interface above is the execution endpoint for offline
-search/coverage planners. A worked example (coverage-search-planner,
-`flight_plan.json` → ENU waypoints) is documented in
-[`docs/coverage-search-integration.md`](docs/coverage-search-integration.md).
-Additional background: [`docs/README_zh.md`](docs/README_zh.md) and
-[`docs/utils-fastlio-gz-bridges.md`](docs/utils-fastlio-gz-bridges.md).
+Configuration changes apply on the next launch without rebuilding. The
+[operations reference](docs/operations.md) lists important files and launch
+overrides. For package-specific integration details, use the
+[skills API](skills/README.md), [combined-launch guide](src/launch/README.md),
+and [coverage-planner guide](src/search/uav-coverage-route-planner/README.md).
