@@ -39,6 +39,8 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
         declare_parameter("waypoint_queue_service", waypoint_queue_service_);
     clear_waypoints_service_ =
         declare_parameter("clear_waypoints_service", clear_waypoints_service_);
+    waypoint_queue_status_topic_ =
+        declare_parameter("waypoint_queue_status_topic", waypoint_queue_status_topic_);
     waypoint_reached_dist_ =
         declare_parameter("waypoint_reached_dist", waypoint_reached_dist_);
     const double waypoint_hold_time =
@@ -68,6 +70,8 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
         clear_waypoints_service_,
         std::bind(&OffboardNode::clearWaypointsCallback, this,
                   std::placeholders::_1, std::placeholders::_2));
+    waypoint_queue_status_pub_ = create_publisher<nav_msgs::msg::Path>(
+        waypoint_queue_status_topic_, rclcpp::QoS(1).reliable().transient_local());
 
     takeoff_cmd_sub_ = create_subscription<std_msgs::msg::Bool>(
         takeoff_cmd_topic_, rclcpp::QoS(10).reliable(),
@@ -82,6 +86,7 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     state_enter_t_ = now();
     last_arm_t_ = now();
     last_planner_reset_t_ = now();
+    publishWaypointQueue();
 
     RCLCPP_INFO(get_logger(),
                 "Offboard state machine started (planner-driven). "
@@ -100,6 +105,7 @@ void OffboardNode::queueWaypointsCallback(
         return;
     }
     res->queued_count = static_cast<uint32_t>(waypoints_->enqueue(req->waypoints));
+    publishWaypointQueueIfChanged();
     res->success = true;
     res->message = "queued " + std::to_string(res->queued_count) + " waypoint(s)";
 }
@@ -121,6 +127,7 @@ void OffboardNode::clearWaypointsCallback(
 
     res->success = true;
     res->message = "cleared " + std::to_string(res->cleared_count) + " waypoint(s)";
+    publishWaypointQueueIfChanged();
 }
 
 void OffboardNode::setState(State s)
@@ -198,15 +205,19 @@ void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Re
 
 void OffboardNode::publishHold()
 {
-    px4_->publishSetpoint(hold_x_, hold_y_, hold_z_, 0.0f, 0.0f, 0.0f);
+    px4_->publishSetpoint(hold_x_, hold_y_, hold_z_,
+                          0.0f, 0.0f, 0.0f, hold_yaw_, 0.0f);
 }
 
 void OffboardNode::publishIdleHold()
 {
-    float yaw_ned = 0.0f;
+    // Hold the yaw captured with the position after a completed waypoint or
+    // any other transition into hold. Only pre-align when another waypoint is
+    // actually queued for execution.
+    float yaw_ned = hold_yaw_;
     const auto goal = headingTarget();
     const auto local_pos = px4_->getLocalPosition();
-    if (goal && local_pos && local_pos->xy_valid) {
+    if (waypoints_->hasPendingGoal() && goal && local_pos && local_pos->xy_valid) {
         const double enu_x = local_pos->y;
         const double enu_y = local_pos->x;
         const double bearing = std::atan2(
@@ -224,6 +235,9 @@ void OffboardNode::captureHold()
         hold_x_ = local_pos->x;
         hold_y_ = local_pos->y;
         hold_z_ = local_pos->z;
+        if (std::isfinite(local_pos->heading)) {
+            hold_yaw_ = local_pos->heading;
+        }
         have_hold_ = true;
     }
 }
@@ -244,9 +258,35 @@ bool OffboardNode::publishCurrentGoal()
         return false;
     }
     publishGoalToPlanner(*goal);
+    publishWaypointQueueIfChanged();
     RCLCPP_INFO(get_logger(), "Goal forwarded to SUPER: (%.2f, %.2f, %.2f)",
                 goal->pose.position.x, goal->pose.position.y, goal->pose.position.z);
     return true;
+}
+
+void OffboardNode::publishWaypointQueue()
+{
+    nav_msgs::msg::Path snapshot;
+    snapshot.header.stamp = now();
+
+    if (const auto current = waypoints_->currentGoal()) {
+        snapshot.poses.push_back(*current);
+    }
+    for (const auto &waypoint : waypoints_->buffered()) {
+        snapshot.poses.push_back(waypoint);
+    }
+    if (!snapshot.poses.empty()) {
+        snapshot.header.frame_id = snapshot.poses.front().header.frame_id;
+    }
+    waypoint_queue_status_pub_->publish(snapshot);
+    published_waypoint_revision_ = waypoints_->revision();
+}
+
+void OffboardNode::publishWaypointQueueIfChanged()
+{
+    if (published_waypoint_revision_ != waypoints_->revision()) {
+        publishWaypointQueue();
+    }
 }
 
 bool OffboardNode::systemReady() const
@@ -351,6 +391,7 @@ void OffboardNode::timerCallback()
 
     waypoints_->tick(state_ == State::IDLE || state_ == State::MOVE ||
                      state_ == State::TAKEOFF);
+    publishWaypointQueueIfChanged();
 }
 
 }  // namespace offboard

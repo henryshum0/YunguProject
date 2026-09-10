@@ -10,6 +10,10 @@
 # Changes here take effect on the next `ros2 launch offboard offboard.launch.py`.
 
 offboard_fsm:
+  # ENU frame used by skills-generated PoseStamped waypoint goals. It must
+  # match coverage_planner's startup JSON frame_id.
+  frame_id: map
+
   # Use the /clock simulation clock for all time handling (true for a Gazebo
   # simulation, false to use the real system clock). Aligned with FAST-LIO.
   use_sim_time: false
@@ -32,7 +36,7 @@ offboard_fsm:
   yaw_align_thresh: 0.35
 
   # NED hover height after OFFBOARD (negative = up) [m]
-  default_height: 20.0
+  default_height: 10.0
 
   # Takeoff climb velocity [m/s] (direct PX4 vertical climb, no planner).
   takeoff_vel: 2.0

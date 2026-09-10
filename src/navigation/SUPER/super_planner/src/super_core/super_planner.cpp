@@ -22,6 +22,7 @@
 */
 
 #include <super_core/super_planner.h>
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <super_utils/scope_timer.hpp>
@@ -82,6 +83,7 @@ namespace super_planner {
         gi_.goal_p = goal_p;
         gi_.goal_yaw = goal_yaw;
         gi_.new_goal = new_goal;
+        near_goal_braking_active_ = false;
         vec_Vec3f viz_pts{goal_p, robot_state_.p};
 
         {
@@ -182,6 +184,51 @@ namespace super_planner {
             ros_ptr_->vizGoalPath(viz_pts);
             time_consuming_[VISUALIZATION] += t_viz.stop();
         }
+
+        // Enter the braking region only while already moving. A vehicle
+        // starting from rest has no meaningful deceleration profile, so its
+        // first trajectory remains under the normal optimizer. The distance
+        // check is intentionally full 3D.
+        const double entry_speed = robot_state_.v.norm();
+        constexpr double kSpeedEpsilon = 1e-3;
+        if (!near_goal_braking_active_ &&
+            cfg_.near_goal_braking_distance > 0.0 &&
+            (robot_state_.p - goal_p).norm() <= cfg_.near_goal_braking_distance &&
+            entry_speed > cfg_.near_goal_goal_speed + kSpeedEpsilon) {
+            Vec3f local_start_pt;
+            if (!map_ptr_->getNearestCellNot(GridType::OCCUPIED, robot_state_.p, local_start_pt, 3.0)) {
+                ros_ptr_->warn(" -- [SUPER] Near-goal braking has no collision-free start point.");
+                latest_replan.setRetCode(SUPER_NO_START_POINT);
+                return FAILED;
+            }
+
+            ExpTraj braking_traj;
+            if (generateNearGoalBrakingTrajectory(
+                        local_start_pt, goal_p, entry_speed, braking_traj) != SUCCESS) {
+                ros_ptr_->warn(" -- [SUPER] Near-goal braking trajectory failed; no optimized fallback is used.");
+                return FAILED;
+            }
+            cmd_traj_info_.setTrajectory(braking_traj);
+            last_exp_traj_info_ = braking_traj;
+            robot_on_backup_traj_ = false;
+            gi_.new_goal = false;
+            near_goal_braking_active_ = true;
+            latest_replan.setLocalStartP(local_start_pt);
+            latest_replan.setExpTraj(braking_traj.posTraj());
+            latest_replan.setExpYawTraj(braking_traj.yawTraj());
+            latest_replan.setRetCode(SUPER_SUCCESS_NO_BACKUP);
+            ros_ptr_->vizCommittedTraj(cmd_traj_info_.posTraj(), -1);
+            ros_ptr_->info(" -- [SUPER] Near goal: replaced active path with constant-deceleration A* trajectory.");
+            return SUCCESS;
+        }
+
+        // The active near-goal path already came from A*. Keep commanding it
+        // rather than feeding it back into the optimizer on every replan tick.
+        if (near_goal_braking_active_ && !new_goal) {
+            latest_replan.setRetCode(SUPER_SUCCESS_NO_BACKUP);
+            return NO_NEED;
+        }
+        near_goal_braking_active_ = false;
 
 
         /// 1) Replan EXP traj
@@ -1165,6 +1212,153 @@ namespace super_planner {
         path.insert(path.begin(), start_pt);
         if (ret_code == REACH_GOAL) {
             path.push_back(goal);
+        }
+        return true;
+    }
+
+    RET_CODE SuperPlanner::generateNearGoalBrakingTrajectory(
+            const Vec3f &start_pt,
+            const Vec3f &goal_p,
+            const double &entry_speed,
+            ExpTraj &out_exp_traj_info) {
+        constexpr double kSpeedEpsilon = 1e-3;
+        if (cfg_.near_goal_goal_speed < 0.0) {
+            ros_ptr_->error(" -- [SUPER] near_goal_goal_speed must be non-negative.");
+            return FAILED;
+        }
+        if (entry_speed <= cfg_.near_goal_goal_speed + kSpeedEpsilon) {
+            ros_ptr_->warn(" -- [SUPER] Near-goal braking requires entry speed greater than goal speed.");
+            return FAILED;
+        }
+
+        vec_Vec3f astar_path;
+        if (!PathSearch(start_pt, goal_p, cfg_.planning_horizon, astar_path) || astar_path.size() < 2) {
+            ros_ptr_->warn(" -- [SUPER] Near-goal A* search failed.");
+            return FAILED;
+        }
+        if ((astar_path.back() - goal_p).norm() > cfg_.resolution * 2.0) {
+            ros_ptr_->warn(" -- [SUPER] Near-goal A* search did not reach the goal within the planning horizon.");
+            return FAILED;
+        }
+
+        const double path_length = geometry_utils::computePathLength(astar_path);
+        if (path_length <= kSpeedEpsilon) {
+            ros_ptr_->warn(" -- [SUPER] Near-goal A* path is too short to build a braking trajectory.");
+            return FAILED;
+        }
+
+        // For s = u t + 1/2 a t^2 and v = u + a t, solve the
+        // constant-deceleration profile over the collision-free A* length:
+        //     t = 2s / (u + v), a = (v - u) / t.
+        const double terminal_speed = cfg_.near_goal_goal_speed;
+        const double duration = 2.0 * path_length / (entry_speed + terminal_speed);
+        const double acceleration = (terminal_speed - entry_speed) / duration;
+        ros_ptr_->info(
+                " -- [SUPER] Near-goal braking: s={:.3f} m, u={:.3f} m/s, v={:.3f} m/s, a={:.3f} m/s^2, t={:.3f} s.",
+                path_length, entry_speed, terminal_speed, acceleration, duration);
+
+        // Hold the heading captured when the vehicle enters the braking
+        // region. The yaw trajectory below contains only this constant term,
+        // therefore its commanded yaw rate is exactly zero throughout.
+        const double yaw = robot_state_.yaw;
+        Trajectory position_traj;
+        Trajectory yaw_traj;
+        if (!buildBrakingTrajectory(astar_path, yaw, entry_speed, position_traj, yaw_traj)) {
+            ros_ptr_->warn(" -- [SUPER] Near-goal A* path contains no usable segments.");
+            return FAILED;
+        }
+
+        const double start_wt = ros_ptr_->getSimTime();
+        out_exp_traj_info.setTrajectory(start_wt, position_traj, yaw_traj);
+        out_exp_traj_info.setGoalConnectedFlag(true);
+        out_exp_traj_info.setWholeTrajKnownFreeFlag(true);
+        ros_ptr_->vizFrontendPath(astar_path);
+        ros_ptr_->vizExpTraj(position_traj);
+        return SUCCESS;
+    }
+
+    bool SuperPlanner::buildBrakingTrajectory(
+            const vec_Vec3f &path,
+            const double &yaw,
+            const double &entry_speed,
+            Trajectory &position_traj,
+            Trajectory &yaw_traj) const {
+        constexpr double kMinimumSegmentLength = 1e-4;
+        constexpr double kSpeedEpsilon = 1e-3;
+        constexpr double kGoalHoldDuration = 0.1;
+        constexpr int kPolynomialOrder = 7;
+        constexpr int kAccelerationColumn = 5;
+        constexpr int kVelocityColumn = 6;
+        constexpr int kConstantColumn = 7;
+
+        const double path_length = geometry_utils::computePathLength(path);
+        const double terminal_speed = cfg_.near_goal_goal_speed;
+        if (path_length <= kMinimumSegmentLength ||
+            entry_speed <= terminal_speed + kSpeedEpsilon) {
+            return false;
+        }
+
+        const double total_duration = 2.0 * path_length / (entry_speed + terminal_speed);
+        const double acceleration = (terminal_speed - entry_speed) / total_duration;
+        if (acceleration >= -kSpeedEpsilon) {
+            return false;
+        }
+
+        position_traj.clear();
+        yaw_traj.clear();
+        double segment_start_speed = entry_speed;
+        for (size_t index = 1; index < path.size(); ++index) {
+            const Vec3f delta = path[index] - path[index - 1];
+            const double length = delta.norm();
+            if (length <= kMinimumSegmentLength) {
+                continue;
+            }
+
+            // Solve d = u_i t + 1/2 a t^2 for the positive time root.
+            const double discriminant = segment_start_speed * segment_start_speed +
+                                       2.0 * acceleration * length;
+            if (discriminant < -kSpeedEpsilon) {
+                return false;
+            }
+            const double segment_end_speed = std::sqrt(std::max(0.0, discriminant));
+            const double duration =
+                    (segment_end_speed - segment_start_speed) / acceleration;
+            if (duration <= kMinimumSegmentLength) {
+                return false;
+            }
+
+            const Vec3f direction = delta / length;
+            Eigen::Matrix<double, 3, kPolynomialOrder + 1> position_coefficients =
+                    Eigen::Matrix<double, 3, kPolynomialOrder + 1>::Zero();
+            position_coefficients.col(kAccelerationColumn) = 0.5 * acceleration * direction;
+            position_coefficients.col(kVelocityColumn) = segment_start_speed * direction;
+            position_coefficients.col(kConstantColumn) = path[index - 1];
+            position_traj.emplace_back(duration, position_coefficients);
+
+            Eigen::Matrix<double, 3, kPolynomialOrder + 1> yaw_coefficients =
+                    Eigen::Matrix<double, 3, kPolynomialOrder + 1>::Zero();
+            yaw_coefficients(0, kConstantColumn) = yaw;
+            yaw_traj.emplace_back(duration, yaw_coefficients);
+            segment_start_speed = segment_end_speed;
+        }
+
+        if (position_traj.empty()) {
+            return false;
+        }
+
+        // A resting goal needs a final static piece so command evaluation after
+        // the braking duration cannot retain a stale velocity. Non-zero goal
+        // speeds deliberately omit it to avoid an artificial velocity jump.
+        if (terminal_speed <= kSpeedEpsilon) {
+            Eigen::Matrix<double, 3, kPolynomialOrder + 1> position_hold =
+                    Eigen::Matrix<double, 3, kPolynomialOrder + 1>::Zero();
+            position_hold.col(kConstantColumn) = path.back();
+            position_traj.emplace_back(kGoalHoldDuration, position_hold);
+
+            Eigen::Matrix<double, 3, kPolynomialOrder + 1> yaw_hold =
+                    Eigen::Matrix<double, 3, kPolynomialOrder + 1>::Zero();
+            yaw_hold(0, kConstantColumn) = yaw;
+            yaw_traj.emplace_back(kGoalHoldDuration, yaw_hold);
         }
         return true;
     }

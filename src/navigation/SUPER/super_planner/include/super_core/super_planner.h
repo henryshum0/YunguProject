@@ -79,6 +79,9 @@ namespace super_planner {
         Vec3f local_start_p_;
 
         bool robot_on_backup_traj_{false};
+        // A close in-flight goal is represented by a braking A* trajectory.
+        // Do not feed it back into the optimizer unless a new goal arrives.
+        bool near_goal_braking_active_{false};
         // use negative value to indicate the traj is not available
         double on_backup_start_WT{-1}, on_backup_end_WT{-1};
 
@@ -146,6 +149,17 @@ namespace super_planner {
 
         /* For Backup traj generation */
         RET_CODE generateBackupTrajectory(ExpTraj &ref_exp_traj, BackupTraj &back_traj_info);
+
+        RET_CODE generateNearGoalBrakingTrajectory(const Vec3f &start_pt,
+                                                    const Vec3f &goal_p,
+                                                    const double &entry_speed,
+                                                    ExpTraj &out_exp_traj_info);
+
+        bool buildBrakingTrajectory(const vec_Vec3f &path,
+                                    const double &yaw,
+                                    const double &entry_speed,
+                                    Trajectory &position_traj,
+                                    Trajectory &yaw_traj) const;
 
         int getNearestFurtherGoalPoint(const vec_E<Vec3f> &goals, const Vec3f &start_pt);
 

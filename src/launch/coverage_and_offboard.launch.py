@@ -36,7 +36,7 @@ def generate_launch_description() -> LaunchDescription:
         ),
         DeclareLaunchArgument(
             "use_fastlio",
-            default_value="true",
+            default_value="false",
             description="Launch FAST-LIO and its PX4 visual-odometry bridge.",
         ),
         IncludeLaunchDescription(

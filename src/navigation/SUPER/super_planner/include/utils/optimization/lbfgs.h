@@ -170,6 +170,10 @@ namespace math_utils{
             LBFGSERR_MAXIMUMSTEP,
             /** Line search reaches the maximum, assumptions not satisfied or precision not achievable.*/
             LBFGSERR_MAXIMUMLINESEARCH,
+            /** Line search exhausted trials while the Armijo decrease test failed. */
+            LBFGSERR_MAXIMUMLINESEARCH_ARMIJO,
+            /** Line search exhausted trials while the weak-Wolfe curvature test failed. */
+            LBFGSERR_MAXIMUMLINESEARCH_WOLFE,
             /** The algorithm routine reaches the maximum number of iterations. */
             LBFGSERR_MAXIMUMITERATION,
             /** Relative search interval width is at least lbfgs_parameter_t::machine_prec. */

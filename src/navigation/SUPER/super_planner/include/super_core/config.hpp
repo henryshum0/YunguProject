@@ -58,6 +58,13 @@ namespace super_planner {
         double resolution;
         double planning_horizon;
         double receding_dis;
+        // When an in-flight trajectory enters this full-3D distance from the
+        // goal, replace its remaining path with a constant-deceleration A*
+        // trajectory that reaches the requested terminal speed.
+        double near_goal_braking_distance{1.0};
+        // Desired scalar speed at the goal for near-goal braking. Zero means
+        // come to rest at the goal.
+        double near_goal_goal_speed{0.0};
         double safe_corridor_line_max_length;
         // for fov cut
         double sensing_horizon;
@@ -102,6 +109,8 @@ namespace super_planner {
             loader.LoadParam("super_planner/corridor_line_max_length", corridor_line_max_length, 3.0);
             loader.LoadParam("super_planner/planning_horizon", planning_horizon, 10.0);
             loader.LoadParam("super_planner/receding_dis", receding_dis, 5.0);
+            loader.LoadParam("super_planner/near_goal_braking_distance", near_goal_braking_distance, 1.0);
+            loader.LoadParam("super_planner/near_goal_goal_speed", near_goal_goal_speed, 0.0);
             loader.LoadParam("super_planner/robot_r", robot_r, 0.3);
             loader.LoadParam("super_planner/iris_iter_num", iris_iter_num, 1);
             loader.LoadParam("super_planner/yaw_mode", yaw_mode, 1);

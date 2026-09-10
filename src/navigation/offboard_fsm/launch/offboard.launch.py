@@ -191,6 +191,8 @@ def generate_launch_description():
             'offboard_fsm.services.queue_waypoints', '/waypoint_buffer')),
         'clear_waypoints_service': str(topic(
             'offboard_fsm.services.clear_waypoints', '/waypoint_buffer/clear')),
+        'waypoint_queue_status_topic': str(topic(
+            'offboard_fsm.out.waypoint_queue_status', '/waypoint_buffer/status')),
         'cloud_in_topic': default_cloud_in,
     }
 
@@ -253,6 +255,7 @@ def generate_launch_description():
                 'goal_topic': LaunchConfiguration('goal_topic'),
                 'waypoint_queue_service': LaunchConfiguration('waypoint_queue_service'),
                 'clear_waypoints_service': LaunchConfiguration('clear_waypoints_service'),
+                'waypoint_queue_status_topic': LaunchConfiguration('waypoint_queue_status_topic'),
                 'planner_state_topic': topic('super.out.planner_state', 'fsm/planner_state'),
                 'goal_status_topic': topic('super.out.goal_status', 'fsm/goal_status'),
                 'lio_state_topic': topic('fastlio.out.lio_state', 'fastlio/lio_state'),

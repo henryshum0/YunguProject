@@ -67,6 +67,7 @@ ament_target_dependencies(offboard_node
   std_srvs
   std_msgs
   geometry_msgs
+  nav_msgs
   visualization_msgs
   super_planner
   fast_lio
@@ -127,6 +128,7 @@ ament_target_dependencies(offboard_component
   std_srvs
   std_msgs
   geometry_msgs
+  nav_msgs
   visualization_msgs
   super_planner
   fast_lio
@@ -153,7 +155,7 @@ install(DIRECTORY
 )
 
 ament_export_include_directories(include)
-ament_export_dependencies(rclcpp rclcpp_components px4_msgs mars_quadrotor_msgs std_srvs
+ament_export_dependencies(rclcpp rclcpp_components px4_msgs mars_quadrotor_msgs std_srvs nav_msgs
   rosidl_default_runtime)
 
 ament_package()
