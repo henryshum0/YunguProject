@@ -10,15 +10,16 @@ from rclpy.node import Node
 
 from offboard_fsm.srv import QueueWaypoints
 from skills.base import Primitive, SkillExecutionError, SkillTimeoutError
+from skills.config import SkillRuntimeConfig
 
 
 class MovePrimitive(Primitive[Sequence[PoseStamped], int]):
     """Queue ENU route goals with an already-running ``offboard_fsm`` node."""
 
-    def __init__(self, node: Node, *, queue_service: str = "/waypoint_buffer") -> None:
+    def __init__(self, node: Node, *, config: SkillRuntimeConfig) -> None:
         self._node = node
-        self._queue_service = queue_service
-        self._client = node.create_client(QueueWaypoints, queue_service)
+        self._queue_service = config.offboard.queue_service
+        self._client = node.create_client(QueueWaypoints, self._queue_service)
 
     @property
     def name(self) -> str:

@@ -8,6 +8,7 @@ from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 
 from skills.base import Skill
+from skills.config import SkillRuntimeConfig
 from skills.frames import WaypointInput, pose_stamped_from_enu_waypoint, to_enu_waypoints
 from skills.primitives import ClearWaypointsPrimitive, MovePrimitive
 
@@ -19,13 +20,11 @@ class NavigateSkill(Skill[WaypointInput, int]):
         self,
         node: Node,
         *,
-        frame_id: str = "map",
-        queue_service: str = "/waypoint_buffer",
-        clear_service: str = "/waypoint_buffer/clear",
+        config: SkillRuntimeConfig,
     ) -> None:
-        self._frame_id = frame_id
-        self._move = MovePrimitive(node, queue_service=queue_service)
-        self._clear = ClearWaypointsPrimitive(node, clear_service=clear_service)
+        self._frame_id = config.offboard.frame_id
+        self._move = MovePrimitive(node, config=config)
+        self._clear = ClearWaypointsPrimitive(node, config=config)
 
     @property
     def name(self) -> str:

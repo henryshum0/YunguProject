@@ -11,17 +11,12 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool
 
-from skills import NavigateSkill, PlanSearchPrimitive, SearchSkill
+from skills import NavigateSkill, PlanSearchPrimitive, SearchSkill, SkillRuntimeConfig
 
 
 @dataclass(frozen=True, slots=True)
 class ConnectionSettings:
-    frame_id: str
-    planner_service: str
-    queue_service: str
-    clear_service: str
-    takeoff_topic: str
-    land_topic: str
+    config: SkillRuntimeConfig
     timeout_sec: float
 
 
@@ -33,36 +28,25 @@ class SkillController:
         self._flight_publishers = {}
 
     def takeoff(self, settings: ConnectionSettings) -> None:
-        self._publish_flight_command(settings.takeoff_topic)
+        self._publish_flight_command(settings.config.offboard.takeoff_topic)
 
     def land(self, settings: ConnectionSettings) -> None:
-        self._publish_flight_command(settings.land_topic)
+        self._publish_flight_command(settings.config.offboard.land_topic)
 
     def navigate(
         self, waypoints: tuple[tuple[float, float, float, float], ...], *, frame: str,
         settings: ConnectionSettings,
     ) -> int:
-        return NavigateSkill(
-            self._node,
-            frame_id=settings.frame_id,
-            queue_service=settings.queue_service,
-            clear_service=settings.clear_service,
-        ).call(waypoints, frame=frame, timeout_sec=settings.timeout_sec)
+        return NavigateSkill(self._node, config=settings.config).call(
+            waypoints, frame=frame, timeout_sec=settings.timeout_sec)
 
     def clear(self, settings: ConnectionSettings) -> int:
-        return NavigateSkill(
-            self._node,
-            frame_id=settings.frame_id,
-            queue_service=settings.queue_service,
-            clear_service=settings.clear_service,
-        ).clear(timeout_sec=settings.timeout_sec)
+        return NavigateSkill(self._node, config=settings.config).clear(timeout_sec=settings.timeout_sec)
 
     def plan_search(
         self, corners: tuple[tuple[float, float], ...], *, settings: ConnectionSettings,
     ) -> Path:
-        return PlanSearchPrimitive(
-            self._node, frame_id=settings.frame_id, service_name=settings.planner_service,
-        ).call(
+        return PlanSearchPrimitive(self._node, config=settings.config).call(
             corners,
             publish_result=False,
             timeout_sec=settings.timeout_sec,
@@ -71,13 +55,8 @@ class SkillController:
     def search_and_queue(
         self, corners: tuple[tuple[float, float], ...], *, settings: ConnectionSettings,
     ) -> Path:
-        return SearchSkill(
-            self._node,
-            frame_id=settings.frame_id,
-            service_name=settings.planner_service,
-            queue_service=settings.queue_service,
-            clear_service=settings.clear_service,
-        ).call(corners, timeout_sec=settings.timeout_sec)
+        return SearchSkill(self._node, config=settings.config).call(
+            corners, timeout_sec=settings.timeout_sec)
 
     def _publish_flight_command(self, topic: str) -> None:
         publisher = self._flight_publishers.get(topic)

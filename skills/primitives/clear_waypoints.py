@@ -7,15 +7,16 @@ from rclpy.node import Node
 
 from offboard_fsm.srv import ClearWaypoints
 from skills.base import Primitive, SkillExecutionError, SkillTimeoutError
+from skills.config import SkillRuntimeConfig
 
 
 class ClearWaypointsPrimitive(Primitive[None, int]):
     """Abort the active waypoint and clear all queued offboard waypoints."""
 
-    def __init__(self, node: Node, *, clear_service: str = "/waypoint_buffer/clear") -> None:
+    def __init__(self, node: Node, *, config: SkillRuntimeConfig) -> None:
         self._node = node
-        self._clear_service = clear_service
-        self._client = node.create_client(ClearWaypoints, clear_service)
+        self._clear_service = config.offboard.clear_service
+        self._client = node.create_client(ClearWaypoints, self._clear_service)
 
     @property
     def name(self) -> str:

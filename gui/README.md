@@ -12,17 +12,17 @@ export PYTHONPATH=/home/windshape/YunguProject:$PYTHONPATH
 Start the coverage planner and offboard FSM before using service actions. The GUI reports an error
 without freezing if a configured service is unavailable.
 
-The connection panel defaults to `map`, `/coverage_planner/plan_coverage`,
-`/waypoint_buffer`, `/waypoint_buffer/clear`, `/takeoff_cmd`, `/land_cmd`,
-`/swan_gamma_v2/front_camera/image`, and a 10-second timeout.
-All values are editable for namespaced or remapped systems.
+The connection panel requires the navigation configuration directory
+(`src/navigation/config/offboard`) and planner JSON (`src/search/config/yungu_planner.json`).
+The GUI loads their validated `SkillRuntimeConfig` before each flight or skill action; this supplies
+the frame ID, planner service, waypoint queue/clear services, and takeoff/land topics. Camera,
+vehicle-odometry, queue-status, and timeout settings remain independently editable.
 
 - **Navigate** accepts one `x, y, z, heading_deg` waypoint per line. Select ENU or NED; the
-  existing `NavigateSkill` performs the conversion and queues the full route. Its independent
-  Navigation map defaults to Yungu's map JSON: click to select an ENU position, review the
+  existing `NavigateSkill` performs the conversion and queues the full route. Select the Navigate
+  tab, then use the persistent operations map to click an ENU position; review the
   editable altitude (default 5 m) and heading (default 0°), then use **Queue selected goal**.
-  The heading is ROS ENU yaw (0° east, counter-clockwise positive). Orange marks the selected
-  goal; blue marks a goal accepted by the queue service.
+  The heading is ROS ENU yaw (0° east, counter-clockwise positive).
 - **Clear route** calls the clear service, aborting the current route and removing queued waypoints.
 - **Plan only** calls `PlanSearchPrimitive` using four ENU search corners and displays its path
   without publishing planner waypoint or marker topics.
@@ -39,7 +39,7 @@ All values are editable for namespaced or remapped systems.
 
 ## Coverage map selection
 
-The Coverage Search tab defaults to
+The persistent operations map defaults to
 `src/search/config/yungu_map.json`. It renders the map origin and occupied footprints directly
 from the planner-compatible JSON; no image file or additional Python package is required.
 
@@ -47,13 +47,18 @@ Use **Browse…** to select another map JSON and **Reload** after editing one. T
 visual aid only: it does not reconfigure the running coverage planner. Select the same map used by
 the planner's startup configuration to avoid planning against a different obstacle layout.
 
-Click two opposite points on the map to create an axis-aligned ENU rectangle. The GUI fills the
-four service corners in southwest, southeast, northeast, northwest order; you can still edit those
-values manually. **Reset selection** clears only the search rectangle. Successful Plan only and
-Plan and queue requests overlay their returned sparse waypoint route in blue.
+The selected tab controls click behavior without hiding the map. On **Navigate**, one click selects
+an ENU goal. On **Coverage Search**, two opposite clicks create an axis-aligned ENU rectangle; the
+GUI fills the service corners in southwest, southeast, northeast, northwest order. You can still
+edit all values manually. **Reset selection** clears only the search rectangle. Successful Plan
+only and Plan and queue requests overlay their returned sparse waypoint route in blue.
 
-The Navigation map is intentionally visual only. It renders map origin and occupied footprints,
-but it does not check the clicked route for collision or alter the map used by the running planner.
+The operations map remains visible across tab changes and also shows the live vehicle pose from
+`/gz/ground_truth/odom` (black heading arrow) and the authoritative offboard route from
+`/waypoint_buffer/status`: orange is the active target and purple points are pending waypoints.
+Both topics are editable in the connection settings. The vehicle source must already be ENU and
+aligned with the selected map; the GUI does not transform frames. The map remains visual only: it
+does not check clicked routes for collision or alter the map used by the running planner.
 
 Run the non-graphical import check with:
 

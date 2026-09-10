@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+from pathlib import Path as FilePath
+
 import pytest
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 
 from gui.controller import ConnectionSettings, SkillController, format_path
+from skills.config import CoveragePlannerSkillConfig, OffboardSkillConfig, SkillRuntimeConfig
 
 
 SETTINGS = ConnectionSettings(
-    frame_id="map",
-    planner_service="/planner",
-    queue_service="/queue",
-    clear_service="/clear",
-    takeoff_topic="/takeoff",
-    land_topic="/land",
+    config=SkillRuntimeConfig(
+        offboard=OffboardSkillConfig(
+            frame_id="map", queue_service="/queue", clear_service="/clear",
+            takeoff_topic="/takeoff", land_topic="/land", queue_status_topic="/status"),
+        coverage_planner=CoveragePlannerSkillConfig(
+            frame_id="map", plan_service="/planner", planner_config_file=FilePath("/tmp/test-planner.json")),
+    ),
     timeout_sec=4.0,
 )
 
@@ -84,8 +88,7 @@ def test_controller_uses_settings_for_skills_and_flight_topics(monkeypatch) -> N
     assert node.publishers["/land"].messages[0].data is True
 
     assert controller.navigate(((1.0, 2.0, 3.0, 0.0),), frame="enu", settings=SETTINGS) == 1
-    assert FakeNavigateSkill.instances[0].kwargs == {
-        "frame_id": "map", "queue_service": "/queue", "clear_service": "/clear"}
+    assert FakeNavigateSkill.instances[0].kwargs == {"config": SETTINGS.config}
     assert controller.clear(SETTINGS) == 3
     assert isinstance(controller.plan_search(((0.0, 0.0),) * 4, settings=SETTINGS), Path)
     assert isinstance(controller.search_and_queue(((0.0, 0.0),) * 4, settings=SETTINGS), Path)

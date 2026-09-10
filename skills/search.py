@@ -6,6 +6,7 @@ from nav_msgs.msg import Path
 from rclpy.node import Node
 
 from skills.base import Skill
+from skills.config import SkillRuntimeConfig
 from skills.navigate import NavigateSkill
 from skills.primitives import PlanSearchPrimitive
 from skills.primitives.plan_search import SearchArea
@@ -18,16 +19,10 @@ class SearchSkill(Skill[SearchArea, Path]):
         self,
         node: Node,
         *,
-        frame_id: str = "map",
-        service_name: str = "/coverage_planner/plan_coverage",
-        queue_service: str = "/waypoint_buffer",
-        clear_service: str = "/waypoint_buffer/clear",
+        config: SkillRuntimeConfig,
     ) -> None:
-        self._search = PlanSearchPrimitive(
-            node, frame_id=frame_id, service_name=service_name)
-        self._navigate = NavigateSkill(
-            node, frame_id=frame_id, queue_service=queue_service,
-            clear_service=clear_service)
+        self._search = PlanSearchPrimitive(node, config=config)
+        self._navigate = NavigateSkill(node, config=config)
 
     @property
     def name(self) -> str:

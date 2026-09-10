@@ -13,6 +13,7 @@ from skills import (
     SkillExecutionError,
     SkillTimeoutError,
 )
+from skills.tests.config_data import TEST_CONFIG
 
 
 class FakeFuture:
@@ -82,7 +83,7 @@ def test_move_queues_every_pose_with_waypoint_buffer_service(monkeypatch) -> Non
         lambda node, future, timeout_sec: None,
     )
     goals = (PoseStamped(), PoseStamped())
-    primitive = MovePrimitive(node)
+    primitive = MovePrimitive(node, config=TEST_CONFIG)
     assert primitive.name == "move"
     assert primitive.call(goals) == 2
     assert primitive.queue_service == "/waypoint_buffer"
@@ -91,7 +92,7 @@ def test_move_queues_every_pose_with_waypoint_buffer_service(monkeypatch) -> Non
 
 
 def test_move_reports_unavailable_or_rejected_queue_service(monkeypatch) -> None:
-    unavailable = MovePrimitive(FakeNode(FakeClient(available=False)))
+    unavailable = MovePrimitive(FakeNode(FakeClient(available=False)), config=TEST_CONFIG)
     with pytest.raises(SkillTimeoutError, match="unavailable"):
         unavailable.call((PoseStamped(),))
 
@@ -100,7 +101,7 @@ def test_move_reports_unavailable_or_rejected_queue_service(monkeypatch) -> None
         "skills.primitives.move.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    rejected = MovePrimitive(FakeNode(client))
+    rejected = MovePrimitive(FakeNode(client), config=TEST_CONFIG)
     with pytest.raises(SkillExecutionError, match="rejected"):
         rejected.call((PoseStamped(),))
 
@@ -112,14 +113,14 @@ def test_clear_waypoints_returns_removed_count_and_times_out(monkeypatch) -> Non
         "skills.primitives.clear_waypoints.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    primitive = ClearWaypointsPrimitive(node)
+    primitive = ClearWaypointsPrimitive(node, config=TEST_CONFIG)
     assert primitive.name == "clear_waypoints"
     assert primitive.call() == 3
     assert primitive.clear_service == "/waypoint_buffer/clear"
     assert node.service_name == "/waypoint_buffer/clear"
 
     timed_out_client = FakeClient(_clear_response(0), done=False)
-    timed_out = ClearWaypointsPrimitive(FakeNode(timed_out_client))
+    timed_out = ClearWaypointsPrimitive(FakeNode(timed_out_client), config=TEST_CONFIG)
     with pytest.raises(SkillTimeoutError, match="did not respond"):
         timed_out.call()
     assert timed_out_client.future.cancelled
@@ -135,7 +136,7 @@ def test_plan_search_returns_coverage_service_waypoints(monkeypatch) -> None:
         "skills.primitives.plan_search.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    primitive = PlanSearchPrimitive(node)
+    primitive = PlanSearchPrimitive(node, config=TEST_CONFIG)
     result = primitive.call(((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
     assert result is response.waypoints
     assert node.service_name == "/coverage_planner/plan_coverage"
@@ -152,7 +153,7 @@ def test_plan_search_can_request_published_visualization(monkeypatch) -> None:
         "skills.primitives.plan_search.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    primitive = PlanSearchPrimitive(FakeNode(client))
+    primitive = PlanSearchPrimitive(FakeNode(client), config=TEST_CONFIG)
     primitive.call(
         ((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)),
         publish_result=True,
@@ -169,13 +170,13 @@ def test_search_reports_backend_rejection(monkeypatch) -> None:
         "skills.primitives.plan_search.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    primitive = PlanSearchPrimitive(FakeNode(client))
+    primitive = PlanSearchPrimitive(FakeNode(client), config=TEST_CONFIG)
     with pytest.raises(SkillExecutionError, match="infeasible"):
         primitive.call(((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
 
 
 def test_search_reports_unavailable_or_timed_out_service(monkeypatch) -> None:
-    unavailable = PlanSearchPrimitive(FakeNode(FakeClient(available=False)))
+    unavailable = PlanSearchPrimitive(FakeNode(FakeClient(available=False)), config=TEST_CONFIG)
     with pytest.raises(SkillTimeoutError, match="unavailable"):
         unavailable.call(((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
 
@@ -184,14 +185,14 @@ def test_search_reports_unavailable_or_timed_out_service(monkeypatch) -> None:
         "skills.primitives.plan_search.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    timed_out = PlanSearchPrimitive(FakeNode(client))
+    timed_out = PlanSearchPrimitive(FakeNode(client), config=TEST_CONFIG)
     with pytest.raises(SkillTimeoutError, match="did not respond"):
         timed_out.call(((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
     assert client.future.cancelled
 
 
 def test_search_requires_four_distinct_finite_corners() -> None:
-    primitive = PlanSearchPrimitive(FakeNode(FakeClient()))
+    primitive = PlanSearchPrimitive(FakeNode(FakeClient()), config=TEST_CONFIG)
     with pytest.raises(ValueError, match="exactly four"):
         primitive.call(((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)))
     with pytest.raises(ValueError, match="distinct"):

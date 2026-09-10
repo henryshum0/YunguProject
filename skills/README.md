@@ -12,19 +12,31 @@ source /home/windshape/YunguProject/install/setup.bash
 export PYTHONPATH=/home/windshape/YunguProject:$PYTHONPATH
 ```
 
-Use the primitives from an orchestrator node:
+Every primitive requires one validated workspace configuration. Load it once
+from the offboard configuration directory and the coverage-planner startup JSON:
 
 ```python
 from rclpy.node import Node
-from skills import ClearWaypointsPrimitive, MovePrimitive, NavigateSkill, PlanSearchPrimitive
+from skills import (
+    ClearWaypointsPrimitive,
+    MovePrimitive,
+    NavigateSkill,
+    PlanSearchPrimitive,
+    SkillRuntimeConfig,
+)
 
 node = Node("mission_orchestrator")
-search = PlanSearchPrimitive(node, frame_id="map")
+config = SkillRuntimeConfig.load(
+    navigation_config_dir="/home/windshape/YunguProject/src/navigation/config/offboard",
+    planner_config_file="/home/windshape/YunguProject/src/search/config/yungu_planner.json",
+)
+
+search = PlanSearchPrimitive(node, config=config)
 path = search.call(((10.0, 10.0), (120.0, 10.0), (120.0, 80.0), (10.0, 80.0)))
 
-move = MovePrimitive(node)  # /waypoint_buffer queue service by default
+move = MovePrimitive(node, config=config)
 count = move.call(path.poses)
-cleared = ClearWaypointsPrimitive(node).call()
+cleared = ClearWaypointsPrimitive(node, config=config).call()
 ```
 
 `NavigateSkill` is the coordinate-based interface to `MovePrimitive`. Its waypoints use
@@ -35,7 +47,7 @@ NED input is `(north, east, down, yaw)` with `0°` facing North and clockwise-po
 ```python
 from skills import NavigateSkill
 
-navigate = NavigateSkill(node, frame_id="map")
+navigate = NavigateSkill(node, config=config)
 navigate.call((10.0, 20.0, 5.0, 90.0), frame="enu")
 navigate.call([
     (20.0, 10.0, -5.0, 0.0),
@@ -57,7 +69,7 @@ search area, queues the returned ENU `Path` through `NavigateSkill`, then return
 ```python
 from skills import SearchSkill
 
-search_and_navigate = SearchSkill(node, frame_id="map")
+search_and_navigate = SearchSkill(node, config=config)
 path = search_and_navigate.call(((10.0, 10.0), (120.0, 10.0), (120.0, 80.0), (10.0, 80.0)))
 ```
 
@@ -70,6 +82,8 @@ ENU corners in the configured map frame. `MovePrimitive` submits `PoseStamped` b
 `offboard_fsm` queue service; it returns once they have been accepted, not when the vehicle
 finishes flying. Planner, queue, and clear-service readiness failures raise `SkillTimeoutError`.
 
-Both primitives accept alternate ROS names through their constructors. Calls raise
-`SkillTimeoutError` when the planner service is unavailable or does not respond, and
-`SkillExecutionError` when the planner rejects an otherwise valid request.
+`SkillRuntimeConfig` validates `offboard_fsm.yaml`, `topics.yaml`, and the planner JSON before
+any ROS client is created. It requires matching ENU frame IDs, derives the planner service as
+`/coverage_planner/plan_coverage`, and reads queue, clear, takeoff, land, and queue-status names
+from `topics.yaml`. Calls raise `SkillTimeoutError` when the planner or offboard service is
+unavailable or does not respond, and `SkillExecutionError` when a service rejects a valid request.
