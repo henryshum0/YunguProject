@@ -1,0 +1,70 @@
+digraph SkillDependencies {
+  graph [
+    rankdir=LR,
+    bgcolor="white",
+    pad="0.2",
+    nodesep="0.55",
+    ranksep="0.85",
+    fontname="Arial",
+    labelloc="t",
+    label="YunguProject skill and primitive dependency graph",
+    fontsize=22,
+    fontcolor="#102A43"
+  ];
+  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, margin="0.16,0.1"];
+  edge [fontname="Arial", fontsize=9, color="#526D82", fontcolor="#334E68"];
+
+  gui [label="SkillsTestGui", fillcolor="#DDF5F2", color="#00A6A6"];
+  controller [label="SkillController", fillcolor="#DDF5F2", color="#00A6A6"];
+  config [label="SkillRuntimeConfig\n(frame + endpoint configuration)", fillcolor="#E1EFFC", color="#2E7DD1"];
+
+  subgraph cluster_skills {
+    label="Concrete skills";
+    color="#2E7DD1";
+    style="rounded";
+    navigate [label="NavigateSkill\nENU/NED waypoint conversion", fillcolor="#E1EFFC", color="#2E7DD1"];
+    search [label="SearchSkill\nplan then queue", fillcolor="#E1EFFC", color="#2E7DD1"];
+  }
+  subgraph cluster_primitives {
+    label="ROS-backed primitives";
+    color="#7D58B7";
+    style="rounded";
+    plan [label="PlanSearchPrimitive\n4 ENU corners → Path", fillcolor="#EFE8FA", color="#7D58B7"];
+    move [label="MovePrimitive\nPoseStamped[] → count", fillcolor="#EFE8FA", color="#7D58B7"];
+    clear [label="ClearWaypointsPrimitive\nNone → cleared count", fillcolor="#EFE8FA", color="#7D58B7"];
+  }
+  subgraph cluster_ros {
+    label="Running ROS nodes";
+    color="#E58B3B";
+    style="rounded";
+    planner [label="CoveragePlannerNode", fillcolor="#FDEDDC", color="#E58B3B"];
+    offboard [label="OffboardNode", fillcolor="#FDEDDC", color="#E58B3B"];
+  }
+  paths [label="nav_msgs/msg/Path\n(sparse ENU route)", fillcolor="#F0F4F7", color="#526D82"];
+  takeoff_land [label="takeoff / land topics", fillcolor="#F0F4F7", color="#526D82"];
+
+  gui -> controller [label="delegates actions"];
+  controller -> config [label="uses"];
+  controller -> navigate [label="navigate / clear"];
+  controller -> plan [label="plan only"];
+  controller -> search [label="plan and queue"];
+  controller -> takeoff_land [style=dashed, label="publishes"];
+
+  config -> navigate [label="frame + services"];
+  config -> search [label="frame + services"];
+  config -> plan [label="frame + service"];
+  config -> move [label="queue service"];
+  config -> clear [label="clear service"];
+
+  navigate -> move [label="composes"];
+  navigate -> clear [label="composes"];
+  search -> plan [label="composes"];
+  search -> navigate [label="queues returned poses"];
+
+  plan -> planner [style=dashed, label="PlanCoverage"];
+  planner -> paths [style=dashed, label="returns"];
+  paths -> search [style=dashed, label="response"];
+  move -> offboard [style=dashed, label="QueueWaypoints"];
+  clear -> offboard [style=dashed, label="ClearWaypoints"];
+  takeoff_land -> offboard [style=dashed];
+}

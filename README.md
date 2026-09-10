@@ -195,3 +195,5 @@ Configuration changes apply on the next launch without rebuilding. The
 overrides. For package-specific integration details, use the
 [skills API](skills/README.md), [combined-launch guide](src/launch/README.md),
 and [coverage-planner guide](src/search/uav-coverage-route-planner/README.md).
+The [architectural UML and skill dependency graphs](docs/uml.md) show the
+project-owned command path and its ROS boundaries.

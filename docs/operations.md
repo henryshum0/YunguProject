@@ -177,3 +177,4 @@ by the spawn offset so it aligns with LiDAR and sensor-interface output.
 - [Coverage planner service and map configuration](../src/search/uav-coverage-route-planner/README.md)
 - [GUI controls and map behavior](../gui/README.md)
 - [Skills API](../skills/README.md)
+- [Architectural UML and skill dependency graphs](uml.md)

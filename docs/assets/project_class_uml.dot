@@ -1,0 +1,228 @@
+digraph ProjectClassUml {
+  graph [
+    rankdir=LR,
+    bgcolor="white",
+    pad="0.2",
+    nodesep="0.55",
+    ranksep="1.0",
+    fontname="Arial",
+    labelloc="t",
+    label="YunguProject architectural class UML",
+    fontsize=24,
+    fontcolor="#102A43"
+  ];
+  node [shape=plain, fontname="Arial", fontsize=10];
+  edge [fontname="Arial", fontsize=9, color="#526D82", fontcolor="#334E68"];
+
+  subgraph cluster_gui {
+    label="GUI";
+    color="#00A6A6";
+    fontcolor="#007C7C";
+    style="rounded";
+    gui [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#00A6A6">
+        <TR><TD BGCOLOR="#DDF5F2"><B>SkillsTestGui</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ map interaction<BR/>+ background actions<BR/>+ camera / telemetry view</TD></TR>
+      </TABLE>
+    >];
+    controller [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#00A6A6">
+        <TR><TD BGCOLOR="#DDF5F2"><B>SkillController</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ takeoff() / land()<BR/>+ navigate() / clear()<BR/>+ plan_search() / search_and_queue()</TD></TR>
+      </TABLE>
+    >];
+    map_view [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#00A6A6">
+        <TR><TD BGCOLOR="#F2FBFA"><B>PlannerMap / Viewport</B></TD></TR>
+        <TR><TD ALIGN="LEFT">map rendering and ENU click conversion</TD></TR>
+      </TABLE>
+    >];
+    telemetry [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#00A6A6">
+        <TR><TD BGCOLOR="#F2FBFA"><B>OperationsTelemetry</B></TD></TR>
+        <TR><TD ALIGN="LEFT">vehicle and queue subscriptions</TD></TR>
+      </TABLE>
+    >];
+  }
+
+  subgraph cluster_skills {
+    label="Plain Python skills package";
+    color="#2E7DD1";
+    fontcolor="#1F5B9C";
+    style="rounded";
+    skill [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#E1EFFC"><I>&lt;&lt;abstract&gt;&gt;</I><BR/><B>Skill&lt;Request, Result&gt;</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ name<BR/>+ call(request, timeout_sec)</TD></TR>
+      </TABLE>
+    >];
+    primitive [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#E1EFFC"><I>&lt;&lt;abstract&gt;&gt;</I><BR/><B>Primitive&lt;Request, Result&gt;</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ name<BR/>+ call(request, timeout_sec)</TD></TR>
+      </TABLE>
+    >];
+    config [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#E1EFFC"><B>SkillRuntimeConfig</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ offboard: OffboardSkillConfig<BR/>+ coverage_planner: CoveragePlannerSkillConfig<BR/>+ load(config_dir, planner_json)</TD></TR>
+      </TABLE>
+    >];
+    navigate [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#E1EFFC"><B>NavigateSkill</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ call(waypoints, frame)<BR/>+ call_poses(poses)<BR/>+ clear()</TD></TR>
+      </TABLE>
+    >];
+    search [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#E1EFFC"><B>SearchSkill</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ call(four ENU corners): Path</TD></TR>
+      </TABLE>
+    >];
+    move [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#F3F8FE"><B>MovePrimitive</B></TD></TR>
+        <TR><TD ALIGN="LEFT">Queue an ordered PoseStamped batch</TD></TR>
+      </TABLE>
+    >];
+    clear [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#F3F8FE"><B>ClearWaypointsPrimitive</B></TD></TR>
+        <TR><TD ALIGN="LEFT">Abort active and pending route</TD></TR>
+      </TABLE>
+    >];
+    plan [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#F3F8FE"><B>PlanSearchPrimitive</B></TD></TR>
+        <TR><TD ALIGN="LEFT">Plan four-corner area: Path</TD></TR>
+      </TABLE>
+    >];
+  }
+
+  subgraph cluster_search {
+    label="coverage_planner ROS package";
+    color="#7D58B7";
+    fontcolor="#65418D";
+    style="rounded";
+    planner_node [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#7D58B7">
+        <TR><TD BGCOLOR="#EFE8FA"><B>CoveragePlannerNode</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ start()<BR/>+ plan_and_publish(area)<BR/>+ handle PlanCoverage</TD></TR>
+      </TABLE>
+    >];
+    coverage_planner [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#7D58B7">
+        <TR><TD BGCOLOR="#EFE8FA"><B>CoveragePlanner</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ plan(...): PlanResult</TD></TR>
+      </TABLE>
+    >];
+    plan_result [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#7D58B7">
+        <TR><TD BGCOLOR="#F9F6FD"><B>PlanResult</B></TD></TR>
+        <TR><TD ALIGN="LEFT">planning_route, coverage status,<BR/>obstacles, patches, warnings</TD></TR>
+      </TABLE>
+    >];
+    planning_parts [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#7D58B7">
+        <TR><TD BGCOLOR="#F9F6FD"><B>Planning collaborators</B></TD></TR>
+        <TR><TD ALIGN="LEFT">GlobalScanlineGenerator / BCDGenerator<BR/>VisibilityRouter / patch + route optimization</TD></TR>
+      </TABLE>
+    >];
+  }
+
+  subgraph cluster_navigation {
+    label="Navigation ROS packages";
+    color="#E58B3B";
+    fontcolor="#B96213";
+    style="rounded";
+    offboard [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#E58B3B">
+        <TR><TD BGCOLOR="#FDEDDC"><B>OffboardNode</B></TD></TR>
+        <TR><TD ALIGN="LEFT">state: INIT / ARMING / TAKEOFF / IDLE / MOVE / LAND<BR/>QueueWaypoints + ClearWaypoints services<BR/>takeoff / land commands and queue status</TD></TR>
+      </TABLE>
+    >];
+    waypoint [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#E58B3B">
+        <TR><TD BGCOLOR="#FFF8F1"><B>WaypointHandler</B></TD></TR>
+        <TR><TD ALIGN="LEFT">enqueue / advance / clear<BR/>active + pending route state</TD></TR>
+      </TABLE>
+    >];
+    px4 [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#E58B3B">
+        <TR><TD BGCOLOR="#FFF8F1"><B>Px4Handler</B></TD></TR>
+        <TR><TD ALIGN="LEFT">PX4 state I/O and setpoints</TD></TR>
+      </TABLE>
+    >];
+    super_handler [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#E58B3B">
+        <TR><TD BGCOLOR="#FFF8F1"><B>SuperHandler</B></TD></TR>
+        <TR><TD ALIGN="LEFT">goal / command / planner-state ROS I/O</TD></TR>
+      </TABLE>
+    >];
+    super_planner [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#E58B3B">
+        <TR><TD BGCOLOR="#FDEDDC"><B>SuperPlanner</B></TD></TR>
+        <TR><TD ALIGN="LEFT">PlanFromRest / ReplanOnce<BR/>committed position + yaw trajectory</TD></TR>
+      </TABLE>
+    >];
+    super_parts [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#E58B3B">
+        <TR><TD BGCOLOR="#FFF8F1"><B>SUPER collaborators</B></TD></TR>
+        <TR><TD ALIGN="LEFT">Astar / CorridorGenerator / ExpTrajOpt<BR/>ROGMapROS / YawTrajOpt</TD></TR>
+      </TABLE>
+    >];
+  }
+
+  ros_services [label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#526D82">
+      <TR><TD BGCOLOR="#F0F4F7"><B>ROS service contracts</B></TD></TR>
+      <TR><TD ALIGN="LEFT">PlanCoverage<BR/>QueueWaypoints<BR/>ClearWaypoints</TD></TR>
+    </TABLE>
+  >];
+  px4_stack [label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#526D82">
+      <TR><TD BGCOLOR="#F0F4F7"><B>PX4 / Gazebo / sensors</B></TD></TR>
+      <TR><TD ALIGN="LEFT">PX4 SITL, Gazebo, gz_sensor_interface,<BR/>FAST-LIO, LiDAR, front camera</TD></TR>
+    </TABLE>
+  >];
+
+  gui -> controller [dir=both, arrowtail=diamond, label=" owns "];
+  gui -> map_view [dir=both, arrowtail=diamond];
+  gui -> telemetry [dir=both, arrowtail=diamond];
+  controller -> config [label=" reads "];
+  controller -> navigate [label=" creates "];
+  controller -> search [label=" creates "];
+  controller -> plan [label=" creates "];
+
+  navigate -> skill [arrowhead=empty];
+  search -> skill [arrowhead=empty];
+  move -> primitive [arrowhead=empty];
+  clear -> primitive [arrowhead=empty];
+  plan -> primitive [arrowhead=empty];
+  navigate -> move [dir=both, arrowtail=diamond, label=" composes "];
+  navigate -> clear [dir=both, arrowtail=diamond];
+  search -> plan [dir=both, arrowtail=diamond, label=" composes "];
+  search -> navigate [dir=both, arrowtail=diamond];
+  config -> planner_node [style=dashed, label=" planner JSON "];
+
+  plan -> ros_services [style=dashed, label=" PlanCoverage "];
+  move -> ros_services [style=dashed, label=" QueueWaypoints "];
+  clear -> ros_services [style=dashed, label=" ClearWaypoints "];
+  ros_services -> planner_node [style=dashed];
+  ros_services -> offboard [style=dashed];
+
+  planner_node -> coverage_planner [label=" invokes "];
+  coverage_planner -> plan_result [label=" returns "];
+  coverage_planner -> planning_parts [dir=both, arrowtail=diamond, label=" uses "];
+
+  offboard -> waypoint [dir=both, arrowtail=diamond, label=" owns "];
+  offboard -> px4 [dir=both, arrowtail=diamond];
+  offboard -> super_handler [dir=both, arrowtail=diamond];
+  super_handler -> super_planner [style=dashed, label=" ROS goal / command "];
+  super_planner -> super_parts [dir=both, arrowtail=diamond, label=" uses "];
+  px4 -> px4_stack [style=dashed, label=" PX4 topics "];
+  super_planner -> px4_stack [style=dashed, label=" map + odometry "];
+  telemetry -> offboard [style=dashed, label=" queue status "];
+  telemetry -> px4_stack [style=dashed, label=" odometry / image "];
+}
