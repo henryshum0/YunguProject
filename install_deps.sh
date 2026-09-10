@@ -68,6 +68,7 @@ $SUDO apt-get install -y \
     "ros-${ROS_DISTRO}-pcl-conversions" \
     "ros-${ROS_DISTRO}-tf2-ros" \
     "ros-${ROS_DISTRO}-vision-msgs" \
+    "ros-${ROS_DISTRO}-ros-gz-image" \
     "ros-${ROS_DISTRO}-rosidl-default-generators"
 
 # Best-effort packages. They may not be resolvable from the configured apt

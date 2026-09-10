@@ -24,7 +24,7 @@ ros2 launch /home/windshape/YunguProject/src/launch/coverage_and_offboard.launch
 The included `offboard_fsm` launcher retains its existing workspace
 configuration files:
 
-- `src/navigation/config/simulation.yaml`
+- `src/simulation/config/simulation.yaml`
 - `src/navigation/config/offboard/offboard_fsm.yaml`
 - `src/navigation/config/offboard/topics.yaml`
 - `src/navigation/config/offboard/fastlio_swan_gamma_effect.yaml`

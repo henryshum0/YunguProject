@@ -14,7 +14,8 @@ void OffboardNode::handleLand()
     const float target_z = static_cast<float>(landing_z_);
     // NED descend = positive vz (down).
     px4_->publishSetpoint(tx, ty, target_z,
-                          0.0f, 0.0f, static_cast<float>(landing_vel_));
+                          0.0f, 0.0f, static_cast<float>(landing_vel_),
+                          hold_yaw_, 0.0f);
 
     // Landed per PX4's landing detector.
     if (px4_->isLanded()) {

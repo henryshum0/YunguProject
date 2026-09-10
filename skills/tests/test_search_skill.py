@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path as FilePath
+
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 
 from skills import SearchSkill
+from skills.tests.config_data import TEST_CONFIG
 
 
 class FakeNode:
@@ -13,14 +16,14 @@ class FakeNode:
 class FakePlanSearchPrimitive:
     instances = []
 
-    def __init__(self, node, *, frame_id, service_name) -> None:
-        self.frame_id = frame_id
-        self.service_name = service_name
+    def __init__(self, node, *, config) -> None:
+        self.frame_id = config.coverage_planner.frame_id
+        self.service_name = config.coverage_planner.plan_service
         self.requests = []
         self.publish_results = []
         self.timeouts = []
         self.path = Path()
-        self.path.header.frame_id = frame_id
+        self.path.header.frame_id = self.frame_id
         self.path.poses = [PoseStamped(), PoseStamped()]
         self.__class__.instances.append(self)
 
@@ -34,10 +37,10 @@ class FakePlanSearchPrimitive:
 class FakeNavigateSkill:
     instances = []
 
-    def __init__(self, node, *, frame_id, queue_service, clear_service) -> None:
-        self.frame_id = frame_id
-        self.queue_service = queue_service
-        self.clear_service = clear_service
+    def __init__(self, node, *, config) -> None:
+        self.frame_id = config.offboard.frame_id
+        self.queue_service = config.offboard.queue_service
+        self.clear_service = config.offboard.clear_service
         self.poses = []
         self.timeouts = []
         self.__class__.instances.append(self)
@@ -54,8 +57,14 @@ def test_search_skill_plans_then_queues_path_through_navigate(monkeypatch) -> No
     monkeypatch.setattr("skills.search.PlanSearchPrimitive", FakePlanSearchPrimitive)
     monkeypatch.setattr("skills.search.NavigateSkill", FakeNavigateSkill)
 
-    skill = SearchSkill(
-        FakeNode(), frame_id="world", service_name="/planner", queue_service="/goals")
+    config = TEST_CONFIG.__class__(
+        offboard=TEST_CONFIG.offboard.__class__(
+            frame_id="world", queue_service="/goals", clear_service="/clear",
+            takeoff_topic="/takeoff", land_topic="/land", queue_status_topic="/status"),
+        coverage_planner=TEST_CONFIG.coverage_planner.__class__(
+            frame_id="world", plan_service="/planner", planner_config_file=FilePath("/tmp/test-planner.json")),
+    )
+    skill = SearchSkill(FakeNode(), config=config)
     corners = ((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0))
     result = skill.call(corners, timeout_sec=3.0)
 

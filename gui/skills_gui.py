@@ -9,6 +9,7 @@ import tkinter as tk
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from queue import Empty, Queue
+from time import monotonic
 from tkinter import filedialog, messagebox, ttk
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
@@ -19,12 +20,22 @@ import rclpy
 from rclpy.node import Node
 
 from gui.controller import ConnectionSettings, SkillController, format_path
-from gui.input_parser import parse_corners, parse_frame, parse_timeout, parse_waypoints
+from gui.camera_view import CameraPreview
+from gui.telemetry import OperationsTelemetry, QueueState, VehicleState
+from skills import SkillRuntimeConfig
+from gui.input_parser import (
+    parse_corners,
+    parse_frame,
+    parse_navigation_goal,
+    parse_timeout,
+    parse_waypoints,
+)
 from gui.map_view import (
     MapLoadError,
     PlannerMap,
     Viewport,
     bounds_for,
+    heading_endpoint,
     load_planner_map,
     make_viewport,
     rectangle_from_clicks,
@@ -38,7 +49,9 @@ class SkillsTestGui(tk.Tk):
     def __init__(self, node: Node) -> None:
         super().__init__()
         self.title("Yungu Skills Test GUI")
-        self.minsize(1180, 760)
+        # The camera is a native 640 px-wide feed.  Keep enough room for it
+        # instead of allowing the skill controls to squeeze the sidebar.
+        self.minsize(1880, 760)
         self._node = node
         self._controller = SkillController(node)
         self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="skill-service")
@@ -50,47 +63,73 @@ class SkillsTestGui(tk.Tk):
         self._pending_map_click: tuple[float, float] | None = None
         self._route_preview: tuple[tuple[float, float], ...] = ()
         self._map_redraw_scheduled = False
+        self._navigation_goal: tuple[float, float, float, float] | None = None
+        self._vehicle_state: VehicleState | None = None
+        self._queue_state: QueueState | None = None
+        self._operations_telemetry: OperationsTelemetry | None = None
+        self._camera_preview: CameraPreview | None = None
+        self._camera_photo: tk.PhotoImage | None = None
         self._build_variables()
         self._build_layout()
         self._load_map()
         self.protocol("WM_DELETE_WINDOW", self._close)
         self.after(50, self._poll_completed_actions)
+        self.after(50, self._poll_camera_preview)
+        self.after(100, self._poll_operations_telemetry)
+        self.after_idle(self._start_camera_preview)
+        self.after_idle(self._start_operations_telemetry)
 
     def _build_variables(self) -> None:
-        self.frame_id = tk.StringVar(value="map")
-        self.planner_service = tk.StringVar(value="/coverage_planner/plan_coverage")
-        self.queue_service = tk.StringVar(value="/waypoint_buffer")
-        self.clear_service = tk.StringVar(value="/waypoint_buffer/clear")
-        self.takeoff_topic = tk.StringVar(value="/takeoff_cmd")
-        self.land_topic = tk.StringVar(value="/land_cmd")
+        self.navigation_config_dir = tk.StringVar(
+            value=str(WORKSPACE_ROOT / "src" / "navigation" / "config" / "offboard"))
+        self.planner_config_file = tk.StringVar(
+            value=str(WORKSPACE_ROOT / "src" / "search" / "config" / "yungu_planner.json"))
+        self.camera_image_topic = tk.StringVar(value="/swan_gamma_v2/front_camera/image")
+        self.vehicle_odometry_topic = tk.StringVar(value="/gz/ground_truth/odom")
+        self.waypoint_queue_status_topic = tk.StringVar(value="/waypoint_buffer/status")
         self.timeout_sec = tk.StringVar(value="10")
         self.navigate_frame = tk.StringVar(value="ENU")
         self.corner_values = [(tk.StringVar(), tk.StringVar()) for _ in range(4)]
         self.map_file = tk.StringVar(
             value=str(WORKSPACE_ROOT / "src" / "search" / "config" / "yungu_map.json"))
         self.map_status = tk.StringVar()
+        self.map_mode = tk.StringVar(value="Navigate: click selects one ENU goal")
+        self.telemetry_status = tk.StringVar(value="Telemetry stopped.")
+        self.navigation_goal_x = tk.StringVar()
+        self.navigation_goal_y = tk.StringVar()
+        self.navigation_goal_z = tk.StringVar(value="5.0")
+        self.navigation_goal_heading = tk.StringVar(value="0")
         self.status = tk.StringVar(value="Ready. Source ROS and start the required nodes first.")
         for x_value, y_value in self.corner_values:
             x_value.trace_add("write", self._on_corner_value_changed)
             y_value.trace_add("write", self._on_corner_value_changed)
+        for value in (
+            self.navigation_goal_x,
+            self.navigation_goal_y,
+            self.navigation_goal_z,
+            self.navigation_goal_heading,
+        ):
+            value.trace_add("write", self._on_navigation_goal_value_changed)
 
     def _build_layout(self) -> None:
         outer = ttk.Frame(self, padding=10)
         outer.grid(sticky="nsew")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
-        outer.columnconfigure(0, weight=1)
+        outer.columnconfigure(0, weight=1, minsize=1180)
+        # 640 px preview + label-frame padding/border.  ``minsize`` is needed
+        # because a zero-weight grid column may otherwise be compressed.
+        outer.columnconfigure(1, weight=0, minsize=660)
         outer.rowconfigure(3, weight=1)
 
         settings = ttk.LabelFrame(outer, text="Connection settings", padding=8)
         settings.grid(row=0, column=0, sticky="ew")
         fields = [
-            ("Frame ID", self.frame_id),
-            ("Planner service", self.planner_service),
-            ("Queue service", self.queue_service),
-            ("Clear service", self.clear_service),
-            ("Takeoff topic", self.takeoff_topic),
-            ("Land topic", self.land_topic),
+            ("Navigation config directory", self.navigation_config_dir),
+            ("Planner config JSON", self.planner_config_file),
+            ("Camera image topic", self.camera_image_topic),
+            ("Vehicle odometry topic", self.vehicle_odometry_topic),
+            ("Queue status topic", self.waypoint_queue_status_topic),
             ("Timeout (s)", self.timeout_sec),
         ]
         for index, (label, variable) in enumerate(fields):
@@ -108,11 +147,17 @@ class SkillsTestGui(tk.Tk):
         ttk.Label(flight, text="Both commands require confirmation and publish Bool(data=True).").grid(
             row=0, column=2, padx=16, sticky="w")
 
-        notebook = ttk.Notebook(outer)
-        notebook.grid(row=2, column=0, pady=(8, 0), sticky="nsew")
+        work_area = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
+        work_area.grid(row=2, column=0, pady=(8, 0), sticky="nsew")
         outer.rowconfigure(2, weight=1)
-        self._build_navigate_tab(notebook)
-        self._build_search_tab(notebook)
+        self._notebook = ttk.Notebook(work_area)
+        work_area.add(self._notebook, weight=1)
+        self._build_navigate_tab(self._notebook)
+        self._build_search_tab(self._notebook)
+        self._notebook.bind("<<NotebookTabChanged>>", self._on_skill_tab_changed)
+        operations = ttk.LabelFrame(work_area, text="Live operations map", padding=6)
+        work_area.add(operations, weight=1)
+        self._build_operations_map(operations)
 
         result = ttk.LabelFrame(outer, text="Status and planner result", padding=8)
         result.grid(row=3, column=0, pady=(8, 0), sticky="nsew")
@@ -126,11 +171,15 @@ class SkillsTestGui(tk.Tk):
         scrollbar.grid(row=1, column=1, sticky="ns")
         self.output.configure(yscrollcommand=scrollbar.set)
 
+        self._build_camera_pane(outer)
+
     def _build_navigate_tab(self, notebook: ttk.Notebook) -> None:
         tab = ttk.Frame(notebook, padding=10)
         notebook.add(tab, text="Navigate")
         tab.columnconfigure(0, weight=1)
-        ttk.Label(tab, text="One waypoint per line: x, y, z, heading_deg").grid(row=0, column=0, sticky="w")
+        tab.rowconfigure(1, weight=1)
+        ttk.Label(tab, text="One waypoint per line: x, y, z, heading_deg").grid(
+            row=0, column=0, sticky="w")
         self.waypoint_text = tk.Text(tab, height=10, width=80)
         self.waypoint_text.grid(row=1, column=0, pady=6, sticky="nsew")
         self.waypoint_text.insert("1.0", "10, 10, 5, 0\n20, 10, 5, 90")
@@ -142,11 +191,28 @@ class SkillsTestGui(tk.Tk):
         self._service_button(controls, "Queue navigation", self._navigate).grid(row=0, column=2, padx=(0, 8))
         self._service_button(controls, "Clear route", self._clear_route).grid(row=0, column=3)
 
+        goal_controls = ttk.LabelFrame(tab, text="Map-selected ENU goal", padding=6)
+        goal_controls.grid(row=3, column=0, pady=(10, 0), sticky="ew")
+        for index, (label, value) in enumerate((
+            ("X", self.navigation_goal_x),
+            ("Y", self.navigation_goal_y),
+            ("Altitude", self.navigation_goal_z),
+            ("Heading°", self.navigation_goal_heading),
+        )):
+            ttk.Label(goal_controls, text=label).grid(row=0, column=index * 2, padx=(0, 4), pady=3, sticky="w")
+            ttk.Entry(goal_controls, textvariable=value, width=9).grid(
+                row=0, column=index * 2 + 1, padx=(0, 8), pady=3)
+        self._service_button(goal_controls, "Queue selected goal", self._queue_navigation_map_goal).grid(
+            row=1, column=0, columnspan=4, pady=(3, 0), sticky="w")
+        ttk.Button(goal_controls, text="Clear selection", command=self._clear_navigation_map_selection).grid(
+            row=1, column=4, columnspan=4, padx=(8, 0), pady=(3, 0), sticky="w")
+        ttk.Label(tab, text=("Select the Navigate tab, then click the persistent operations map. "
+                             "The map is display-only and does not validate flight paths."),
+                  wraplength=500).grid(row=4, column=0, pady=(8, 0), sticky="w")
+
     def _build_search_tab(self, notebook: ttk.Notebook) -> None:
         tab = ttk.Frame(notebook, padding=10)
         notebook.add(tab, text="Coverage search")
-        tab.columnconfigure(3, weight=1)
-        tab.rowconfigure(3, weight=1)
         ttk.Label(tab, text="Four search-area corners in ENU metres (x, y), or choose two map points.").grid(
             row=0, column=0, columnspan=3, sticky="w")
         for index, (x_value, y_value) in enumerate(self.corner_values, start=1):
@@ -159,31 +225,61 @@ class SkillsTestGui(tk.Tk):
         self._service_button(controls, "Plan and queue", self._search_and_queue).grid(row=0, column=1, padx=(0, 8))
         ttk.Button(controls, text="Reset selection", command=self._reset_map_selection).grid(row=0, column=2)
 
-        map_panel = ttk.LabelFrame(tab, text="Map visualization (display only)", padding=6)
-        map_panel.grid(row=0, column=3, rowspan=6, padx=(18, 0), sticky="nsew")
-        map_panel.columnconfigure(0, weight=1)
-        map_panel.rowconfigure(2, weight=1)
-        ttk.Label(map_panel, text="Map JSON").grid(row=0, column=0, sticky="w")
-        map_entry = ttk.Entry(map_panel, textvariable=self.map_file, width=54)
-        map_entry.grid(row=1, column=0, sticky="ew", padx=(0, 6))
-        map_controls = ttk.Frame(map_panel)
-        map_controls.grid(row=1, column=1, sticky="e")
-        ttk.Button(map_controls, text="Browse…", command=self._browse_map).grid(row=0, column=0, padx=(0, 5))
-        ttk.Button(map_controls, text="Reload", command=self._load_map).grid(row=0, column=1)
-        self.map_canvas = tk.Canvas(
-            map_panel, width=620, height=410, background="#f8f9fa", highlightthickness=1,
-            highlightbackground="#a0a0a0", cursor="crosshair")
-        self.map_canvas.grid(row=2, column=0, columnspan=2, pady=(8, 5), sticky="nsew")
-        self.map_canvas.bind("<Button-1>", self._on_map_click)
+        ttk.Label(tab, text=("Select the Coverage Search tab, then use two clicks on the persistent "
+                             "operations map to fill SW, SE, NE, NW."), wraplength=500).grid(
+            row=6, column=0, columnspan=3, pady=(10, 0), sticky="w")
+
+    def _build_operations_map(self, panel: ttk.LabelFrame) -> None:
+        panel.columnconfigure(0, weight=1)
+        panel.rowconfigure(3, weight=1)
+        ttk.Label(panel, text="Map JSON").grid(row=0, column=0, sticky="w")
+        ttk.Entry(panel, textvariable=self.map_file, width=52).grid(
+            row=1, column=0, sticky="ew", padx=(0, 6))
+        controls = ttk.Frame(panel)
+        controls.grid(row=1, column=1, sticky="e")
+        ttk.Button(controls, text="Browse…", command=self._browse_map).grid(row=0, column=0, padx=(0, 5))
+        ttk.Button(controls, text="Reload", command=self._load_map).grid(row=0, column=1)
+        ttk.Button(controls, text="Reconnect telemetry", command=self._start_operations_telemetry).grid(
+            row=0, column=2, padx=(8, 0))
+        ttk.Label(panel, textvariable=self.map_mode, wraplength=620).grid(
+            row=2, column=0, columnspan=2, pady=(6, 2), sticky="w")
+        self.map_canvas = tk.Canvas(panel, width=620, height=410, background="#f8f9fa",
+                                    highlightthickness=1, highlightbackground="#a0a0a0",
+                                    cursor="crosshair")
+        self.map_canvas.grid(row=3, column=0, columnspan=2, sticky="nsew")
+        self.map_canvas.bind("<Button-1>", self._on_operations_map_click)
         self.map_canvas.bind("<Configure>", self._on_map_resize)
-        ttk.Label(
-            map_panel,
-            text=("Two clicks define an axis-aligned ENU rectangle. This display map does not "
-                  "change the map loaded by the running planner."),
-            wraplength=600,
-        ).grid(row=3, column=0, columnspan=2, sticky="w")
-        ttk.Label(map_panel, textvariable=self.map_status, wraplength=600).grid(
+        ttk.Label(panel, textvariable=self.telemetry_status, wraplength=620).grid(
             row=4, column=0, columnspan=2, pady=(4, 0), sticky="w")
+        ttk.Label(panel, textvariable=self.map_status, wraplength=620).grid(
+            row=5, column=0, columnspan=2, pady=(2, 0), sticky="w")
+
+    def _build_camera_pane(self, outer: ttk.Frame) -> None:
+        pane = ttk.LabelFrame(outer, text="Front camera", padding=8, width=660)
+        pane.grid(row=0, column=1, rowspan=4, padx=(10, 0), sticky="nsew")
+        pane.columnconfigure(0, weight=1)
+        pane.rowconfigure(2, weight=1)
+        ttk.Label(
+            pane,
+            text=("Live preview remains visible while changing skill tabs. Set the topic in Connection "
+                  "settings, then reconnect if it changes."),
+            wraplength=390,
+        ).grid(row=0, column=0, sticky="w")
+        controls = ttk.Frame(pane)
+        controls.grid(row=1, column=0, pady=(8, 6), sticky="w")
+        ttk.Button(controls, text="Start / reconnect preview", command=self._start_camera_preview).grid(
+            row=0, column=0, padx=(0, 8))
+        ttk.Button(controls, text="Stop preview", command=self._stop_camera_preview).grid(row=0, column=1)
+        self.camera_status = tk.StringVar(value="Preview stopped.")
+        ttk.Label(controls, textvariable=self.camera_status, wraplength=220).grid(
+            row=1, column=0, columnspan=2, pady=(5, 0), sticky="w")
+        preview_frame = tk.Frame(pane, width=640, height=480, background="#202020")
+        preview_frame.grid(row=2, column=0, sticky="nsew")
+        preview_frame.grid_propagate(False)
+        self.camera_label = tk.Label(
+            preview_frame, text="Starting camera preview...", background="#202020",
+            foreground="#f0f0f0", anchor="center")
+        self.camera_label.pack(fill="both", expand=True)
 
     def _service_button(self, parent: tk.Misc, text: str, command) -> ttk.Button:
         button = ttk.Button(parent, text=text, command=command)
@@ -192,26 +288,59 @@ class SkillsTestGui(tk.Tk):
 
     def _settings(self) -> ConnectionSettings:
         timeout = parse_timeout(self.timeout_sec.get())
-        fields = {
-            "frame ID": self.frame_id.get(),
-            "planner service": self.planner_service.get(),
-            "queue service": self.queue_service.get(),
-            "clear service": self.clear_service.get(),
-            "takeoff topic": self.takeoff_topic.get(),
-            "land topic": self.land_topic.get(),
-        }
-        for label, value in fields.items():
-            if not value.strip():
-                raise ValueError(f"{label} must not be empty")
+        navigation_config_dir = self.navigation_config_dir.get().strip()
+        planner_config_file = self.planner_config_file.get().strip()
+        if not navigation_config_dir:
+            raise ValueError("navigation config directory must not be empty")
+        if not planner_config_file:
+            raise ValueError("planner config JSON must not be empty")
         return ConnectionSettings(
-            frame_id=fields["frame ID"].strip(),
-            planner_service=fields["planner service"].strip(),
-            queue_service=fields["queue service"].strip(),
-            clear_service=fields["clear service"].strip(),
-            takeoff_topic=fields["takeoff topic"].strip(),
-            land_topic=fields["land topic"].strip(),
+            config=SkillRuntimeConfig.load(navigation_config_dir, planner_config_file),
             timeout_sec=timeout,
         )
+
+    def _start_camera_preview(self) -> None:
+        topic = self.camera_image_topic.get().strip()
+        try:
+            self._stop_camera_preview(update_status=False)
+            self._camera_preview = CameraPreview(topic)
+        except Exception as error:
+            self.camera_status.set(f"Preview error: {error}")
+            self._report_error(error)
+            return
+        self.camera_status.set(f"Waiting for images on {topic}...")
+        self.camera_label.configure(image="", text="Waiting for camera frames...")
+
+    def _stop_camera_preview(self, *, update_status: bool = True) -> None:
+        preview, self._camera_preview = self._camera_preview, None
+        if preview is not None:
+            preview.close()
+        self._camera_photo = None
+        self.camera_label.configure(image="", text="Camera preview stopped.")
+        if update_status:
+            self.camera_status.set("Preview stopped.")
+
+    def _poll_camera_preview(self) -> None:
+        if self._closed:
+            return
+        preview = self._camera_preview
+        if preview is not None:
+            error = preview.latest_error()
+            if error is not None:
+                self.camera_status.set(f"Preview error: {error}")
+            frame = preview.latest_frame()
+            if frame is not None:
+                try:
+                    photo = tk.PhotoImage(data=frame.ppm_bytes(), format="PPM")
+                except tk.TclError as image_error:
+                    self.camera_status.set(f"Preview display error: {image_error}")
+                    self.after(50, self._poll_camera_preview)
+                    return
+                self._camera_photo = photo
+                self.camera_label.configure(image=self._camera_photo, text="")
+                self.camera_status.set(
+                    f"Receiving {frame.width}x{frame.height} RGB frames on {preview.topic}.")
+        self.after(50, self._poll_camera_preview)
 
     def _takeoff(self) -> None:
         self._confirm_and_publish("Take off", "Publish a takeoff command to the offboard FSM?", "takeoff")
@@ -244,6 +373,29 @@ class SkillsTestGui(tk.Tk):
             lambda: self._controller.navigate(waypoints, frame=frame, settings=settings),
             lambda count: self._set_result(f"Queued {count} navigation waypoint(s)."),
         )
+
+    def _queue_navigation_map_goal(self) -> None:
+        try:
+            settings = self._settings()
+            goal = parse_navigation_goal(
+                self.navigation_goal_x.get(),
+                self.navigation_goal_y.get(),
+                self.navigation_goal_z.get(),
+                self.navigation_goal_heading.get(),
+            )
+        except ValueError as error:
+            self._report_error(error)
+            return
+        self._run_service_action(
+            "Queueing selected map goal...",
+            lambda: self._controller.navigate((goal,), frame="enu", settings=settings),
+            lambda count: self._show_queued_navigation_goal(goal, count),
+        )
+
+    def _show_queued_navigation_goal(self, goal: tuple[float, float, float, float], count: int) -> None:
+        self._set_result(
+            f"Queued {count} selected map goal(s): x={goal[0]:.2f}, y={goal[1]:.2f}, "
+            f"z={goal[2]:.2f}, yaw={goal[3]:.1f} deg.")
 
     def _clear_route(self) -> None:
         try:
@@ -278,6 +430,72 @@ class SkillsTestGui(tk.Tk):
             lambda: action(corners, settings=settings),
             lambda path: self._show_search_result(prefix, path),
         )
+
+    def _on_skill_tab_changed(self, _event: tk.Event) -> None:
+        if self._notebook.index("current") == 0:
+            self.map_mode.set("Navigate mode: one click selects an ENU goal.")
+        else:
+            self.map_mode.set("Coverage Search mode: two clicks select an ENU rectangle.")
+        self._schedule_map_redraw()
+
+    def _on_operations_map_click(self, event: tk.Event) -> None:
+        if self._map_viewport is None:
+            return
+        if self._notebook.index("current") == 0:
+            self._on_navigation_map_click(event)
+        else:
+            self._on_map_click(event)
+
+    def _on_navigation_map_click(self, event: tk.Event) -> None:
+        if self._map_viewport is None:
+            return
+        x, y = self._map_viewport.to_enu((float(event.x), float(event.y)))
+        self.navigation_goal_x.set(f"{x:.3f}")
+        self.navigation_goal_y.set(f"{y:.3f}")
+        self._navigation_goal = self._current_navigation_goal()
+        self.map_status.set(
+            f"Selected ENU goal ({x:.2f}, {y:.2f}). Review altitude/heading, then queue it.")
+        self._schedule_map_redraw()
+
+    def _on_navigation_goal_value_changed(self, *_args: str) -> None:
+        self._navigation_goal = self._current_navigation_goal()
+        self._schedule_map_redraw()
+
+    def _current_navigation_goal(self) -> tuple[float, float, float, float] | None:
+        try:
+            return parse_navigation_goal(
+                self.navigation_goal_x.get(),
+                self.navigation_goal_y.get(),
+                self.navigation_goal_z.get(),
+                self.navigation_goal_heading.get(),
+            )
+        except ValueError:
+            return None
+
+    def _clear_navigation_map_selection(self) -> None:
+        self.navigation_goal_x.set("")
+        self.navigation_goal_y.set("")
+        self._navigation_goal = None
+        self.map_status.set("Navigation goal selection cleared.")
+        self._schedule_map_redraw()
+
+    def _draw_navigation_goal(self, goal: tuple[float, float, float, float], color: str, label: str) -> None:
+        assert self._map_viewport is not None
+        x, y, _altitude, heading = goal
+        span = max(
+            self._map_viewport.bounds.max_x - self._map_viewport.bounds.min_x,
+            self._map_viewport.bounds.max_y - self._map_viewport.bounds.min_y,
+            1.0,
+        )
+        endpoint = heading_endpoint((x, y), heading, max(1.0, span * 0.05))
+        start_x, start_y = self._map_viewport.to_canvas((x, y))
+        end_x, end_y = self._map_viewport.to_canvas(endpoint)
+        self.map_canvas.create_line(start_x, start_y, end_x, end_y, fill=color, width=2.5, arrow=tk.LAST)
+        self.map_canvas.create_oval(start_x - 5, start_y - 5, start_x + 5, start_y + 5,
+                                    fill=color, outline="white")
+        self.map_canvas.create_text(
+            start_x + 8, start_y - 8, anchor="sw", fill=color,
+            text=f"{label}: z={goal[2]:.1f}, yaw={heading:.0f}°")
 
     def _browse_map(self) -> None:
         initial = Path(self.map_file.get()).expanduser()
@@ -355,6 +573,13 @@ class SkillsTestGui(tk.Tk):
             overlays.append(corners)
         if self._pending_map_click is not None:
             overlays.append((self._pending_map_click,))
+        selected_goal = self._current_navigation_goal()
+        if selected_goal is not None:
+            overlays.append(((selected_goal[0], selected_goal[1]),))
+        if self._vehicle_state is not None:
+            overlays.append(((self._vehicle_state.x, self._vehicle_state.y),))
+        if self._queue_state is not None:
+            overlays.append(self._queue_state.points)
         width = max(float(canvas.winfo_width()), 100.0)
         height = max(float(canvas.winfo_height()), 100.0)
         self._map_viewport = make_viewport(bounds_for(self._map_data, *overlays), width, height)
@@ -376,17 +601,47 @@ class SkillsTestGui(tk.Tk):
         if self._pending_map_click is not None:
             x, y = self._map_viewport.to_canvas(self._pending_map_click)
             canvas.create_oval(x - 5, y - 5, x + 5, y + 5, fill="#ff9800", outline="white")
+        if selected_goal is not None:
+            self._draw_navigation_goal(selected_goal, "#00838f", "selected")
         if self._route_preview:
             if len(self._route_preview) > 1:
                 canvas.create_line(self._canvas_coordinates(self._route_preview), fill="#1565c0", width=2.5)
             for point in self._route_preview:
                 x, y = self._map_viewport.to_canvas(point)
                 canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill="#1565c0", outline="white")
+        if self._queue_state is not None and self._queue_state.points:
+            queue_points = self._queue_state.points
+            if len(queue_points) > 1:
+                canvas.create_line(self._canvas_coordinates(queue_points), fill="#7e57c2", width=2.5)
+            active_x, active_y = self._map_viewport.to_canvas(queue_points[0])
+            canvas.create_oval(active_x - 6, active_y - 6, active_x + 6, active_y + 6,
+                               fill="#ff7043", outline="white", width=1.5)
+            canvas.create_text(active_x + 8, active_y - 8, anchor="sw", text="active", fill="#d84315")
+            for point in queue_points[1:]:
+                x, y = self._map_viewport.to_canvas(point)
+                canvas.create_oval(x - 4, y - 4, x + 4, y + 4, fill="#7e57c2", outline="white")
+        if self._vehicle_state is not None:
+            self._draw_vehicle(self._vehicle_state)
         canvas.create_text(
             8, 8, anchor="nw", fill="#303030",
             text=(f"{self._map_data.source.name} | red: occupied | green: search area | "
-                  "blue: planned route"),
+                  "blue: planned route | orange: active queue | purple: pending queue | black: vehicle"),
         )
+
+    def _draw_vehicle(self, vehicle: VehicleState) -> None:
+        assert self._map_viewport is not None
+        span = max(
+            self._map_viewport.bounds.max_x - self._map_viewport.bounds.min_x,
+            self._map_viewport.bounds.max_y - self._map_viewport.bounds.min_y,
+            1.0,
+        )
+        endpoint = heading_endpoint((vehicle.x, vehicle.y), vehicle.heading_deg, max(1.0, span * 0.04))
+        x, y = self._map_viewport.to_canvas((vehicle.x, vehicle.y))
+        end_x, end_y = self._map_viewport.to_canvas(endpoint)
+        self.map_canvas.create_line(x, y, end_x, end_y, fill="#202020", width=3, arrow=tk.LAST)
+        self.map_canvas.create_oval(x - 6, y - 6, x + 6, y + 6, fill="#202020", outline="white", width=1.5)
+        self.map_canvas.create_text(x + 8, y + 8, anchor="nw", fill="#202020",
+                                    text=f"vehicle z={vehicle.z:.1f}, yaw={vehicle.heading_deg:.0f}°")
 
     def _canvas_coordinates(self, points: tuple[tuple[float, float], ...]) -> tuple[float, ...]:
         assert self._map_viewport is not None
@@ -416,6 +671,69 @@ class SkillsTestGui(tk.Tk):
         self._route_preview = route_points(path)
         self._schedule_map_redraw()
         self._set_result(f"{prefix} coverage route.\n{format_path(path)}")
+
+    def _start_operations_telemetry(self) -> None:
+        try:
+            self._stop_operations_telemetry(update_status=False)
+            self._operations_telemetry = OperationsTelemetry(
+                self.vehicle_odometry_topic.get(), self.waypoint_queue_status_topic.get())
+        except Exception as error:
+            self.telemetry_status.set(f"Telemetry error: {error}")
+            self._report_error(error)
+            return
+        self._vehicle_state = None
+        self._queue_state = None
+        self.telemetry_status.set(
+            f"Waiting for vehicle pose on {self.vehicle_odometry_topic.get().strip()} and queue state on "
+            f"{self.waypoint_queue_status_topic.get().strip()}...")
+        self._schedule_map_redraw()
+
+    def _stop_operations_telemetry(self, *, update_status: bool = True) -> None:
+        telemetry, self._operations_telemetry = self._operations_telemetry, None
+        if telemetry is not None:
+            telemetry.close()
+        if update_status:
+            self.telemetry_status.set("Telemetry stopped.")
+
+    def _poll_operations_telemetry(self) -> None:
+        if self._closed:
+            return
+        telemetry = self._operations_telemetry
+        if telemetry is not None:
+            error = telemetry.latest_error()
+            if error is not None:
+                self.telemetry_status.set(f"Telemetry error: {error}")
+            vehicle = telemetry.latest_vehicle()
+            queue_state = telemetry.latest_queue()
+            changed = False
+            if vehicle is not None:
+                self._vehicle_state = vehicle
+                changed = True
+            if queue_state is not None:
+                self._queue_state = queue_state
+                changed = True
+            if changed:
+                self._schedule_map_redraw()
+            self._update_telemetry_status(telemetry)
+        self.after(100, self._poll_operations_telemetry)
+
+    def _update_telemetry_status(self, telemetry: OperationsTelemetry) -> None:
+        now = monotonic()
+        vehicle = self._vehicle_state
+        queue_state = self._queue_state
+        vehicle_text = "vehicle: waiting"
+        if vehicle is not None:
+            age = now - vehicle.received_at
+            prefix = "vehicle: stale" if age > 2.0 else "vehicle"
+            vehicle_text = (f"{prefix} x={vehicle.x:.2f}, y={vehicle.y:.2f}, z={vehicle.z:.2f}, "
+                            f"yaw={vehicle.heading_deg:.1f}° ({age:.1f}s ago)")
+        queue_text = "queue: waiting"
+        if queue_state is not None:
+            age = now - queue_state.received_at
+            prefix = "queue: stale" if age > 2.0 else "queue"
+            queue_text = f"{prefix} {len(queue_state.points)} waypoint(s) ({age:.1f}s ago)"
+        self.telemetry_status.set(
+            f"{vehicle_text}; {queue_text}. Topics: {telemetry.odometry_topic}, {telemetry.queue_status_topic}")
 
     def _run_service_action(self, message: str, action, on_success) -> None:
         self.status.set(message)
@@ -463,6 +781,8 @@ class SkillsTestGui(tk.Tk):
     def _close(self) -> None:
         self._closed = True
         self._worker.shutdown(wait=False, cancel_futures=True)
+        self._stop_camera_preview(update_status=False)
+        self._stop_operations_telemetry(update_status=False)
         self._node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

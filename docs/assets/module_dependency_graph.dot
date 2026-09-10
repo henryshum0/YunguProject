@@ -35,7 +35,7 @@ digraph ModuleDependencyGraph {
   Gazebo -> PX4 [dir=both, label="GZ bridge:\nsensors / actuators"];
   Gazebo -> Adapter [label="ROS-GZ bridge:\nLiDAR, IMU, truth odom"];
   PX4 -> Adapter [label="vehicle odometry"];
-  Adapter -> FastLio [label="fused cloud + IMU"];
+  Adapter -> FastLio [label="horizontal LiDAR cloud + IMU"];
   FastLio -> PX4 [label="external visual odometry"];
   FastLio -> Offboard [label="LIO health"];
   Adapter -> Super [label="/gz/point_cloud_super\n/gz/odom_super"];

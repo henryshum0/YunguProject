@@ -35,9 +35,7 @@ Visualization Manager:
             base_link:
               lidar_link:
                 {}
-              lidar_left_link:
-                {}
-              lidar_right_link:
+              front_camera_link:
                 {}
       Update Interval: 0
       Value: true

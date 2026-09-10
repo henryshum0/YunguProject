@@ -44,7 +44,7 @@ ros2 run benchmark generate_map --config path/to/benchmark.yaml \
 ```
 
 Then load it in the sim by setting the world in
-[`src/navigation/config/simulation.yaml`](../../config/simulation.yaml):
+[`src/simulation/config/simulation.yaml`](../../../simulation/config/simulation.yaml):
 
 ```yaml
 world: benchmark

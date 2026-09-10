@@ -8,7 +8,7 @@ pillars) at random positions inside the cell. A clearing distance keeps a
 minimum center-to-center gap between obstacles (and the generator refuses
 positions that would make geometries overlap). The result is a Gazebo world
 ``.sdf`` (ground plane + sun + static obstacle models) which the PX4 sim can
-load via ``world: <world_name>`` in ``src/navigation/config/simulation.yaml``.
+load via ``world: <world_name>`` in ``src/simulation/config/simulation.yaml``.
 
 Usage:
     python3 src/navigation/tools/benchmark/benchmark/generate_map.py [--config PATH]
@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
 def find_project_root(start: Path) -> Path | None:
     """Closest workspace ancestor containing navigation configuration."""
     for parent in (start, *start.parents):
-        if (parent / "src" / "navigation" / "config" / "simulation.yaml").is_file():
+        if (parent / "src" / "simulation" / "config" / "simulation.yaml").is_file():
             return parent
     return None
 
@@ -310,7 +310,7 @@ def main():
           f"skipped={skipped}")
     print(f"  clearing distance: {cfg['clearing_distance']} m, seed: {cfg.get('seed')}")
     print(f"  to load in the sim: set `world: {world_name}` in "
-          "src/navigation/config/simulation.yaml")
+          "src/simulation/config/simulation.yaml")
 
 
 if __name__ == "__main__":

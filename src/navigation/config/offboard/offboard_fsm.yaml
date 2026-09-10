@@ -10,6 +10,10 @@
 # Changes here take effect on the next `ros2 launch offboard offboard.launch.py`.
 
 offboard_fsm:
+  # ENU frame used by skills-generated PoseStamped waypoint goals. It must
+  # match coverage_planner's startup JSON frame_id.
+  frame_id: map
+
   # Use the /clock simulation clock for all time handling (true for a Gazebo
   # simulation, false to use the real system clock). Aligned with FAST-LIO.
   use_sim_time: false
@@ -32,7 +36,7 @@ offboard_fsm:
   yaw_align_thresh: 0.35
 
   # NED hover height after OFFBOARD (negative = up) [m]
-  default_height: 20.0
+  default_height: 10.0
 
   # Takeoff climb velocity [m/s] (direct PX4 vertical climb, no planner).
   takeoff_vel: 2.0
@@ -66,11 +70,9 @@ offboard_fsm:
   planner_enter_delay: 0.2
   planner_exit_delay: 1.0
 
-  # Raw lidar cloud topic read by super_bridge (then republished to SUPER as
-  # /cloud_registered_px4). Defaults to /<model>/scan/points from
-  # src/navigation/config/simulation.yaml; override e.g. with the fused base_link cloud
-  # /swan_gamma_v2/scan/points_fused. Leave empty to use the default.
-  cloud_in_topic: "/swan_gamma_v2/scan/points_fused"
+  # Body-frame horizontal LiDAR cloud read by super_bridge (then republished to
+  # SUPER as /cloud_registered_px4). Leave empty to use the launch default.
+  cloud_in_topic: "/swan_gamma_v2/scan_horizontal/points_body"
 
   # Master visualization switch: controls SUPER's marker publishing. (The RViz
   # windows + birdview live in the separate visualization package, launched via

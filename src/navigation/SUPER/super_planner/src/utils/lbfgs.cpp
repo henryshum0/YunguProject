@@ -59,6 +59,12 @@ const char *math_utils::lbfgs::lbfgs_strerror(const int err) {
         case LBFGSERR_MAXIMUMLINESEARCH:
             return "Line search reaches the maximum try number, assumptions not satisfied or precision not achievable.";
 
+        case LBFGSERR_MAXIMUMLINESEARCH_ARMIJO:
+            return "Line search exhausted its trials: the final candidate violated the Armijo sufficient-decrease condition.";
+
+        case LBFGSERR_MAXIMUMLINESEARCH_WOLFE:
+            return "Line search exhausted its trials: the final candidate violated the weak-Wolfe curvature condition.";
+
         case LBFGSERR_MAXIMUMITERATION:
             return "The algorithm routine reaches the maximum number of iterations.";
 
@@ -338,6 +344,7 @@ int math_utils::lbfgs::line_search_lewisoverton(Eigen::VectorXd &x, double &f, E
                                                 const callback_data_t &cd, const lbfgs_parameter_t &param) {
     int count = 0;
     bool brackt = false, touched = false;
+    bool last_rejection_was_armijo = false;
     double finit, dginit, dgtest, dstest;
     double mu = 0.0, nu = stpmax;
 
@@ -372,11 +379,13 @@ int math_utils::lbfgs::line_search_lewisoverton(Eigen::VectorXd &x, double &f, E
         }
         /* Check the Armijo condition. */
         if (f > finit + stp * dgtest) {
+            last_rejection_was_armijo = true;
             nu = stp;
             brackt = true;
         } else {
             /* Check the weak Wolfe condition. */
             if (g.dot(s) < dstest) {
+                last_rejection_was_armijo = false;
                 mu = stp;
             } else {
                 return count;
@@ -384,7 +393,9 @@ int math_utils::lbfgs::line_search_lewisoverton(Eigen::VectorXd &x, double &f, E
         }
         if (param.max_linesearch <= count) {
             /* Maximum number of iteration. */
-            return LBFGSERR_MAXIMUMLINESEARCH;
+            return last_rejection_was_armijo
+                   ? LBFGSERR_MAXIMUMLINESEARCH_ARMIJO
+                   : LBFGSERR_MAXIMUMLINESEARCH_WOLFE;
         }
         if (brackt && (nu - mu) < param.machine_prec * nu) {
             /* Relative interval width is at least machine_prec. */

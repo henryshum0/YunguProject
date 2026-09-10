@@ -5,7 +5,7 @@
 # `birdview_publisher` node as a flat colored point cloud on the ground plane,
 # so it can be used as a map reference while planning waypoints in RViz.
 #
-# Read by src/offboard/launch/offboard.launch.py (via config/sim_config.py).
+# Read by the visualization launch using src/simulation/config/visualization.yaml.
 # Changes here take effect on the next `ros2 launch offboard offboard.launch.py`.
 # ----------------------------------------------------------------------------
 

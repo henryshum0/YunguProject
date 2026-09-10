@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from math import sqrt
+from pathlib import Path
 
 import pytest
 
 from offboard_fsm.srv import ClearWaypoints, QueueWaypoints
 from skills import NavigateSkill, SkillTimeoutError
 from skills.frames import enu_yaw_quaternion, pose_stamped_from_enu_waypoint
+from skills.tests.config_data import TEST_CONFIG
 
 
 class FakeFuture:
@@ -70,7 +72,15 @@ def _patch_queue_spin(monkeypatch) -> None:
 def test_navigate_converts_single_enu_waypoint_and_queues(monkeypatch) -> None:
     _patch_queue_spin(monkeypatch)
     node = FakeNode()
-    navigate = NavigateSkill(node, frame_id="world")
+    config = TEST_CONFIG.__class__(
+        offboard=TEST_CONFIG.offboard.__class__(
+            frame_id="world", queue_service="/waypoint_buffer", clear_service="/waypoint_buffer/clear",
+            takeoff_topic="/takeoff_cmd", land_topic="/land_cmd", queue_status_topic="/waypoint_buffer/status"),
+        coverage_planner=TEST_CONFIG.coverage_planner.__class__(
+            frame_id="world", plan_service="/coverage_planner/plan_coverage",
+            planner_config_file=Path("/tmp/test-planner.json")),
+    )
+    navigate = NavigateSkill(node, config=config)
     assert navigate.name == "navigate"
     assert navigate.call((1.0, 2.0, 3.0, 90.0)) == 1
     assert node.service_names == ["/waypoint_buffer", "/waypoint_buffer/clear"]
@@ -83,7 +93,7 @@ def test_navigate_converts_single_enu_waypoint_and_queues(monkeypatch) -> None:
 def test_navigate_converts_ned_waypoint_batch_to_enu(monkeypatch) -> None:
     _patch_queue_spin(monkeypatch)
     node = FakeNode()
-    navigate = NavigateSkill(node)
+    navigate = NavigateSkill(node, config=TEST_CONFIG)
     assert navigate.call(((10.0, 20.0, -5.0, 0.0), (4.0, 2.0, 7.0, 450.0)), frame="NED") == 2
     first, second = node.queue_client.requests[0].waypoints
     assert (first.pose.position.x, first.pose.position.y, first.pose.position.z) == (20.0, 10.0, 5.0)
@@ -97,12 +107,12 @@ def test_navigate_clear_delegates_to_clear_service(monkeypatch) -> None:
         "skills.primitives.clear_waypoints.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    navigate = NavigateSkill(FakeNode())
+    navigate = NavigateSkill(FakeNode(), config=TEST_CONFIG)
     assert navigate.clear() == 2
 
 
 def test_navigate_reports_unavailable_queue_service() -> None:
-    navigate = NavigateSkill(FakeNode(queue_available=False))
+    navigate = NavigateSkill(FakeNode(queue_available=False), config=TEST_CONFIG)
     with pytest.raises(SkillTimeoutError, match="unavailable"):
         navigate.call((1.0, 2.0, 3.0, 0.0))
 
@@ -118,7 +128,7 @@ def test_navigate_reports_unavailable_queue_service() -> None:
 )
 def test_navigate_rejects_invalid_waypoint_input(waypoints, frame, message) -> None:
     with pytest.raises(ValueError, match=message):
-        NavigateSkill(FakeNode()).call(waypoints, frame=frame)
+        NavigateSkill(FakeNode(), config=TEST_CONFIG).call(waypoints, frame=frame)
 
 
 def test_heading_normalization_and_coverage_output_compatibility() -> None:

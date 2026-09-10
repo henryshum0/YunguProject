@@ -12,6 +12,7 @@ from rclpy.node import Node
 
 from coverage_planner.srv import PlanCoverage
 from skills.base import Primitive, SkillExecutionError, SkillTimeoutError
+from skills.config import SkillRuntimeConfig
 
 
 SearchArea = Sequence[tuple[float, float]]
@@ -24,13 +25,12 @@ class PlanSearchPrimitive(Primitive[SearchArea, Path]):
         self,
         node: Node,
         *,
-        frame_id: str = "map",
-        service_name: str = "/coverage_planner/plan_coverage",
+        config: SkillRuntimeConfig,
     ) -> None:
         self._node = node
-        self._frame_id = frame_id
-        self._service_name = service_name
-        self._client = node.create_client(PlanCoverage, service_name)
+        self._frame_id = config.coverage_planner.frame_id
+        self._service_name = config.coverage_planner.plan_service
+        self._client = node.create_client(PlanCoverage, self._service_name)
 
     @property
     def name(self) -> str:

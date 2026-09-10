@@ -2,10 +2,12 @@
 
 #include <memory>
 #include <optional>
+#include <cstdint>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <nav_msgs/msg/path.hpp>
 
 #include "offboard_fsm/srv/clear_waypoints.hpp"
 #include "offboard_fsm/srv/queue_waypoints.hpp"
@@ -59,6 +61,7 @@ private:
     std::string land_cmd_topic_{"/land_cmd"};
     std::string waypoint_queue_service_{"/waypoint_buffer"};
     std::string clear_waypoints_service_{"/waypoint_buffer/clear"};
+    std::string waypoint_queue_status_topic_{"/waypoint_buffer/status"};
 
     std::unique_ptr<Px4Handler> px4_;
     std::unique_ptr<SuperHandler> super_;
@@ -67,6 +70,7 @@ private:
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_srv_;
     rclcpp::Service<offboard_fsm::srv::QueueWaypoints>::SharedPtr waypoint_queue_srv_;
     rclcpp::Service<offboard_fsm::srv::ClearWaypoints>::SharedPtr clear_waypoints_srv_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr waypoint_queue_status_pub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr takeoff_cmd_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr land_cmd_sub_;
     rclcpp::TimerBase::SharedPtr timer_;
@@ -74,10 +78,12 @@ private:
     State state_{State::INIT};
     rclcpp::Time state_enter_t_;
 
-    /// current NED hold position for IDLE / landing
+    /// Current NED hold pose for IDLE / landing. The heading is captured with
+    /// the position so a hold cannot leave PX4 with an unspecified yaw.
     float hold_x_{0.0f};
     float hold_y_{0.0f};
     float hold_z_{0.0f};
+    float hold_yaw_{0.0f};
     bool have_hold_{false};
 
     int arm_retry_count_{0};
@@ -98,6 +104,7 @@ private:
     bool planner_cond_val_{false};
     rclcpp::Time planner_cond_t_;
     bool stuck_recovery_attempted_{false};
+    uint64_t published_waypoint_revision_{UINT64_MAX};
 
     void timerCallback();
     void landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
@@ -128,6 +135,8 @@ private:
     void captureHold();
     void publishGoalToPlanner(const geometry_msgs::msg::PoseStamped &goal);
     bool publishCurrentGoal();
+    void publishWaypointQueue();
+    void publishWaypointQueueIfChanged();
 
     bool systemReady() const;
     std::optional<geometry_msgs::msg::PoseStamped> headingTarget() const;

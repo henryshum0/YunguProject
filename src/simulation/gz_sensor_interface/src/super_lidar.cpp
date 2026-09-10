@@ -1,15 +1,12 @@
 // super_lidar — publish a world-frame (ENU) point cloud + odom for SUPER.
 //
 // The input source is selected with the `cloud_source` parameter, all of which
-// are produced by lidar_sensor and are ALREADY expressed in base_link:
-//   "fused"      (default): /swan_gamma_v2/scan/points_fused          (merged side LiDARs)
-//   "left":       /swan_gamma_v2/scan_left/points_body
-//   "right":      /swan_gamma_v2/scan_right/points_body
-//   "horizontal": /swan_gamma_v2/scan_horizontal/points_body
+// is produced by lidar_sensor and is ALREADY expressed in base_link:
+//   /swan_gamma_v2/scan_horizontal/points_body
 // The base_link points are then rotated/translated into the world (ENU) frame by
 // the PX4 body->world pose.
 //
-// Topics are read from src/navigation/config/gz_sensor_interface.yaml (via
+// Topics are read from src/simulation/config/gz_sensor_interface.yaml (via
 // sensor_sensors.launch.py):
 //   in_cloud:  one of the four base_link outputs above
 //   in_odom:   /fmu/out/vehicle_odometry             (PX4 NED)
@@ -103,7 +100,7 @@ class SuperLidar : public rclcpp::Node
 public:
   SuperLidar() : Node("super_lidar")
   {
-    declare_parameter("in_cloud", "/swan_gamma_v2/scan/points_fused");
+    declare_parameter("in_cloud", "/swan_gamma_v2/scan_horizontal/points_body");
     declare_parameter("in_odom", "/fmu/out/vehicle_odometry");
     declare_parameter("out_cloud", "/gz/point_cloud_super");
     declare_parameter("out_odom", "/gz/odom_super");

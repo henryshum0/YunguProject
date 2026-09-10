@@ -24,6 +24,16 @@ def parse_waypoints(text: str) -> tuple[Waypoint, ...]:
     return tuple(parsed)  # type: ignore[return-value]
 
 
+def parse_navigation_goal(x: str, y: str, z: str, heading_deg: str) -> Waypoint:
+    """Parse one editable ENU map-navigation goal."""
+    return (
+        _finite(x, "goal x"),
+        _finite(y, "goal y"),
+        _finite(z, "goal altitude"),
+        _finite(heading_deg, "goal heading") % 360.0,
+    )
+
+
 def parse_corners(rows: Sequence[tuple[str, str]]) -> tuple[Corner, ...]:
     """Parse exactly four distinct ENU ``(x, y)`` search corners."""
     if len(rows) != 4:

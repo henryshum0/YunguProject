@@ -31,7 +31,7 @@
         map_file_path: "./test.pcd"
 
         common:
-            lid_topic:  "/swan_gamma_v2/scan/points_fused"  # two side LiDARs merged in base_link
+            lid_topic:  "/swan_gamma_v2/scan_horizontal/points_body"  # level LiDAR in base_link
             imu_topic:  "/livox/imu"
             time_sync_en: false
             time_offset_lidar_to_imu: 0.0
@@ -54,8 +54,8 @@
                                       # points pile up beyond ~25 m — ICP hit
                                       # 476 ms at 35); 25 is the stable point
             extrinsic_est_en: false   # fixed extrinsic for sim
-            # Merged cloud is in base_link == IMU frame (lidar_merge applies
-            # each lidar's mounting transform) → identity extrinsic.
+            # The horizontal cloud is in base_link == IMU frame
+            # (lidar_sensor applies its fixed mounting transform).
             extrinsic_T: [ 0.0, 0.0, 0.0 ]
             extrinsic_R: [ 1., 0., 0.,
                            0., 1., 0.,

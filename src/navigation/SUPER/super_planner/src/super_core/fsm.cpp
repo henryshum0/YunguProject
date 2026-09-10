@@ -129,8 +129,6 @@ namespace fsm {
             return;
         }
 
-        planner_ptr_->getMap()->getNearestInfCellNot(GridType::OCCUPIED, gi_.goal_p, gi_.goal_p, 3.0);
-
         TimeConsuming replan_once_time("replan_once_time", false);
 
         RET_CODE ret_code = planner_ptr_->ReplanOnce(gi_.goal_p, gi_.goal_yaw, gi_.new_goal);
@@ -255,13 +253,14 @@ namespace fsm {
             click_point.z() = cfg_.click_height;
         }
 
-        if (planner_ptr_->getMap()->getNearestInfCellNot(GridType::OCCUPIED, click_point, gi_.goal_p, 3.0)) {
-            cout << GREEN << " -- [Fsm] Get goal at " << RESET << gi_.goal_p.transpose() << endl;
-        } else {
-            gi_.goal_p = click_point;
-            fmt::print(fg(fmt::color::indian_red),
-                       "Goal is deeply occupied; planner will retry until the failure timeout.\n");
-        }
+        // The upstream goal interface owns all three ENU coordinates. In
+        // particular, the GUI's z value must not be silently changed by a 3D
+        // nearest-free-cell search. A map-infeasible requested point is
+        // reported by normal planning failure rather than being moved to a
+        // different flight height.
+        gi_.goal_p = click_point;
+        ros_ptr_->info(" -- [Fsm] Receive goal at: [{}, {}, {}]",
+                       gi_.goal_p.x(), gi_.goal_p.y(), gi_.goal_p.z());
 
         if (completeGoalIfReached("GoalCallback")) {
             return;

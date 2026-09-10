@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -51,6 +52,7 @@ public:
     }
 
     bool hasReachedCurrent() const { return wp_reached_; }
+    uint64_t revision() const { return revision_; }
 
 private:
     rclcpp::Node &node_;
@@ -62,6 +64,7 @@ private:
     std::optional<geometry_msgs::msg::PoseStamped> current_;
     bool wp_reached_{false};
     size_t seq_{0};
+    uint64_t revision_{0};
 };
 
 }  // namespace offboard

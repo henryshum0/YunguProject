@@ -43,6 +43,29 @@ using namespace optimization_utils;
 using Vec8f = Eigen::Matrix<double, 8, 1>;
 using Mat83f = Eigen::Matrix<double, 8, 3>;
 
+namespace {
+
+std::string formatLastConstraintResiduals(const VecDf &penalty_log) {
+    if (penalty_log.size() < 8) {
+        return "last constraint residuals are unavailable";
+    }
+
+    // These are unweighted maximum signed residuals from the last cost
+    // evaluation. A positive value means that constraint was violated.
+    std::ostringstream oss;
+    oss << "last candidate constraint residuals "
+        << "[corridor=" << penalty_log(POS_IDX)
+        << ", velocity_sq=" << penalty_log(VEL_IDX)
+        << ", acceleration_sq=" << penalty_log(ACC_IDX)
+        << ", jerk_sq=" << penalty_log(JER_IDX)
+        << ", attractor_sq=" << penalty_log(ATT_IDX)
+        << ", body_rate_sq=" << penalty_log(OMG_IDX)
+        << ", thrust_band_sq=" << penalty_log(THR_IDX) << "]";
+    return oss.str();
+}
+
+}  // namespace
+
 void ExpTrajOpt::constraintsFunctional(const VecDf &T,
                                        const MatD3f &coeffs,
                                        const VecDi &hIdx,
@@ -762,7 +785,10 @@ double ExpTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
     } else {
         traj.clear();
         minCostFunctional = INFINITY;
-        cout << YELLOW << " -- [MINCO] TrajOpt failed, " << lbfgs::lbfgs_strerror(ret) << RESET << endl;
+        std::ostringstream failure;
+        failure << " -- [MINCO] TrajOpt failed: " << lbfgs::lbfgs_strerror(ret)
+                << "; " << formatLastConstraintResiduals(opt_vars.penalty_log);
+        ros_ptr_->warn(failure.str());
 //        cout << "Init times: " << times_init.transpose() << endl;
     }
     return minCostFunctional + ret;

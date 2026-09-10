@@ -25,6 +25,9 @@ size_t WaypointHandler::enqueue(const std::vector<geometry_msgs::msg::PoseStampe
                     waypoint.pose.position.x, waypoint.pose.position.y,
                     waypoint.pose.position.z);
     }
+    if (!waypoints.empty()) {
+        ++revision_;
+    }
     return waypoints.size();
 }
 
@@ -37,6 +40,7 @@ bool WaypointHandler::advanceToNext()
     current_ = buffer_.front();
     buffer_.pop_front();
     wp_reached_ = false;
+    ++revision_;
     const size_t seq = ++seq_;
 
     RCLCPP_INFO(node_.get_logger(), "Waypoint #%zu promoted: (%.2f, %.2f, %.2f), "
@@ -77,6 +81,7 @@ size_t WaypointHandler::clearPending()
     buffer_.clear();
     current_.reset();
     wp_reached_ = false;
+    ++revision_;
     return pending;
 }
 
@@ -91,12 +96,14 @@ void WaypointHandler::skipCurrent()
     }
     current_.reset();
     wp_reached_ = false;
+    ++revision_;
 }
 
 void WaypointHandler::completeCurrent()
 {
     current_.reset();
     wp_reached_ = false;
+    ++revision_;
 }
 
 }  // namespace offboard

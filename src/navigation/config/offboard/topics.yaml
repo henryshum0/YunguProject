@@ -28,6 +28,7 @@ offboard_fsm:
     pos_setpoint:    /fmu/in/trajectory_setpoint
     planner_reset:   /fsm_node/reset             # service request to SUPER
     waypoint_markers: /waypoint_markers
+    waypoint_queue_status: /waypoint_buffer/status  # active waypoint, then pending route
   # SERVICES
   services:
     queue_waypoints: /waypoint_buffer

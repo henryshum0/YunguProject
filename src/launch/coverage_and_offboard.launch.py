@@ -2,8 +2,8 @@
 
 This is a workspace-level launch file and is intended to be run directly after
 sourcing the YunguProject overlay. The included offboard launch continues to
-load its controller, topic, and simulation settings from
-``src/navigation/config/``. Coverage planner mission/map settings are supplied through
+load its controller and topic settings from ``src/navigation/config/offboard/`` and
+simulation settings from ``src/simulation/config/``. Coverage planner mission/map settings are supplied through
 ``config_file``.
 """
 
@@ -36,7 +36,7 @@ def generate_launch_description() -> LaunchDescription:
         ),
         DeclareLaunchArgument(
             "use_fastlio",
-            default_value="true",
+            default_value="false",
             description="Launch FAST-LIO and its PX4 visual-odometry bridge.",
         ),
         IncludeLaunchDescription(
