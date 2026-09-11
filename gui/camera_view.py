@@ -29,6 +29,26 @@ class CameraFrame:
     def ppm_bytes(self) -> bytes:
         return f"P6\n{self.width} {self.height}\n255\n".encode("ascii") + self.rgb
 
+    def resized_to_fit(self, maximum_width: int, maximum_height: int) -> "CameraFrame":
+        """Return an aspect-preserving nearest-neighbour preview frame."""
+        if maximum_width <= 0 or maximum_height <= 0:
+            raise ValueError("preview dimensions must be positive")
+        scale = min(1.0, maximum_width / self.width, maximum_height / self.height)
+        width = max(1, int(self.width * scale))
+        height = max(1, int(self.height * scale))
+        if (width, height) == (self.width, self.height):
+            return self
+        output = bytearray(width * height * 3)
+        destination = 0
+        for y in range(height):
+            source_y = min(self.height - 1, int(y * self.height / height))
+            for x in range(width):
+                source_x = min(self.width - 1, int(x * self.width / width))
+                source = (source_y * self.width + source_x) * 3
+                output[destination:destination + 3] = self.rgb[source:source + 3]
+                destination += 3
+        return CameraFrame(width=width, height=height, rgb=bytes(output))
+
 
 def decode_ros_image(message: Any) -> CameraFrame:
     """Decode the common uncompressed ROS image encodings into packed RGB."""
@@ -76,14 +96,16 @@ def decode_ros_image(message: Any) -> CameraFrame:
 class CameraPreview:
     """Own an image-only ROS node/executor so it never races GUI service calls."""
 
-    def __init__(self, topic: str) -> None:
+    def __init__(self, topic: str, *, node_name: str = "skills_test_gui_camera") -> None:
         if not topic.strip():
             raise ValueError("camera image topic must not be empty")
+        if not node_name.strip():
+            raise ValueError("camera preview node name must not be empty")
         self.topic = topic.strip()
         self._frames: Queue[CameraFrame] = Queue(maxsize=1)
         self._errors: Queue[str] = Queue(maxsize=1)
         self._stop = Event()
-        self._node: Node = rclpy.create_node("skills_test_gui_camera")
+        self._node: Node = rclpy.create_node(node_name.strip())
         self._executor = SingleThreadedExecutor()
         self._executor.add_node(self._node)
         self._subscription = self._node.create_subscription(

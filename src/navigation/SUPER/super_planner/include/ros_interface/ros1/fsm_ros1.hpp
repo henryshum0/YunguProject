@@ -238,11 +238,15 @@ namespace fsm {
             }
             getOnePositionCommand(pid_cmd_, traj_finish_);
             if (traj_finish_) {
-                cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
-                if (closeToGoal(0.1)) {
-                    ChangeState("getPoseFromTraj", WAIT_GOAL);
+                if (planner_ptr_->isNearGoalBrakingActive()) {
+                    finish_plan = true;
                 } else {
-                    ChangeState("getPoseFromTraj", GENERATE_TRAJ);
+                    cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
+                    if (closeToGoal(0.1)) {
+                        ChangeState("getPoseFromTraj", WAIT_GOAL);
+                    } else {
+                        ChangeState("getPoseFromTraj", GENERATE_TRAJ);
+                    }
                 }
             }
             pose.first = Vec3f{pid_cmd_.position.x, pid_cmd_.position.y, pid_cmd_.position.z};
@@ -338,11 +342,15 @@ namespace fsm {
             mpc_cmd_pub_.publish(heartbeat);
             cmd_pub.publish(pid_cmd_);
             if (traj_finish_) {
-                cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
-                if (closeToGoal(0.1)) {
-                    ChangeState("PubCmdCallback", WAIT_GOAL);
+                if (planner_ptr_->isNearGoalBrakingActive()) {
+                    finish_plan = true;
                 } else {
-                    ChangeState("PubCmdCallback", GENERATE_TRAJ);
+                    cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
+                    if (closeToGoal(0.1)) {
+                        ChangeState("PubCmdCallback", WAIT_GOAL);
+                    } else {
+                        ChangeState("PubCmdCallback", GENERATE_TRAJ);
+                    }
                 }
             }
         }

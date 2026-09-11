@@ -35,6 +35,8 @@ super_planner:
   receding_dis: 1.0
   # On first entry within this full-3D distance, replace the remaining path
   # with a constant-deceleration A* trajectory that reaches goal speed.
+  # Enter before MINCO becomes ill-conditioned for a short remaining route.
+  # The A* braking trajectory is committed once on crossing this 1 m boundary.
   near_goal_braking_distance: 1.0
   near_goal_goal_speed: 0.0
   robot_r: 0.6

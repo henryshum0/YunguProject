@@ -16,6 +16,11 @@ WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
+# The feeds are stacked, so each can use a wider 4:3 preview without taking
+# horizontal space away from the operations controls and map.
+CAMERA_PREVIEW_WIDTH = 640
+CAMERA_PREVIEW_HEIGHT = 480
+
 import rclpy
 from rclpy.node import Node
 
@@ -49,9 +54,8 @@ class SkillsTestGui(tk.Tk):
     def __init__(self, node: Node) -> None:
         super().__init__()
         self.title("Yungu Skills Test GUI")
-        # The camera is a native 640 px-wide feed.  Keep enough room for it
-        # instead of allowing the skill controls to squeeze the sidebar.
-        self.minsize(1880, 760)
+        # Stacked 4:3 feeds keep both camera views wide and readable.
+        self.minsize(1920, 1080)
         self._node = node
         self._controller = SkillController(node)
         self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="skill-service")
@@ -67,16 +71,18 @@ class SkillsTestGui(tk.Tk):
         self._vehicle_state: VehicleState | None = None
         self._queue_state: QueueState | None = None
         self._operations_telemetry: OperationsTelemetry | None = None
-        self._camera_preview: CameraPreview | None = None
-        self._camera_photo: tk.PhotoImage | None = None
+        self._camera_previews: dict[str, CameraPreview] = {}
+        self._camera_photos: dict[str, tk.PhotoImage] = {}
+        self._camera_labels: dict[str, tk.Label] = {}
+        self._camera_statuses: dict[str, tk.StringVar] = {}
         self._build_variables()
         self._build_layout()
         self._load_map()
         self.protocol("WM_DELETE_WINDOW", self._close)
         self.after(50, self._poll_completed_actions)
-        self.after(50, self._poll_camera_preview)
+        self.after(50, self._poll_camera_previews)
         self.after(100, self._poll_operations_telemetry)
-        self.after_idle(self._start_camera_preview)
+        self.after_idle(self._start_camera_previews)
         self.after_idle(self._start_operations_telemetry)
 
     def _build_variables(self) -> None:
@@ -84,7 +90,8 @@ class SkillsTestGui(tk.Tk):
             value=str(WORKSPACE_ROOT / "src" / "navigation" / "config" / "offboard"))
         self.planner_config_file = tk.StringVar(
             value=str(WORKSPACE_ROOT / "src" / "search" / "config" / "yungu_planner.json"))
-        self.camera_image_topic = tk.StringVar(value="/swan_gamma_v2/front_camera/image")
+        self.front_camera_image_topic = tk.StringVar(value="/swan_gamma_v2/front_camera/image")
+        self.follow_camera_image_topic = tk.StringVar(value="/swan_gamma_v2/follow_camera/image")
         self.vehicle_odometry_topic = tk.StringVar(value="/gz/ground_truth/odom")
         self.waypoint_queue_status_topic = tk.StringVar(value="/waypoint_buffer/status")
         self.timeout_sec = tk.StringVar(value="10")
@@ -116,31 +123,33 @@ class SkillsTestGui(tk.Tk):
         outer.grid(sticky="nsew")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
-        outer.columnconfigure(0, weight=1, minsize=1180)
-        # 640 px preview + label-frame padding/border.  ``minsize`` is needed
-        # because a zero-weight grid column may otherwise be compressed.
-        outer.columnconfigure(1, weight=0, minsize=660)
+        outer.columnconfigure(0, weight=1, minsize=1200)
+        # A native-width preview plus frame padding/borders. ``minsize`` prevents
+        # the zero-weight sidebar from being compressed by the main controls.
+        outer.columnconfigure(1, weight=0, minsize=680)
         outer.rowconfigure(3, weight=1)
 
-        settings = ttk.LabelFrame(outer, text="Connection settings", padding=8)
+        settings = ttk.LabelFrame(outer, text="Connection settings", padding=4)
         settings.grid(row=0, column=0, sticky="ew")
         fields = [
             ("Navigation config directory", self.navigation_config_dir),
             ("Planner config JSON", self.planner_config_file),
-            ("Camera image topic", self.camera_image_topic),
+            ("Front camera image topic", self.front_camera_image_topic),
+            ("Follow camera image topic", self.follow_camera_image_topic),
             ("Vehicle odometry topic", self.vehicle_odometry_topic),
             ("Queue status topic", self.waypoint_queue_status_topic),
             ("Timeout (s)", self.timeout_sec),
         ]
         for index, (label, variable) in enumerate(fields):
-            row, column = divmod(index, 2)
-            ttk.Label(settings, text=label).grid(row=row, column=column * 2, padx=(0, 6), pady=3, sticky="w")
-            ttk.Entry(settings, textvariable=variable, width=38).grid(
-                row=row, column=column * 2 + 1, padx=(0, 16), pady=3, sticky="ew")
-        settings.columnconfigure(1, weight=1)
-        settings.columnconfigure(3, weight=1)
+            row, column = divmod(index, 4)
+            field = ttk.Frame(settings)
+            field.grid(row=row, column=column, padx=(0, 8), pady=1, sticky="ew")
+            ttk.Label(field, text=label).grid(row=0, column=0, sticky="w")
+            ttk.Entry(field, textvariable=variable, width=31).grid(row=1, column=0, sticky="ew")
+            field.columnconfigure(0, weight=1)
+            settings.columnconfigure(column, weight=1)
 
-        flight = ttk.LabelFrame(outer, text="Flight control", padding=8)
+        flight = ttk.LabelFrame(outer, text="Flight control", padding=4)
         flight.grid(row=1, column=0, pady=(8, 0), sticky="ew")
         ttk.Button(flight, text="Take off", command=self._takeoff).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(flight, text="Land", command=self._land).grid(row=0, column=1)
@@ -155,17 +164,17 @@ class SkillsTestGui(tk.Tk):
         self._build_navigate_tab(self._notebook)
         self._build_search_tab(self._notebook)
         self._notebook.bind("<<NotebookTabChanged>>", self._on_skill_tab_changed)
-        operations = ttk.LabelFrame(work_area, text="Live operations map", padding=6)
-        work_area.add(operations, weight=1)
+        operations = ttk.LabelFrame(work_area, text="Live operations map", padding=4)
+        work_area.add(operations, weight=2)
         self._build_operations_map(operations)
 
-        result = ttk.LabelFrame(outer, text="Status and planner result", padding=8)
+        result = ttk.LabelFrame(outer, text="Status and planner result", padding=4)
         result.grid(row=3, column=0, pady=(8, 0), sticky="nsew")
         result.columnconfigure(0, weight=1)
         result.rowconfigure(1, weight=1)
         ttk.Label(result, textvariable=self.status, foreground="#155724", wraplength=850).grid(
             row=0, column=0, sticky="ew", pady=(0, 6))
-        self.output = tk.Text(result, height=12, wrap="none", state="disabled")
+        self.output = tk.Text(result, height=6, wrap="none", state="disabled")
         self.output.grid(row=1, column=0, sticky="nsew")
         scrollbar = ttk.Scrollbar(result, command=self.output.yview)
         scrollbar.grid(row=1, column=1, sticky="ns")
@@ -180,7 +189,7 @@ class SkillsTestGui(tk.Tk):
         tab.rowconfigure(1, weight=1)
         ttk.Label(tab, text="One waypoint per line: x, y, z, heading_deg").grid(
             row=0, column=0, sticky="w")
-        self.waypoint_text = tk.Text(tab, height=10, width=80)
+        self.waypoint_text = tk.Text(tab, height=6, width=60)
         self.waypoint_text.grid(row=1, column=0, pady=6, sticky="nsew")
         self.waypoint_text.insert("1.0", "10, 10, 5, 0\n20, 10, 5, 90")
         controls = ttk.Frame(tab)
@@ -241,45 +250,59 @@ class SkillsTestGui(tk.Tk):
         ttk.Button(controls, text="Reload", command=self._load_map).grid(row=0, column=1)
         ttk.Button(controls, text="Reconnect telemetry", command=self._start_operations_telemetry).grid(
             row=0, column=2, padx=(8, 0))
-        ttk.Label(panel, textvariable=self.map_mode, wraplength=620).grid(
+        ttk.Label(panel, textvariable=self.map_mode, wraplength=720).grid(
             row=2, column=0, columnspan=2, pady=(6, 2), sticky="w")
-        self.map_canvas = tk.Canvas(panel, width=620, height=410, background="#f8f9fa",
+        self.map_canvas = tk.Canvas(panel, width=740, height=540, background="#f8f9fa",
                                     highlightthickness=1, highlightbackground="#a0a0a0",
                                     cursor="crosshair")
         self.map_canvas.grid(row=3, column=0, columnspan=2, sticky="nsew")
         self.map_canvas.bind("<Button-1>", self._on_operations_map_click)
         self.map_canvas.bind("<Configure>", self._on_map_resize)
-        ttk.Label(panel, textvariable=self.telemetry_status, wraplength=620).grid(
+        ttk.Label(panel, textvariable=self.telemetry_status, wraplength=720).grid(
             row=4, column=0, columnspan=2, pady=(4, 0), sticky="w")
-        ttk.Label(panel, textvariable=self.map_status, wraplength=620).grid(
+        ttk.Label(panel, textvariable=self.map_status, wraplength=720).grid(
             row=5, column=0, columnspan=2, pady=(2, 0), sticky="w")
 
     def _build_camera_pane(self, outer: ttk.Frame) -> None:
-        pane = ttk.LabelFrame(outer, text="Front camera", padding=8, width=660)
+        pane = ttk.LabelFrame(outer, text="Camera feeds", padding=4, width=680)
         pane.grid(row=0, column=1, rowspan=4, padx=(10, 0), sticky="nsew")
         pane.columnconfigure(0, weight=1)
-        pane.rowconfigure(2, weight=1)
+        pane.rowconfigure(3, weight=1)
+        pane.rowconfigure(4, weight=1)
         ttk.Label(
             pane,
-            text=("Live preview remains visible while changing skill tabs. Set the topic in Connection "
-                  "settings, then reconnect if it changes."),
-            wraplength=390,
+            text=("Front and chase-camera previews remain visible while changing skill tabs. "
+                  "Set their topics in Connection settings, then reconnect after changing either one."),
+            wraplength=650,
         ).grid(row=0, column=0, sticky="w")
         controls = ttk.Frame(pane)
         controls.grid(row=1, column=0, pady=(8, 6), sticky="w")
-        ttk.Button(controls, text="Start / reconnect preview", command=self._start_camera_preview).grid(
+        ttk.Button(controls, text="Start / reconnect feeds", command=self._start_camera_previews).grid(
             row=0, column=0, padx=(0, 8))
-        ttk.Button(controls, text="Stop preview", command=self._stop_camera_preview).grid(row=0, column=1)
-        self.camera_status = tk.StringVar(value="Preview stopped.")
-        ttk.Label(controls, textvariable=self.camera_status, wraplength=220).grid(
-            row=1, column=0, columnspan=2, pady=(5, 0), sticky="w")
-        preview_frame = tk.Frame(pane, width=640, height=480, background="#202020")
-        preview_frame.grid(row=2, column=0, sticky="nsew")
-        preview_frame.grid_propagate(False)
-        self.camera_label = tk.Label(
-            preview_frame, text="Starting camera preview...", background="#202020",
-            foreground="#f0f0f0", anchor="center")
-        self.camera_label.pack(fill="both", expand=True)
+        ttk.Button(controls, text="Stop feeds", command=self._stop_camera_previews).grid(row=0, column=1)
+
+        for row, (key, title) in enumerate((
+            ("front", "Front camera"),
+            ("follow", "Follow camera"),
+        ), start=3):
+            feed = ttk.LabelFrame(pane, text=title, padding=5)
+            feed.grid(row=row, column=0, pady=(0, 8) if row == 3 else (0, 0), sticky="nsew")
+            status = tk.StringVar(value="Preview stopped.")
+            ttk.Label(feed, textvariable=status, wraplength=620).grid(row=0, column=0, pady=(0, 2), sticky="w")
+            preview_frame = tk.Frame(
+                feed,
+                width=CAMERA_PREVIEW_WIDTH,
+                height=CAMERA_PREVIEW_HEIGHT,
+                background="#202020",
+            )
+            preview_frame.grid(row=1, column=0, sticky="nsew")
+            preview_frame.grid_propagate(False)
+            label = tk.Label(
+                preview_frame, text="Starting camera preview...", background="#202020",
+                foreground="#f0f0f0", anchor="center")
+            label.pack(fill="both", expand=True)
+            self._camera_labels[key] = label
+            self._camera_statuses[key] = status
 
     def _service_button(self, parent: tk.Misc, text: str, command) -> ttk.Button:
         button = ttk.Button(parent, text=text, command=command)
@@ -299,48 +322,59 @@ class SkillsTestGui(tk.Tk):
             timeout_sec=timeout,
         )
 
-    def _start_camera_preview(self) -> None:
-        topic = self.camera_image_topic.get().strip()
-        try:
-            self._stop_camera_preview(update_status=False)
-            self._camera_preview = CameraPreview(topic)
-        except Exception as error:
-            self.camera_status.set(f"Preview error: {error}")
-            self._report_error(error)
-            return
-        self.camera_status.set(f"Waiting for images on {topic}...")
-        self.camera_label.configure(image="", text="Waiting for camera frames...")
+    def _start_camera_previews(self) -> None:
+        """Start independent ROS image subscribers for the two persistent feeds."""
+        self._stop_camera_previews(update_status=False)
+        feeds = (
+            ("front", self.front_camera_image_topic.get().strip(), "skills_test_gui_front_camera"),
+            ("follow", self.follow_camera_image_topic.get().strip(), "skills_test_gui_follow_camera"),
+        )
+        for key, topic, node_name in feeds:
+            status = self._camera_statuses[key]
+            label = self._camera_labels[key]
+            try:
+                self._camera_previews[key] = CameraPreview(topic, node_name=node_name)
+            except Exception as error:
+                status.set(f"Preview error: {error}")
+                label.configure(image="", text="Camera preview unavailable.")
+                self._report_error(error)
+                continue
+            status.set(f"Waiting for images on {topic}...")
+            label.configure(image="", text="Waiting for camera frames...")
 
-    def _stop_camera_preview(self, *, update_status: bool = True) -> None:
-        preview, self._camera_preview = self._camera_preview, None
-        if preview is not None:
+    def _stop_camera_previews(self, *, update_status: bool = True) -> None:
+        previews, self._camera_previews = self._camera_previews, {}
+        for preview in previews.values():
             preview.close()
-        self._camera_photo = None
-        self.camera_label.configure(image="", text="Camera preview stopped.")
-        if update_status:
-            self.camera_status.set("Preview stopped.")
+        self._camera_photos.clear()
+        for key, label in self._camera_labels.items():
+            label.configure(image="", text="Camera preview stopped.")
+            if update_status:
+                self._camera_statuses[key].set("Preview stopped.")
 
-    def _poll_camera_preview(self) -> None:
+    def _poll_camera_previews(self) -> None:
         if self._closed:
             return
-        preview = self._camera_preview
-        if preview is not None:
+        for key, preview in tuple(self._camera_previews.items()):
+            status = self._camera_statuses[key]
+            label = self._camera_labels[key]
             error = preview.latest_error()
             if error is not None:
-                self.camera_status.set(f"Preview error: {error}")
+                status.set(f"Preview error: {error}")
             frame = preview.latest_frame()
             if frame is not None:
                 try:
-                    photo = tk.PhotoImage(data=frame.ppm_bytes(), format="PPM")
+                    display_frame = frame.resized_to_fit(
+                        CAMERA_PREVIEW_WIDTH, CAMERA_PREVIEW_HEIGHT)
+                    photo = tk.PhotoImage(data=display_frame.ppm_bytes(), format="PPM")
                 except tk.TclError as image_error:
-                    self.camera_status.set(f"Preview display error: {image_error}")
-                    self.after(50, self._poll_camera_preview)
-                    return
-                self._camera_photo = photo
-                self.camera_label.configure(image=self._camera_photo, text="")
-                self.camera_status.set(
+                    status.set(f"Preview display error: {image_error}")
+                    continue
+                self._camera_photos[key] = photo
+                label.configure(image=photo, text="")
+                status.set(
                     f"Receiving {frame.width}x{frame.height} RGB frames on {preview.topic}.")
-        self.after(50, self._poll_camera_preview)
+        self.after(100, self._poll_camera_previews)
 
     def _takeoff(self) -> None:
         self._confirm_and_publish("Take off", "Publish a takeoff command to the offboard FSM?", "takeoff")
@@ -781,7 +815,7 @@ class SkillsTestGui(tk.Tk):
     def _close(self) -> None:
         self._closed = True
         self._worker.shutdown(wait=False, cancel_futures=True)
-        self._stop_camera_preview(update_status=False)
+        self._stop_camera_previews(update_status=False)
         self._stop_operations_telemetry(update_status=False)
         self._node.destroy_node()
         if rclpy.ok():

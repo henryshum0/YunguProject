@@ -83,7 +83,7 @@ namespace super_planner {
         gi_.goal_p = goal_p;
         gi_.goal_yaw = goal_yaw;
         gi_.new_goal = new_goal;
-        near_goal_braking_active_ = false;
+        near_goal_braking_active_.store(false);
         vec_Vec3f viz_pts{goal_p, robot_state_.p};
 
         {
@@ -191,7 +191,7 @@ namespace super_planner {
         // check is intentionally full 3D.
         const double entry_speed = robot_state_.v.norm();
         constexpr double kSpeedEpsilon = 1e-3;
-        if (!near_goal_braking_active_ &&
+        if (!near_goal_braking_active_.load() &&
             cfg_.near_goal_braking_distance > 0.0 &&
             (robot_state_.p - goal_p).norm() <= cfg_.near_goal_braking_distance &&
             entry_speed > cfg_.near_goal_goal_speed + kSpeedEpsilon) {
@@ -212,7 +212,7 @@ namespace super_planner {
             last_exp_traj_info_ = braking_traj;
             robot_on_backup_traj_ = false;
             gi_.new_goal = false;
-            near_goal_braking_active_ = true;
+            near_goal_braking_active_.store(true);
             latest_replan.setLocalStartP(local_start_pt);
             latest_replan.setExpTraj(braking_traj.posTraj());
             latest_replan.setExpYawTraj(braking_traj.yawTraj());
@@ -224,11 +224,11 @@ namespace super_planner {
 
         // The active near-goal path already came from A*. Keep commanding it
         // rather than feeding it back into the optimizer on every replan tick.
-        if (near_goal_braking_active_ && !new_goal) {
+        if (near_goal_braking_active_.load() && !new_goal) {
             latest_replan.setRetCode(SUPER_SUCCESS_NO_BACKUP);
             return NO_NEED;
         }
-        near_goal_braking_active_ = false;
+        near_goal_braking_active_.store(false);
 
 
         /// 1) Replan EXP traj

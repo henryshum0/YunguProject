@@ -112,7 +112,7 @@ loads the ROS environment automatically and provides:
 - ENU/NED waypoint entry and click-to-navigate selection;
 - two-click coverage-rectangle planning and optional route queueing;
 - a persistent Yungu map with vehicle pose and authoritative waypoint queue;
-- a persistent live front-camera preview.
+- persistent live front and third-person follow-camera previews.
 
 The GUI is an operator/test client only: it does not replace planning,
 collision checking, or offboard control. See [`gui/README.md`](gui/README.md)
@@ -159,7 +159,7 @@ failure behavior, use the [operations reference](docs/operations.md).
 - `FAST_LIO` supplies LiDAR-inertial odometry; `livox_ros_driver2` supports the
   physical LiDAR path.
 - `VisionFlow-PX4` supplies PX4 SITL, the Yungu Gazebo world, vehicle models,
-  and the bridged front-camera image stream.
+  and bridged front/follow camera image streams.
 
 ### Navigation and execution
 

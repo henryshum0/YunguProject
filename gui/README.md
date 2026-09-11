@@ -30,12 +30,12 @@ vehicle-odometry, queue-status, and timeout settings remain independently editab
   route after it was accepted by the offboard queue service.
 - **Take off** and **Land** publish the existing `Bool(data=True)` commands only after a confirmation
   dialog.
-- **Front camera** is a persistent sidebar, so it remains visible while navigating or planning.
-  It subscribes on its own ROS executor and starts automatically with the configured image topic.
-  Use **Start / reconnect preview** after changing that topic; the preview does not block planner
-  or waypoint service actions. The default simulated camera requires `ros-humble-ros-gz-image`
-  and the normal `utils/start_sim.sh` bridge process. The GUI reserves a native 640×480 preview,
-  matching the simulated camera output without downsampling.
+- **Camera feeds** are a persistent sidebar, so they remain visible while navigating or planning.
+  The front camera defaults to `/swan_gamma_v2/front_camera/image`; the follow camera defaults to
+  `/swan_gamma_v2/follow_camera/image`. Each has its own ROS subscriber/executor, while the GUI
+  stacks both in an aspect-preserving native-resolution 640×480 preview. Use **Start / reconnect feeds** after
+  changing either topic; preview work does not block planner or waypoint service actions. Both
+  simulated feeds require `ros-humble-ros-gz-image` and the normal `utils/start_sim.sh` bridge.
 
 ## Coverage map selection
 

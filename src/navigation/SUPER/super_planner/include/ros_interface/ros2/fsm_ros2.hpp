@@ -279,9 +279,17 @@ namespace fsm {
             }
             getOnePositionCommand(pid_cmd_, traj_finish_);
             if (traj_finish_) {
-                cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
-                if (!completeGoalIfReached("getPoseFromTraj")) {
-                    ChangeState("getPoseFromTraj", GENERATE_TRAJ);
+                if (planner_ptr_->isNearGoalBrakingActive()) {
+                    // A near-goal braking path is built once on region entry.
+                    // Keep emitting its terminal rest setpoint until the real
+                    // vehicle reaches the goal; regenerating from this close
+                    // state makes the controller chase moving trajectories.
+                    finish_plan = true;
+                } else {
+                    cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
+                    if (!completeGoalIfReached("getPoseFromTraj")) {
+                        ChangeState("getPoseFromTraj", GENERATE_TRAJ);
+                    }
                 }
             }
             pose.first = Vec3f{pid_cmd_.position.x, pid_cmd_.position.y, pid_cmd_.position.z};
@@ -424,9 +432,17 @@ namespace fsm {
             mpc_cmd_pub_->publish(heartbeat);
             cmd_pub_->publish(pid_cmd_);
             if (traj_finish_) {
-                cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
-                if (!completeGoalIfReached("PubCmdCallback")) {
-                    ChangeState("PubCmdCallback", GENERATE_TRAJ);
+                if (planner_ptr_->isNearGoalBrakingActive()) {
+                    // Do not call PlanFromRest again after the one-shot
+                    // braking trajectory ends. getOneCommandFromTraj clamps
+                    // evaluation to the final rest state until completion or
+                    // a newly received goal replaces this trajectory.
+                    finish_plan = true;
+                } else {
+                    cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
+                    if (!completeGoalIfReached("PubCmdCallback")) {
+                        ChangeState("PubCmdCallback", GENERATE_TRAJ);
+                    }
                 }
             }
         }

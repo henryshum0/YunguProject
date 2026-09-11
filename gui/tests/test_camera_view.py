@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from gui.camera_view import ImageDecodeError, decode_ros_image
+from gui.camera_view import CameraFrame, ImageDecodeError, decode_ros_image
 
 
 def image(*, width: int, height: int, encoding: str, step: int, data: bytes):
@@ -20,6 +20,17 @@ def test_decode_ros_image_converts_bgr_and_row_padding_to_rgb() -> None:
     assert frame.height == 1
     assert frame.rgb == bytes((1, 2, 3, 10, 20, 30))
     assert frame.ppm_bytes().startswith(b"P6\n2 1\n255\n")
+
+
+def test_camera_frame_resizes_to_fit_without_distorting_aspect_ratio() -> None:
+    frame = CameraFrame(width=4, height=2, rgb=bytes((10, 20, 30)) * 8)
+    preview = frame.resized_to_fit(3, 3)
+
+    assert (preview.width, preview.height) == (3, 1)
+    assert len(preview.rgb) == 3 * 1 * 3
+
+    native = frame.resized_to_fit(8, 8)
+    assert native is frame
 
 
 @pytest.mark.parametrize(
