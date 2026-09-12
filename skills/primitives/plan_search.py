@@ -8,9 +8,10 @@ from math import isfinite
 import rclpy
 from geometry_msgs.msg import Point32
 from nav_msgs.msg import Path
+from rclpy.action import ActionClient
 from rclpy.node import Node
 
-from coverage_planner.srv import PlanCoverage
+from coverage_planner.action import PlanCoverage
 from skills.base import Primitive, SkillExecutionError, SkillTimeoutError
 from skills.config import SkillRuntimeConfig
 
@@ -30,7 +31,7 @@ class PlanSearchPrimitive(Primitive[SearchArea, Path]):
         self._node = node
         self._frame_id = config.coverage_planner.frame_id
         self._service_name = config.coverage_planner.plan_service
-        self._client = node.create_client(PlanCoverage, self._service_name)
+        self._client = ActionClient(node, PlanCoverage, self._service_name)
 
     @property
     def name(self) -> str:
@@ -47,38 +48,53 @@ class PlanSearchPrimitive(Primitive[SearchArea, Path]):
         publish_result: bool = False,
         timeout_sec: float | None = 30.0,
     ) -> Path:
-        """Wait for the planner service, then return its sparse waypoint path.
+        """Submit a planner action and return its asynchronous sparse waypoint result.
 
-        ``publish_result=False`` is a dry run: the route is returned only in the
-        service response. Set it when a planner `Path`/marker visualization is
-        desired as well.
+        ``timeout_sec`` covers server discovery and receipt of the action goal.
+        Once accepted, the planner result waits asynchronously without the GUI's
+        short request timeout. ``publish_result=False`` is a dry run: the route
+        is returned only in the action result.
         """
         corners = _validated_corners(request)
-        if not self._client.wait_for_service(timeout_sec=timeout_sec):
+        if not self._client.wait_for_server(timeout_sec=timeout_sec):
             raise SkillTimeoutError(
-                f"coverage planner service '{self._service_name}' is unavailable")
-        service_request = PlanCoverage.Request()
-        service_request.search_area.header.frame_id = self._frame_id
-        service_request.search_area.polygon.points = [
+                f"coverage planner action '{self._service_name}' is unavailable")
+        goal = PlanCoverage.Goal()
+        goal.search_area.header.frame_id = self._frame_id
+        goal.search_area.polygon.points = [
             Point32(x=x, y=y, z=0.0) for x, y in corners
         ]
-        service_request.publish_result = bool(publish_result)
-        future = self._client.call_async(service_request)
-        rclpy.spin_until_future_complete(self._node, future, timeout_sec=timeout_sec)
-        if not future.done():
-            future.cancel()
+        goal.publish_result = bool(publish_result)
+        receipt_future = self._client.send_goal_async(goal)
+        rclpy.spin_until_future_complete(self._node, receipt_future, timeout_sec=timeout_sec)
+        if not receipt_future.done():
+            receipt_future.cancel()
             raise SkillTimeoutError(
-                f"coverage planner service '{self._service_name}' did not respond")
+                f"coverage planner action '{self._service_name}' did not acknowledge the request")
         try:
-            response = future.result()
+            goal_handle = receipt_future.result()
         except Exception as exc:
             raise SkillExecutionError(
-                f"coverage planner service '{self._service_name}' failed: {exc}"
+                f"coverage planner action '{self._service_name}' receipt failed: {exc}"
             ) from exc
-        if response is None:
-            raise SkillExecutionError("coverage planner service returned no response")
+        if goal_handle is None or not goal_handle.accepted:
+            raise SkillExecutionError("coverage planner rejected the request")
+        result_future = goal_handle.get_result_async()
+        rclpy.spin_until_future_complete(self._node, result_future, timeout_sec=None)
+        if not result_future.done():  # defensive: a shutdown can end the spin without a result
+            raise SkillTimeoutError(
+                f"coverage planner action '{self._service_name}' ended before returning a result")
+        try:
+            action_result = result_future.result()
+        except Exception as exc:
+            raise SkillExecutionError(
+                f"coverage planner action '{self._service_name}' failed: {exc}"
+            ) from exc
+        if action_result is None or action_result.result is None:
+            raise SkillExecutionError("coverage planner action returned no result")
+        response = action_result.result
         if not response.success:
-            raise SkillExecutionError(response.message or "coverage planner rejected the search area")
+            raise SkillExecutionError(response.message or "coverage planning failed")
         return response.waypoints
 
 

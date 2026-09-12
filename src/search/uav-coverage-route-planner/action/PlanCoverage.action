@@ -1,0 +1,13 @@
+# Four ENU corners and whether to publish the resulting Path/MarkerArray.
+geometry_msgs/PolygonStamped search_area
+bool publish_result
+---
+# A goal is acknowledged immediately. This result arrives asynchronously after
+# planning completes, including planner/coverage failures.
+bool success
+string message
+nav_msgs/Path waypoints
+---
+# Human-readable execution stage: validating, planning, publishing, succeeded,
+# failed, or cancelled.
+string stage

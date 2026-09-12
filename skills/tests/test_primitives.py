@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 
-from coverage_planner.srv import PlanCoverage
+from coverage_planner.action import PlanCoverage
 from offboard_fsm.srv import ClearWaypoints, QueueWaypoints
 from skills import (
     ClearWaypointsPrimitive,
@@ -57,6 +59,52 @@ class FakeNode:
     def create_client(self, service_type, service_name):
         self.service_name = service_name
         return self.client
+
+
+class FakePlanGoalHandle:
+    def __init__(self, response, *, accepted: bool = True, done: bool = True) -> None:
+        self.accepted = accepted
+        self._result_future = FakeFuture(SimpleNamespace(result=response), done=done)
+
+    def get_result_async(self):
+        return self._result_future
+
+
+class FakePlanActionClient:
+    def __init__(
+        self,
+        response=None,
+        *,
+        available: bool = True,
+        receipt_done: bool = True,
+        result_done: bool = True,
+        accepted: bool = True,
+    ) -> None:
+        self.response = response
+        self.available = available
+        self.receipt_done = receipt_done
+        self.result_done = result_done
+        self.accepted = accepted
+        self.goals = []
+        self.receipt_future = None
+
+    def wait_for_server(self, timeout_sec=None) -> bool:
+        return self.available
+
+    def send_goal_async(self, goal):
+        self.goals.append(goal)
+        goal_handle = FakePlanGoalHandle(
+            self.response, accepted=self.accepted, done=self.result_done)
+        self.receipt_future = FakeFuture(goal_handle, done=self.receipt_done)
+        return self.receipt_future
+
+
+def _plan_primitive(monkeypatch, client: FakePlanActionClient) -> PlanSearchPrimitive:
+    monkeypatch.setattr(
+        "skills.primitives.plan_search.ActionClient",
+        lambda node, action_type, action_name: client,
+    )
+    return PlanSearchPrimitive(FakeNode(), config=TEST_CONFIG)
 
 
 def _queue_response(count: int, *, success: bool = True) -> QueueWaypoints.Response:
@@ -126,73 +174,72 @@ def test_clear_waypoints_returns_removed_count_and_times_out(monkeypatch) -> Non
     assert timed_out_client.future.cancelled
 
 
-def test_plan_search_returns_coverage_service_waypoints(monkeypatch) -> None:
-    response = PlanCoverage.Response()
+def test_plan_search_returns_coverage_action_waypoints(monkeypatch) -> None:
+    response = PlanCoverage.Result()
     response.success = True
     response.waypoints = Path()
-    client = FakeClient(response)
-    node = FakeNode(client)
+    client = FakePlanActionClient(response)
     monkeypatch.setattr(
         "skills.primitives.plan_search.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    primitive = PlanSearchPrimitive(node, config=TEST_CONFIG)
+    primitive = _plan_primitive(monkeypatch, client)
     result = primitive.call(((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
     assert result is response.waypoints
-    assert node.service_name == "/coverage_planner/plan_coverage"
-    assert client.requests[0].search_area.header.frame_id == "map"
-    assert len(client.requests[0].search_area.polygon.points) == 4
-    assert client.requests[0].publish_result is False
+    assert client.goals[0].search_area.header.frame_id == "map"
+    assert len(client.goals[0].search_area.polygon.points) == 4
+    assert client.goals[0].publish_result is False
 
 
 def test_plan_search_can_request_published_visualization(monkeypatch) -> None:
-    response = PlanCoverage.Response()
+    response = PlanCoverage.Result()
     response.success = True
-    client = FakeClient(response)
+    client = FakePlanActionClient(response)
     monkeypatch.setattr(
         "skills.primitives.plan_search.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    primitive = PlanSearchPrimitive(FakeNode(client), config=TEST_CONFIG)
+    primitive = _plan_primitive(monkeypatch, client)
     primitive.call(
         ((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)),
         publish_result=True,
     )
-    assert client.requests[0].publish_result is True
+    assert client.goals[0].publish_result is True
 
 
 def test_search_reports_backend_rejection(monkeypatch) -> None:
-    response = PlanCoverage.Response()
+    response = PlanCoverage.Result()
     response.success = False
     response.message = "coverage is infeasible"
-    client = FakeClient(response)
+    client = FakePlanActionClient(response)
     monkeypatch.setattr(
         "skills.primitives.plan_search.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    primitive = PlanSearchPrimitive(FakeNode(client), config=TEST_CONFIG)
+    primitive = _plan_primitive(monkeypatch, client)
     with pytest.raises(SkillExecutionError, match="infeasible"):
         primitive.call(((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
 
 
 def test_search_reports_unavailable_or_timed_out_service(monkeypatch) -> None:
-    unavailable = PlanSearchPrimitive(FakeNode(FakeClient(available=False)), config=TEST_CONFIG)
+    unavailable = _plan_primitive(monkeypatch, FakePlanActionClient(available=False))
     with pytest.raises(SkillTimeoutError, match="unavailable"):
         unavailable.call(((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
 
-    client = FakeClient(PlanCoverage.Response(), done=False)
+    client = FakePlanActionClient(PlanCoverage.Result(), receipt_done=False)
     monkeypatch.setattr(
         "skills.primitives.plan_search.rclpy.spin_until_future_complete",
         lambda node, future, timeout_sec: None,
     )
-    timed_out = PlanSearchPrimitive(FakeNode(client), config=TEST_CONFIG)
-    with pytest.raises(SkillTimeoutError, match="did not respond"):
+    timed_out = _plan_primitive(monkeypatch, client)
+    with pytest.raises(SkillTimeoutError, match="did not acknowledge"):
         timed_out.call(((0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
-    assert client.future.cancelled
+    assert client.receipt_future.cancelled
 
 
 def test_search_requires_four_distinct_finite_corners() -> None:
-    primitive = PlanSearchPrimitive(FakeNode(FakeClient()), config=TEST_CONFIG)
+    # Validation occurs before a ROS action is submitted.
+    primitive = PlanSearchPrimitive.__new__(PlanSearchPrimitive)
     with pytest.raises(ValueError, match="exactly four"):
         primitive.call(((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)))
     with pytest.raises(ValueError, match="distinct"):

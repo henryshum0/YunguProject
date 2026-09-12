@@ -9,13 +9,13 @@ export PYTHONPATH=/home/windshape/YunguProject:$PYTHONPATH
 /usr/bin/python3 /home/windshape/YunguProject/gui/skills_gui.py
 ```
 
-Start the coverage planner and offboard FSM before using service actions. The GUI reports an error
+Start the coverage planner and offboard FSM before using service/action controls. The GUI reports an error
 without freezing if a configured service is unavailable.
 
 The connection panel requires the navigation configuration directory
 (`src/navigation/config/offboard`) and planner JSON (`src/search/config/yungu_planner.json`).
 The GUI loads their validated `SkillRuntimeConfig` before each flight or skill action; this supplies
-the frame ID, planner service, waypoint queue/clear services, and takeoff/land topics. Camera,
+the frame ID, planner action, waypoint queue/clear services, and takeoff/land topics. Camera,
 vehicle-odometry, queue-status, and timeout settings remain independently editable.
 
 - **Navigate** accepts one `x, y, z, heading_deg` waypoint per line. Select ENU or NED; the

@@ -1,8 +1,8 @@
 # coverage_planner
 
 `coverage_planner` is a ROS 2 Humble node that loads static map and planning settings at startup.
-Every search boundary, plan result, and optional topic publication is driven by the
-`PlanCoverage` service.
+Every search boundary, asynchronous plan result, and optional topic publication is driven by the
+`PlanCoverage` action.
 
 The package targets Ubuntu 22.04, ROS 2 Humble, and Python 3.10. It uses system Python—no pip,
 virtual environment, or uv is required.
@@ -43,27 +43,30 @@ ros2 topic echo --once /coverage_planner/waypoints
 ros2 topic echo --once /coverage_planner/markers
 ```
 
-## Request a plan by service
+## Request a plan by action
 
 The node also exposes `~/plan_coverage`, which resolves to
-`/coverage_planner/plan_coverage`. Its type is `coverage_planner/srv/PlanCoverage`.
-Send exactly four unclosed ENU corners in `search_area` as a `geometry_msgs/PolygonStamped` whose
-`header.frame_id` exactly matches the configured map frame. A successful response returns the
-sparse `nav_msgs/Path`. Set `publish_result: true` to also refresh the latched waypoint and
-marker topics; it defaults to `false`, which is a non-publishing preview. The point `z` values
-are ignored; route altitude still comes from the planner JSON.
+`/coverage_planner/plan_coverage`. Its type is `coverage_planner/action/PlanCoverage`.
+Sending a goal receives an immediate accepted/rejected acknowledgement, then the action returns a
+success or failure result asynchronously. Send exactly four unclosed ENU corners in `search_area`
+as a `geometry_msgs/PolygonStamped` whose `header.frame_id` exactly matches the configured map
+frame. A successful result returns the sparse `nav_msgs/Path`. Set `publish_result: true` to also
+refresh the latched waypoint and marker topics; it defaults to `false`, which is a
+non-publishing preview. The point `z` values are ignored; route altitude still comes from the
+planner JSON.
 
 ```bash
-ros2 service call /coverage_planner/plan_coverage coverage_planner/srv/PlanCoverage \
+ros2 action send_goal /coverage_planner/plan_coverage coverage_planner/action/PlanCoverage \
   "{search_area: {header: {frame_id: map}, polygon: {points: [
     {x: 10.0, y: 10.0}, {x: 120.0, y: 10.0},
     {x: 120.0, y: 80.0}, {x: 10.0, y: 80.0}
   ]}}, publish_result: false}"
 ```
 
-The response has `success`, `message`, and `waypoints`. Invalid frames, anything other than four
-points, non-finite coordinates, or self-intersecting quadrilaterals return `success: false`; the
-node stays available for the next request.
+Use `--feedback` with the command above to display the `validating`, `planning`, `publishing`,
+and terminal stages. The result has `success`, `message`, and `waypoints`. Invalid frames,
+anything other than four points, non-finite coordinates, self-intersecting quadrilaterals, and
+infeasible coverage return `success: false`; the node stays available for the next request.
 
 For the preconfigured RViz view:
 

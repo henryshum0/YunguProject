@@ -82,7 +82,7 @@ following commands in each prepared terminal:
 # Terminal 2: LiDAR, IMU, and ground-truth sensor bridging.
 ros2 launch gz_sensor_interface sensor_sensors.launch.py
 
-# Terminal 3: offboard FSM, SUPER, and the coverage-planning service.
+# Terminal 3: offboard FSM, SUPER, and the coverage-planning action server.
 ros2 launch "$PWD/src/launch/coverage_and_offboard.launch.py"
 
 # Terminal 4 (optional): RViz and birdview tools.
@@ -140,7 +140,7 @@ counter-clockwise. Read complete API examples in
 
 | Endpoint | Type | Purpose |
 |---|---|---|
-| `/coverage_planner/plan_coverage` | `coverage_planner/srv/PlanCoverage` | Plan four ENU rectangle corners and return a sparse route. |
+| `/coverage_planner/plan_coverage` | `coverage_planner/action/PlanCoverage` | Immediately acknowledge a four-corner request, then asynchronously return a sparse route or planning failure. |
 | `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | Atomically append an ordered waypoint batch. |
 | `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | Abort the active target and remove pending waypoints. |
 | `/waypoint_buffer/status` | `nav_msgs/msg/Path` | Latched queue snapshot: active target, then pending targets. |
@@ -173,7 +173,7 @@ failure behavior, use the [operations reference](docs/operations.md).
 
 - `coverage_planner` plans obstacle-aware single-UAV coverage routes from the
   configured map and a requested search rectangle. Its package README covers
-  the service and JSON schema: [`src/search/uav-coverage-route-planner/README.md`](src/search/uav-coverage-route-planner/README.md).
+  the action and JSON schema: [`src/search/uav-coverage-route-planner/README.md`](src/search/uav-coverage-route-planner/README.md).
 - `visualization`, `flight_monitor`, and `benchmark` provide RViz/birdview,
   recording, and planner-evaluation utilities.
 - [`src/launch/README.md`](src/launch/README.md) documents the combined

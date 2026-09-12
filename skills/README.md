@@ -4,7 +4,7 @@ This is a plain Python package that talks to ROS 2 nodes already running in the
 background. It is not a colcon package.
 
 Prepare an interactive shell by sourcing ROS and the workspace that contains the generated
-coverage-planner service:
+coverage-planner action:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -73,8 +73,9 @@ search_and_navigate = SearchSkill(node, config=config)
 path = search_and_navigate.call(((10.0, 10.0), (120.0, 10.0), (120.0, 80.0), (10.0, 80.0)))
 ```
 
-`PlanSearchPrimitive` calls `/coverage_planner/plan_coverage`, waits for its response, and returns
-the sparse `nav_msgs/msg/Path`. It defaults to a non-publishing preview; pass
+`PlanSearchPrimitive` sends a goal to `/coverage_planner/plan_coverage`, receives an immediate
+accepted/rejected acknowledgement, then waits for its asynchronous result and returns the sparse
+`nav_msgs/msg/Path`. It defaults to a non-publishing preview; pass
 `publish_result=True` to refresh the planner waypoint and marker topics. `SearchSkill` does this
 automatically before queueing its route. Its poses already use ENU positions and ROS ENU-yaw
 quaternions, matching ENU output from `NavigateSkill`. It requires exactly four finite, distinct
@@ -83,7 +84,8 @@ ENU corners in the configured map frame. `MovePrimitive` submits `PoseStamped` b
 finishes flying. Planner, queue, and clear-service readiness failures raise `SkillTimeoutError`.
 
 `SkillRuntimeConfig` validates `offboard_fsm.yaml`, `topics.yaml`, and the planner JSON before
-any ROS client is created. It requires matching ENU frame IDs, derives the planner service as
+any ROS client is created. It requires matching ENU frame IDs, derives the planner action as
 `/coverage_planner/plan_coverage`, and reads queue, clear, takeoff, land, and queue-status names
 from `topics.yaml`. Calls raise `SkillTimeoutError` when the planner or offboard service is
-unavailable or does not respond, and `SkillExecutionError` when a service rejects a valid request.
+unavailable or does not respond, and `SkillExecutionError` when a service rejects a valid request
+or a planner action returns a failed result.

@@ -8,16 +8,17 @@ set(Python3_EXECUTABLE "/usr/bin/python3" CACHE FILEPATH
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "srv/PlanCoverage.srv"
+  "action/PlanCoverage.action"
   DEPENDENCIES geometry_msgs nav_msgs
 )
 
-# rosidl_generator_py creates its own coverage_planner Python package for generated service
+# rosidl_generator_py creates its own coverage_planner Python package for generated action
 # modules. Install the handwritten package tree directly so both trees can share that namespace.
 ament_get_python_install_dir(PYTHON_INSTALL_DIR)
 install(DIRECTORY src/${PROJECT_NAME}/

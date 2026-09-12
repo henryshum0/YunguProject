@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from math import cos, isfinite, radians, sin
+from threading import Lock
 
 import rclpy
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import Point, PolygonStamped, PoseStamped
 from nav_msgs.msg import Path
@@ -158,7 +160,7 @@ def search_area_from_polygon(
 
 
 class CoveragePlannerNode(Node):
-    """Loads map settings at startup and plans only on service requests."""
+    """Loads map settings at startup and plans only on action goals."""
 
     def __init__(self) -> None:
         super().__init__("coverage_planner")
@@ -167,10 +169,11 @@ class CoveragePlannerNode(Node):
         self.result: PlanResult | None = None
         self.waypoint_publisher = None
         self.marker_publisher = None
-        self.plan_service = None
+        self.plan_action = None
+        self._planning_lock = Lock()
 
     def plan_and_publish(self, search_area_points: tuple[tuple[float, float], ...]) -> Path:
-        """Plan and publish the search boundary supplied by a service request."""
+        """Plan and publish the search boundary supplied by an action goal."""
         config = self._require_config()
         result, path = self._plan(search_area_points)
         markers = build_markers(
@@ -195,18 +198,21 @@ class CoveragePlannerNode(Node):
         return result, path
 
     def start(self) -> None:
-        """Validate the startup JSON and expose the on-demand planning service."""
-        from coverage_planner.srv import PlanCoverage
+        """Validate startup JSON and expose asynchronous on-demand planning."""
+        from coverage_planner.action import PlanCoverage
 
         self.config = self._load_config()
         self._ensure_publishers(self.config)
-        self.plan_service = self.create_service(
+        self.plan_action = ActionServer(
+            self,
             PlanCoverage,
             "~/plan_coverage",
-            self._handle_plan_coverage,
+            execute_callback=self._execute_plan_coverage,
+            goal_callback=self._accept_plan_goal,
+            cancel_callback=self._cancel_plan_goal,
         )
         self.get_logger().info(
-            "ready for four-corner coverage requests on "
+            "ready for asynchronous four-corner coverage actions on "
             "'/coverage_planner/plan_coverage'; routes publish only when requested")
 
     def _ensure_publishers(self, config: StartupConfig) -> None:
@@ -232,28 +238,72 @@ class CoveragePlannerNode(Node):
             raise RuntimeError("coverage planner startup has not completed")
         return self.config
 
-    def _handle_plan_coverage(self, request, response):
-        """Plan the request's search area and optionally publish the sparse route."""
+    def _accept_plan_goal(self, _request):
+        """Acknowledge receipt promptly; validation failures use the result channel."""
+        return GoalResponse.ACCEPT
+
+    def _cancel_plan_goal(self, _goal_handle):
+        """Accept cancellation before execution; planning itself is not interruptible."""
+        return CancelResponse.ACCEPT
+
+    @staticmethod
+    def _feedback(goal_handle, stage: str) -> None:
+        from coverage_planner.action import PlanCoverage
+
+        feedback = PlanCoverage.Feedback()
+        feedback.stage = stage
+        goal_handle.publish_feedback(feedback)
+
+    def _execute_plan_coverage(self, goal_handle):
+        """Return success or a descriptive planning failure through the action result."""
+        from coverage_planner.action import PlanCoverage
+
+        result = PlanCoverage.Result()
         if self.config is None:
-            response.success = False
-            response.message = "coverage planner startup has not completed"
-            return response
+            result.success = False
+            result.message = "coverage planner startup has not completed"
+            goal_handle.abort()
+            return result
+        if goal_handle.is_cancel_requested:
+            result.success = False
+            result.message = "coverage request cancelled before planning started"
+            goal_handle.canceled()
+            return result
+        if not self._planning_lock.acquire(blocking=False):
+            result.success = False
+            result.message = "coverage planner is busy with another request"
+            goal_handle.abort()
+            return result
         try:
+            self._feedback(goal_handle, "validating")
             points = search_area_from_polygon(
-                request.search_area, expected_frame_id=self.config.frame_id)
-            if request.publish_result:
+                goal_handle.request.search_area, expected_frame_id=self.config.frame_id)
+            if goal_handle.is_cancel_requested:
+                result.success = False
+                result.message = "coverage request cancelled before planning started"
+                goal_handle.canceled()
+                return result
+            self._feedback(goal_handle, "planning")
+            if goal_handle.request.publish_result:
+                self._feedback(goal_handle, "publishing")
                 path = self.plan_and_publish(points)
             else:
                 _, path = self._plan(points)
-            response.success = True
-            action = "planned and published" if request.publish_result else "planned"
-            response.message = f"{action} {len(path.poses)} sparse waypoints"
-            response.waypoints = path
+            result.success = True
+            action = "planned and published" if goal_handle.request.publish_result else "planned"
+            result.message = f"{action} {len(path.poses)} sparse waypoints"
+            result.waypoints = path
+            self._feedback(goal_handle, "succeeded")
+            goal_handle.succeed()
         except Exception as exc:  # noqa: BLE001 - service errors must not terminate the node
-            response.success = False
-            response.message = str(exc)
+            result.success = False
+            result.message = str(exc)
+            self._feedback(goal_handle, "failed")
+            goal_handle.abort()
             self.get_logger().error(f"coverage request rejected: {exc}")
-        return response
+        finally:
+            self._planning_lock.release()
+        return result
 
 
 def main(args: list[str] | None = None) -> int:

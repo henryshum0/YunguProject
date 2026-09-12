@@ -117,7 +117,7 @@ astar:
 rog_map:
   resolution: 0.3
   inflation_resolution: 0.4
-  inflation_step: 2
+  inflation_step: 3
   unk_inflation_en: false
   unk_inflation_step: 1
   map_size: [ 100, 100, 20 ]

@@ -10,12 +10,13 @@ import launch
 import launch_ros.actions
 import launch_testing.actions
 import rclpy
+from rclpy.action import ActionClient
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import Point32
 from nav_msgs.msg import Path
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from visualization_msgs.msg import MarkerArray
-from coverage_planner.srv import PlanCoverage
+from coverage_planner.action import PlanCoverage
 
 
 TEST_NODE_NAME = "coverage_planner_launch_test_node"
@@ -61,7 +62,33 @@ class TestCoveragePlannerTopics(unittest.TestCase):
     def tearDownClass(cls) -> None:
         rclpy.shutdown()
 
-    def test_publishes_path_and_markers_only_after_service_request(self) -> None:
+    @staticmethod
+    def _send_goal(
+        node, client: ActionClient, *, publish_result: bool, deadline: float,
+    ) -> PlanCoverage.Result:
+        goal = PlanCoverage.Goal()
+        goal.search_area.header.frame_id = "map"
+        goal.search_area.polygon.points = [
+            Point32(x=10.0, y=10.0), Point32(x=80.0, y=10.0),
+            Point32(x=80.0, y=60.0), Point32(x=10.0, y=60.0),
+        ]
+        goal.publish_result = publish_result
+        receipt = client.send_goal_async(goal)
+        while not receipt.done() and time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.2)
+        if not receipt.done():
+            raise AssertionError("coverage action did not acknowledge the goal")
+        goal_handle = receipt.result()
+        if goal_handle is None or not goal_handle.accepted:
+            raise AssertionError("coverage action rejected the goal")
+        result_future = goal_handle.get_result_async()
+        while not result_future.done() and time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.2)
+        if not result_future.done():
+            raise AssertionError("coverage action did not return a result")
+        return result_future.result().result
+
+    def test_publishes_path_and_markers_only_after_action_request(self) -> None:
         node = rclpy.create_node("coverage_planner_launch_test")
         qos = QoSProfile(depth=1)
         qos.reliability = ReliabilityPolicy.RELIABLE
@@ -86,21 +113,10 @@ class TestCoveragePlannerTopics(unittest.TestCase):
                 rclpy.spin_once(node, timeout_sec=0.2)
             self.assertEqual(received, {})
 
-            client = node.create_client(
-                PlanCoverage, f"/{TEST_NODE_NAME}/plan_coverage")
-            self.assertTrue(client.wait_for_service(timeout_sec=5.0))
-            request = PlanCoverage.Request()
-            request.search_area.header.frame_id = "map"
-            request.search_area.polygon.points = [
-                Point32(x=10.0, y=10.0), Point32(x=80.0, y=10.0),
-                Point32(x=80.0, y=60.0), Point32(x=10.0, y=60.0),
-            ]
-            request.publish_result = False
-            future = client.call_async(request)
-            while not future.done() and time.monotonic() < deadline:
-                rclpy.spin_once(node, timeout_sec=0.2)
-            self.assertTrue(future.done())
-            response = future.result()
+            client = ActionClient(node, PlanCoverage, f"/{TEST_NODE_NAME}/plan_coverage")
+            self.assertTrue(client.wait_for_server(timeout_sec=5.0))
+            response = self._send_goal(
+                node, client, publish_result=False, deadline=deadline)
             self.assertTrue(response.success, response.message)
             self.assertGreater(len(response.waypoints.poses), 2)
             self.assertEqual(response.waypoints.header.frame_id, "map")
@@ -110,12 +126,8 @@ class TestCoveragePlannerTopics(unittest.TestCase):
                 rclpy.spin_once(node, timeout_sec=0.2)
             self.assertEqual(received, {})
 
-            request.publish_result = True
-            future = client.call_async(request)
-            while not future.done() and time.monotonic() < deadline:
-                rclpy.spin_once(node, timeout_sec=0.2)
-            self.assertTrue(future.done())
-            response = future.result()
+            response = self._send_goal(
+                node, client, publish_result=True, deadline=deadline)
             self.assertTrue(response.success, response.message)
 
             while len(received) < 2 and time.monotonic() < deadline:

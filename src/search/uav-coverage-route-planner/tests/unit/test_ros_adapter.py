@@ -11,6 +11,7 @@ from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, ReliabilityPolicy
 from visualization_msgs.msg import Marker
 
+from coverage_planner.action import PlanCoverage
 from coverage_planner.io import ConfigError, load_config
 from coverage_planner.models import Waypoint
 from coverage_planner.ros_node import (
@@ -78,7 +79,7 @@ def test_qos_is_reliable_transient_local_keep_last_one() -> None:
     assert qos.durability == DurabilityPolicy.TRANSIENT_LOCAL
 
 
-def test_search_area_service_input_requires_four_map_frame_corners() -> None:
+def test_search_area_action_input_requires_four_map_frame_corners() -> None:
     message = PolygonStamped()
     message.header.frame_id = "map"
     message.polygon.points = [
@@ -128,6 +129,59 @@ def test_coverage_failure_creates_no_publishers(tmp_path: Path, monkeypatch) -> 
         node.config = load_config(CONFIG_DIR / "example_planner.json")
         with pytest.raises(PlanningFailed, match="patch_007"):
             node.plan_and_publish(((10.0, 10.0), (80.0, 10.0), (80.0, 60.0), (10.0, 60.0)))
+        assert node.waypoint_publisher is None
+        assert node.marker_publisher is None
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+class _FakeGoalHandle:
+    def __init__(self, goal: PlanCoverage.Goal) -> None:
+        self.request = goal
+        self.is_cancel_requested = False
+        self.aborted = False
+        self.succeeded = False
+        self.cancelled = False
+        self.feedback: list[str] = []
+
+    def publish_feedback(self, message) -> None:
+        self.feedback.append(message.stage)
+
+    def abort(self) -> None:
+        self.aborted = True
+
+    def succeed(self) -> None:
+        self.succeeded = True
+
+    def canceled(self) -> None:
+        self.cancelled = True
+
+
+def test_action_returns_planning_failure_without_publishing(tmp_path: Path, monkeypatch) -> None:
+    """A received action goal gets a failure result instead of crashing or timing out."""
+    monkeypatch.setenv("ROS_LOG_DIR", str(tmp_path / "ros-log"))
+
+    def fail_planning(config, points):
+        raise PlanningFailed("required coverage was not achieved; failed patch IDs: patch_007")
+
+    monkeypatch.setattr("coverage_planner.ros_node.plan_for_search_area", fail_planning)
+    goal = PlanCoverage.Goal()
+    goal.search_area.header.frame_id = "map"
+    goal.search_area.polygon.points = [
+        Point32(x=10.0, y=10.0), Point32(x=80.0, y=10.0),
+        Point32(x=80.0, y=60.0), Point32(x=10.0, y=60.0),
+    ]
+    handle = _FakeGoalHandle(goal)
+    rclpy.init(args=[])
+    node = CoveragePlannerNode()
+    try:
+        node.config = load_config(CONFIG_DIR / "example_planner.json")
+        result = node._execute_plan_coverage(handle)
+        assert not result.success
+        assert "patch_007" in result.message
+        assert handle.aborted
+        assert handle.feedback == ["validating", "planning", "failed"]
         assert node.waypoint_publisher is None
         assert node.marker_publisher is None
     finally:
