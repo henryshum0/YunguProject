@@ -5,12 +5,17 @@ fsm:
   # complete ENU waypoint (including z) supplied by the GUI/skills instead.
   click_height: -6
   click_yaw_en: true
-  replan_rate: 15.0
+  replan_rate: 30.0
   cmd_topic: "/planning/pos_cmd"
   mpc_cmd_topic: "/planning_cmd/poly_traj"
   timer_en: true
   # Continuous-failure duration before the FAIL flag is published (s).
   planner_fail_time: 2.0
+  # Complete a waypoint after the measured vehicle state settles in this
+  # full-3D tolerance. This prevents the final rest setpoint from causing
+  # endless small corrections toward an exact geometric point.
+  goal_reached_distance: 0.25
+  goal_reached_speed: 0.15
 
 super_planner:
   backup_traj_en: true
@@ -110,13 +115,13 @@ astar:
   visual_process: false
   allow_diag: true
   # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN
-  heu_type: 0
+  heu_type: 1
   debug_visualization_en: true
 
 
 rog_map:
   resolution: 0.3
-  inflation_resolution: 0.4
+  inflation_resolution: 0.5
   inflation_step: 3
   unk_inflation_en: false
   unk_inflation_step: 1

@@ -29,7 +29,6 @@ using namespace super_utils;
 
 namespace fsm {
     namespace {
-        constexpr double kReachedGoalDistance = 0.1;
         constexpr double kCloseGoalDistance = 2.0;
     }
 
@@ -98,10 +97,15 @@ namespace fsm {
     }
 
     bool Fsm::completeGoalIfReached(const string &call_func) {
-        if (!closeToGoal(kReachedGoalDistance)) {
+        const double distance = (robot_state_.p - gi_.goal_p).norm();
+        const double speed = robot_state_.v.norm();
+        if (distance > cfg_.goal_reached_distance || speed > cfg_.goal_reached_speed) {
             return false;
         }
 
+        ros_ptr_->info(
+                " -- [Fsm] Goal settled: distance={:.3f} m, speed={:.3f} m/s; reporting reached.",
+                distance, speed);
         reportGoalStatus(GOAL_STATUS_REACHED);
         gi_.new_goal = false;
         finish_plan = true;

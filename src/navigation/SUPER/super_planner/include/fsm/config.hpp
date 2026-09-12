@@ -52,6 +52,12 @@ namespace fsm {
         /// How long (s) the planner must keep failing continuously before the
         /// FAIL flag is published.
         double planner_fail_time{2.0};
+        /// Full-3D position tolerance used to declare a commanded goal complete.
+        /// This is deliberately wider than numerical path precision so the
+        /// controller can settle without chasing an exact point indefinitely.
+        double goal_reached_distance{0.25};
+        /// Maximum measured 3D speed when accepting the goal as settled.
+        double goal_reached_speed{0.15};
 
         Config() = default;
 
@@ -67,6 +73,8 @@ namespace fsm {
             loader.LoadParam("fsm/mpc_cmd_topic", mpc_cmd_topic, string("/planning_cmd/mpc"));
             loader.LoadParam("fsm/click_goal_topic", click_goal_topic, string("/planning/click_goal_topic"));
             loader.LoadParam("fsm/planner_fail_time", planner_fail_time, 2.0);
+            loader.LoadParam("fsm/goal_reached_distance", goal_reached_distance, 0.25);
+            loader.LoadParam("fsm/goal_reached_speed", goal_reached_speed, 0.15);
 
 
             loader.LoadParam("super_planner/yaw_dot_max", yaw_dot_max, 1.0, true);

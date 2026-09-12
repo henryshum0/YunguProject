@@ -518,14 +518,15 @@ namespace super_planner {
                     }
 
                     out_exp_traj_info = last_exp_traj_info;
-                    if (robot_on_backup_traj_) {
-                        if (cfg_.print_log)
-                            ros_ptr_->warn(
-                                    " -- [SUPER] Replan, emergency stop, return FAILED and wait for plan form rest.");
-                        return fail("goal-connected trajectory ended while following a backup trajectory");
-                    } else {
-                        return NO_NEED;
-                    }
+                    // if (robot_on_backup_traj_) {
+                    //     if (cfg_.print_log)
+                    //         ros_ptr_->warn(
+                    //                 " -- [SUPER] Replan, emergency stop, return FAILED and wait for plan form rest.");
+                    //     return fail("goal-connected trajectory ended while following a backup trajectory");
+                    // } else {
+                    //     return NO_NEED;
+                    // }
+                    return NO_NEED;
                 }
 
                 if (!gi_.new_goal &&
