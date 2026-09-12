@@ -5,9 +5,13 @@ namespace offboard
 
 void OffboardNode::handleInit()
 {
-    // Stream origin so PX4 sees the offboard stream (and so OFFBOARD mode is
-    // accepted) before we arm.
-    px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
+    // Stream a local hold so PX4 sees the offboard stream before arming.  On a
+    // later takeoff this must be the landed position, not the original world
+    // origin, otherwise PX4 can be commanded sideways along the ground.
+    if (!have_hold_ && px4_->hasValidPosition()) {
+        captureHold();
+    }
+    publishHold();
 
     if (super_->isLioError() || super_->isPlannerFail()) {
         RCLCPP_WARN(get_logger(), "Planner or odometry is not ready");
@@ -33,13 +37,23 @@ void OffboardNode::handleInit()
     }
 
     if (!px4_->isOffboard()) {
+        offboard_ready_ = false;
         px4_->setOffboardMode();
         return;
     }
 
+    if (!offboard_ready_) {
+        offboard_ready_ = true;
+        offboard_ready_t_ = now();
+        RCLCPP_INFO(get_logger(),
+                    "OFFBOARD confirmed; waiting %.1f s before arming", arm_wait_);
+    }
+
     if (takeoff_requested_) {
+        if ((now() - offboard_ready_t_).seconds() < arm_wait_) {
+            return;
+        }
         RCLCPP_INFO(get_logger(), "Takeoff requested - entering ARMING");
-        takeoff_requested_ = false;
         arm_retry_count_ = 0;
         setState(State::ARMING);
     }

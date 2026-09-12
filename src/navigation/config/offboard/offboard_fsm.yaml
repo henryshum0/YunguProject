@@ -21,13 +21,20 @@ offboard_fsm:
   # State machine update rate [Hz]
   update_rate: 100.0
 
-  # Wait after ARM before switching to OFFBOARD [s]
+  # Required duration of a confirmed OFFBOARD setpoint stream before ARM [s].
+  # This is reapplied after every landing before a new takeoff attempt.
   arm_wait: 2.0
 
   # Arm retry policy: delay between attempts [s] and max attempts before
   # falling back to INIT.
   arm_retry_delay: 5.0
   arm_retry_max: 3
+  # PX4 native AUTO_LAND commands use best-effort QoS, so retry until PX4's
+  # landing detector reports touchdown.
+  land_retry_delay: 1.0
+  # After PX4 confirms touchdown, resend the best-effort disarm command at
+  # this interval until VehicleStatus confirms ARMING_STATE_DISARMED.
+  disarm_retry_delay: 1.0
 
   # Delay [s] between planner restart requests while IDLE.
   planner_reset_delay: 5.0
@@ -40,10 +47,6 @@ offboard_fsm:
 
   # Takeoff climb velocity [m/s] (direct PX4 vertical climb, no planner).
   takeoff_vel: 2.0
-
-  # Landing descent velocity [m/s] and final landing height [m]
-  landing_vel: 0.5
-  landing_z: 0.15
 
   # Waypoint following: buffered waypoints are flown one at a time. A waypoint
   # is "reached" when within waypoint_reached_dist [m] horizontally; it then

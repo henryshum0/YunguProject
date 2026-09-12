@@ -55,11 +55,11 @@ The diagram source is [`assets/offboard_fsm_state_machine.dot`](assets/offboard_
 | State | Behavior |
 |---|---|
 | `INIT` | Verifies inputs, selects PX4 OFFBOARD mode, then waits for takeoff. If restarted airborne in OFFBOARD with a healthy planner, it resumes in `IDLE`. |
-| `ARMING` | Arms with configured retry behavior; failure returns to `INIT`. |
+| `ARMING` | Arms after a stable OFFBOARD stream. A takeoff request remains latched across configured arm-retry cycles until PX4 confirms arming or it is cancelled. |
 | `TAKEOFF` | Climbs directly with PX4 control to `default_height`, then enters `IDLE`. |
 | `IDLE` | Holds position, maintains SUPER readiness, processes terminal goal status, and hands the next queued waypoint to SUPER when ready. |
 | `MOVE` | Forwards SUPER `PositionCommand` output to PX4. Planner terminal status, failure recovery, or waypoint completion returns to `IDLE`. |
-| `LAND` | Descends directly to `landing_z`, disarms, and returns to `INIT`. |
+| `LAND` | Requests PX4 native `AUTO_LAND` and stops streaming offboard setpoints. After PX4 reports touchdown, it retries disarm until confirmation before returning to `INIT`. |
 
 ```bash
 ros2 topic pub --once /takeoff_cmd std_msgs/msg/Bool "{data: true}"

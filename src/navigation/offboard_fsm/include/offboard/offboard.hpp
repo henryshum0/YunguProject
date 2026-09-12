@@ -33,17 +33,18 @@ private:
         TAKEOFF,       ///< planner-driven ascent to the takeoff height
         IDLE,          ///< hover, waiting for a goal
         MOVE,          ///< forward planner commands (navigation)
-        LAND,          ///< planner-driven landing
+        LAND,          ///< PX4 native AUTO_LAND, followed by confirmed disarm
     };
 
     double update_rate_{50.0};        ///< setpoint stream rate [Hz]
     double planner_cmd_hz_{10.0};     ///< cmd rate threshold for "planner active"
+    double arm_wait_{2.0};            ///< stable OFFBOARD stream before arming [s]
     double arm_retry_delay_{5.0};     ///< delay between arm attempts [s]
     int arm_retry_max_{3};            ///< max arm attempts before back to INIT
+    double land_retry_delay_{1.0};    ///< delay between native-land requests [s]
+    double disarm_retry_delay_{1.0};  ///< delay between touchdown disarm attempts [s]
     double default_height_{1.5};      ///< NED takeoff hover height (negative = up) [m]
     double takeoff_vel_{0.5};         ///< climb speed [m/s] (direct PX4 takeoff)
-    double landing_vel_{0.5};         ///< descend speed [m/s] (FAILSAFE direct land)
-    double landing_z_{0.15};          ///< NED z at which to disarm [m]
     double yaw_align_thresh_{0.35};   ///< rad, heading-to-goal tolerance (heading_ok)
     double waypoint_reached_dist_{3.0}; ///< horizontal distance to consider a waypoint reached
     double planner_reset_delay_{5.0};   ///< delay between planner reset attempts [s]
@@ -88,6 +89,12 @@ private:
 
     int arm_retry_count_{0};
     rclcpp::Time last_arm_t_;
+    bool offboard_ready_{false};
+    rclcpp::Time offboard_ready_t_;
+    bool land_command_requested_{false};
+    rclcpp::Time last_land_t_;
+    bool disarm_requested_{false};
+    rclcpp::Time last_disarm_t_;
     bool planner_reset_in_flight_{false};
     rclcpp::Time last_planner_reset_t_;
 

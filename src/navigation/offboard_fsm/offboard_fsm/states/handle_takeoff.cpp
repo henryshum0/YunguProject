@@ -7,6 +7,13 @@ void OffboardNode::handleTakeoff()
 {
     px4_->publishOffboardControlMode(true, true, true);
 
+    if (!px4_->isArmed() || !px4_->isOffboard()) {
+        RCLCPP_WARN(get_logger(),
+                    "PX4 left ARMED/OFFBOARD during takeoff; returning to INIT");
+        setState(State::INIT);
+        return;
+    }
+
     // Capture the takeoff origin (NED) on entry. Direct PX4 position control:
     // hold xy, climb to default_height.
     if (!have_takeoff_goal_) {
@@ -18,6 +25,13 @@ void OffboardNode::handleTakeoff()
         takeoff_target_x_ = local_pos->x;                          // NED
         takeoff_target_y_ = local_pos->y;
         takeoff_target_z_ = static_cast<float>(-default_height_);  // NED up = negative
+        hold_x_ = takeoff_target_x_;
+        hold_y_ = takeoff_target_y_;
+        hold_z_ = local_pos->z;
+        if (std::isfinite(local_pos->heading)) {
+            hold_yaw_ = local_pos->heading;
+        }
+        have_hold_ = true;
         have_takeoff_goal_ = true;
         RCLCPP_INFO(get_logger(),
                     "Direct takeoff: climb to NED z=%.2f (height %.1f m)",

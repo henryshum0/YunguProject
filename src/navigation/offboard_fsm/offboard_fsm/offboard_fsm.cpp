@@ -16,13 +16,15 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
 {
     update_rate_ = declare_parameter("update_rate", update_rate_);
     planner_cmd_hz_ = declare_parameter("planner_cmd_hz", planner_cmd_hz_);
+    arm_wait_ = declare_parameter("arm_wait", arm_wait_);
     arm_retry_delay_ = declare_parameter("arm_retry_delay", arm_retry_delay_);
     arm_retry_max_ = declare_parameter("arm_retry_max", arm_retry_max_);
+    land_retry_delay_ = declare_parameter("land_retry_delay", land_retry_delay_);
+    disarm_retry_delay_ =
+        declare_parameter("disarm_retry_delay", disarm_retry_delay_);
     planner_reset_delay_ = declare_parameter("planner_reset_delay", planner_reset_delay_);
     default_height_ = declare_parameter("default_height", default_height_);
-    landing_vel_ = declare_parameter("landing_vel", landing_vel_);
     takeoff_vel_ = declare_parameter("takeoff_vel", takeoff_vel_);
-    landing_z_ = declare_parameter("landing_z", landing_z_);
     yaw_align_thresh_ = declare_parameter("yaw_align_thresh", yaw_align_thresh_);
     cmd_topic_ = declare_parameter("cmd_topic", cmd_topic_);
     local_pos_topic_ = declare_parameter("local_pos_topic", local_pos_topic_);
@@ -135,6 +137,17 @@ void OffboardNode::setState(State s)
     RCLCPP_INFO(get_logger(), "State: %s → %s", stateName(), stateNameOf(s));
     state_ = s;
     state_enter_t_ = now();
+    if (s == State::INIT) {
+        // A new takeoff cycle must establish a fresh, stable offboard stream.
+        offboard_ready_ = false;
+        have_takeoff_goal_ = false;
+    }
+    if (s == State::LAND) {
+        // Landing may be interrupted and entered again; never reuse stale
+        // native-land or disarm attempts from a prior touchdown.
+        land_command_requested_ = false;
+        disarm_requested_ = false;
+    }
 }
 
 const char *OffboardNode::stateName() const
@@ -162,9 +175,13 @@ double OffboardNode::stateElapsedSec() const
 
 void OffboardNode::takeoffCmdCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
-    takeoff_requested_ = msg->data;
     if (msg->data) {
+        // Latch a positive command until PX4 has actually armed.  A GUI sends
+        // this only once, while PX4 pre-arm checks can take several retries.
+        takeoff_requested_ = true;
         RCLCPP_INFO(get_logger(), "Takeoff command received");
+    } else {
+        takeoff_requested_ = false;
     }
 }
 
@@ -373,10 +390,9 @@ void OffboardNode::restartPlanner()
 
 void OffboardNode::timerCallback()
 {
-    if (state_ == State::MOVE || state_ == State::TAKEOFF ||
-        state_ == State::LAND) {
+    if (state_ == State::MOVE || state_ == State::TAKEOFF) {
         px4_->publishOffboardControlMode(true, true, true);
-    } else {
+    } else if (state_ != State::LAND) {
         px4_->publishOffboardControlMode(true, false, false);
     }
 

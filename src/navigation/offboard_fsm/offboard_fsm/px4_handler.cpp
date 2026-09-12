@@ -98,6 +98,12 @@ void Px4Handler::disarm()
     sendCommand(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0f);
 }
 
+void Px4Handler::land()
+{
+    RCLCPP_INFO(node_.get_logger(), "Requesting PX4 native AUTO_LAND mode");
+    sendCommand(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_NAV_LAND);
+}
+
 void Px4Handler::setOffboardMode()
 {
     RCLCPP_INFO(node_.get_logger(), "Requesting OFFBOARD mode");

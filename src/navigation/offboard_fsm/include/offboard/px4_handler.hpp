@@ -44,6 +44,8 @@ public:
     void sendCommand(uint16_t command, float param1 = 0.0f, float param2 = 0.0f);
     void arm();
     void disarm();
+    /// Request PX4's native AUTO_LAND mode at the current vehicle location.
+    void land();
     void setOffboardMode();
 
     // --- Incoming (PX4 -> state machine) ---

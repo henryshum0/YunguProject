@@ -5,7 +5,7 @@ namespace offboard
 
 void OffboardNode::handleArming()
 {
-    px4_->publishSetpoint(0.0f, 0.0f, 0.0f);
+    publishHold();
 
     // Heartbeat loss (armed but no longer healthy) -> back to INIT.
     if (super_->isLioError() || !super_->isPlannerReady()) {
@@ -14,8 +14,15 @@ void OffboardNode::handleArming()
         return;
     }
 
+    if (!px4_->isOffboard()) {
+        RCLCPP_WARN(get_logger(), "PX4 left OFFBOARD during ARMING - back to INIT");
+        setState(State::INIT);
+        return;
+    }
+
     if (px4_->isArmed()) {
         RCLCPP_INFO(get_logger(), "Vehicle confirmed ARMED");
+        takeoff_requested_ = false;
         // The takeoff origin is captured in handleTakeoff (direct PX4 climb).
         have_takeoff_goal_ = false;
         setState(State::TAKEOFF);
@@ -28,7 +35,7 @@ void OffboardNode::handleArming()
     const double elapsed = last_arm_t_.nanoseconds() != 0
                                ? (now() - last_arm_t_).seconds()
                                : arm_retry_delay_;
-    if (elapsed >= arm_retry_delay_) {
+    if (arm_retry_count_ == 0 || elapsed >= arm_retry_delay_) {
         px4_->arm();
         last_arm_t_ = now();
         ++arm_retry_count_;
