@@ -41,6 +41,7 @@ void OffboardNode::handleLand()
     waypoints_->clearPending();
     have_hold_ = false;
     have_takeoff_goal_ = false;
+    land_requested_ = false;
     RCLCPP_INFO(get_logger(), "Landing and disarm confirmed - back to INIT");
     setState(State::INIT);
 }

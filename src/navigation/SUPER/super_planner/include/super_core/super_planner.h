@@ -99,6 +99,10 @@ namespace super_planner {
 
         CmdTraj cmd_traj_info_;
         ExpTraj last_exp_traj_info_;
+        // Written while ReplanOnce/PlanFromRest holds replan_lock_. It keeps
+        // the precise failed stage so callers do not collapse every failure
+        // into an unhelpful "GenerateExpTrajectory failed" message.
+        std::string last_exp_traj_failure_{"not attempted"};
 
         vector<double> time_consuming_;
 

@@ -145,6 +145,10 @@ void OffboardNode::setState(State s)
     if (s == State::LAND) {
         // Landing may be interrupted and entered again; never reuse stale
         // native-land or disarm attempts from a prior touchdown.
+        // The Bool topic is edge-triggered: consume its request here so a
+        // completed land cannot trigger a second automatic land after the
+        // next takeoff reaches IDLE.
+        land_requested_ = false;
         land_command_requested_ = false;
         disarm_requested_ = false;
     }

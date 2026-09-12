@@ -111,8 +111,8 @@ namespace super_planner {
         RET_CODE exp_ret_code = generateExpTraj(last_exp_traj_info_, exp_traj_info);
         //GenerateRestToRestExpTraj(local_star_pt, exp_traj_info);
         if (exp_ret_code == FAILED) {
-            ros_ptr_->warn(" -- [SUPER] in [PlanFromRest] GenerateExpTrajectory failed with {}.",
-                           RET_CODE_STR[exp_ret_code].c_str());
+            ros_ptr_->warn(" -- [SUPER] in [PlanFromRest] GenerateExpTrajectory failed at: {}.",
+                           last_exp_traj_failure_);
             return FAILED;
         } else {
             ros_ptr_->info(" -- [SUPER] in [PlanFromRest] GenerateExpTrajectory SUCCESS.");
@@ -238,7 +238,8 @@ namespace super_planner {
         time_consuming_[GENERATE_EXP_TRAJ] = t_exp.stop();
 
         if (exp_ret_code == FAILED) {
-            ros_ptr_->warn(" -- [SUPER] in [ReplanOnce]: GenerateExpTrajectory failed, force return");
+            ros_ptr_->warn(" -- [SUPER] in [ReplanOnce]: GenerateExpTrajectory failed at: {}.",
+                           last_exp_traj_failure_);
             return FAILED;
         } else if (exp_ret_code == NEW_TRAJ) {
             if (cfg_.print_log) {
@@ -426,6 +427,11 @@ namespace super_planner {
     RET_CODE SuperPlanner::generateExpTraj(ExpTraj &last_exp_traj_info, ExpTraj &out_exp_traj_info) {
         /* 1) Log the exp traj frontend time*/
         TimeConsuming t_exp_frontend("t_exp_frontend", false);
+        last_exp_traj_failure_ = "not attempted";
+        const auto fail = [this](const std::string &stage) {
+            last_exp_traj_failure_ = stage;
+            return FAILED;
+        };
 
         // use hot init or not, just prepare a guide path, a guide t, init and fina state and sfc for exp traj opt
         StatePVAJ pos_init_state, pos_fina_state;
@@ -478,7 +484,7 @@ namespace super_planner {
                     if (cfg_.print_log)
                         ros_ptr_->warn(
                                 " -- [SUPER] Replan, emergency stop, return FAILED and wait for plan form rest.");
-                    return FAILED;
+                    return fail("active command trajectory ended while following a backup trajectory");
                 }
 
                 if (cfg_.print_log) {
@@ -498,7 +504,7 @@ namespace super_planner {
                         if (cfg_.print_log)
                             ros_ptr_->warn(
                                     " -- [SUPER] Replan, emergency stop, return FAILED and wait for plan form rest.");
-                        return FAILED;
+                        return fail("active exponential trajectory ended while following a backup trajectory");
                     } else {
                         return NO_NEED;
                     }
@@ -516,7 +522,7 @@ namespace super_planner {
                         if (cfg_.print_log)
                             ros_ptr_->warn(
                                     " -- [SUPER] Replan, emergency stop, return FAILED and wait for plan form rest.");
-                        return FAILED;
+                        return fail("goal-connected trajectory ended while following a backup trajectory");
                     } else {
                         return NO_NEED;
                     }
@@ -532,7 +538,7 @@ namespace super_planner {
                     if (robot_on_backup_traj_) {
                         ros_ptr_->warn(
                                 " -- [SUPER] Replan, emergency stop, return FAILED and wait for plan form rest.");
-                        return FAILED;
+                        return fail("goal is close but the vehicle is already on a backup trajectory");
                     } else {
                         return NO_NEED;
                     }
@@ -590,7 +596,7 @@ namespace super_planner {
             // * 7）Begin replan process, first get the replan state from the committed trajectory.
             if (!guide_pos_traj.getState(replan_state_TT, pos_init_state)) {
                 ros_ptr_->warn(" -- [SUPER] Invalid traj or eval t");
-                return FAILED;
+                return fail("could not evaluate the committed position trajectory at the replan time");
             }
             // * Generate guide path with time stampe, for hot trajectory initialization
             // * the guide stamp is time from the replan start t
@@ -660,11 +666,11 @@ namespace super_planner {
                 vec_Vec3f new_path;
                 if (!PathSearch(guide_path.back(), gi_.goal_p, temp_horizon, new_path)) {
                     ros_ptr_->warn(" -- [SUPER] PathSearch for new path failed");
-                    return FAILED;
+                    return fail("A* search could not connect the guide path to the goal");
                 }
                 if (new_path.size() < 2) {
                     ros_ptr_->warn(" -- [SUPER] PathSearch for new path failed");
-                    return FAILED;
+                    return fail("A* search returned fewer than two path points");
                 }
 
                 // compute total dis
@@ -731,7 +737,7 @@ namespace super_planner {
 
         if (!bool_ret_code) {
             ros_ptr_->warn(" -- [SUPER] SearchPolytopeOnPath for new path failed");
-            return FAILED;
+            return fail("safe-corridor construction failed for the guide path");
         }
         {
             TimeConsuming t_viz("tviz", false);
@@ -772,12 +778,12 @@ namespace super_planner {
         }
         if (!temp_ret) {
             ros_ptr_->warn(" -- [SUPER] OptimizationExpTrajInPolytopes for new path failed");
-            return FAILED;
+            return fail("MINCO exponential-trajectory optimization failed");
         }
         double replan_total_t = (ros_ptr_->getSimTime() - replan_process_start_WT);
         if (replan_total_t > cfg_.replan_forward_dt) {
             ros_ptr_->warn(" -- [SUPER] Replan over time({})!!!! Return FAILED", replan_total_t);
-            return FAILED;
+            return fail("replan exceeded replan_forward_dt deadline");
         }
 
         {
@@ -794,7 +800,7 @@ namespace super_planner {
             !guide_pos_traj.getPartialTrajectoryByTime(replan_process_start_TT, replan_state_TT,
                                                        temp_exp_traj)) {
             ros_ptr_->error(" -- [SUPER] in [generateExpTraj]: getPartialTrajectoryByTime failed, force return");
-            return FAILED;
+            return fail("could not splice the committed position trajectory at the replan time");
         }
         out_exp_traj_info.setSFC(sfc);
         temp_exp_traj = temp_exp_traj + out_traj;
@@ -804,7 +810,7 @@ namespace super_planner {
             StatePVAJ yaw_replan_state;
             if (!guide_yaw_traj.getState(replan_state_TT, yaw_replan_state)) {
                 ros_ptr_->warn(" -- [SUPER] Invalid traj or eval t");
-                return FAILED;
+                return fail("could not evaluate the committed yaw trajectory at the replan time");
             }
             init_yaw = yaw_replan_state.row(0);
         }
@@ -819,13 +825,13 @@ namespace super_planner {
 
         if (!yaw_traj_opt_->optimize(init_yaw, fina_yaw, out_traj, new_traj, 3, false, free_end)) {
             ros_ptr_->error(" -- [SUPER] in [generateExpTraj]: YawTrajOpt failed, force return");
-            return FAILED;
+            return fail("yaw trajectory optimization failed");
         }
         if (!last_exp_traj_info.empty()) {
             if (!guide_yaw_traj.getPartialTrajectoryByTime(replan_process_start_TT, replan_state_TT,
                                                            old_traj)) {
                 ros_ptr_->error(" -- [SUPER] in [generateExpTraj]: getPartialTrajectoryByTime failed, force return");
-                return FAILED;
+                return fail("could not splice the committed yaw trajectory at the replan time");
             }
         }
 
