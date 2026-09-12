@@ -20,8 +20,6 @@ offboard_fsm:
     vehicle_odom:    /fmu/out/vehicle_odometry        # PX4 odom (NED)
     pos_cmd:         /planning/pos_cmd                # from SUPER fsm_node
     waypoint_pose:   /waypoint_pose                   # goal_marker_node intake (RViz 2D goal)
-    takeoff_cmd:     /takeoff_cmd
-    land_cmd:        /land_cmd
   # OUTPUT
   out:
     goal_pose:       /goal_pose                       # to SUPER fsm_node
@@ -33,6 +31,8 @@ offboard_fsm:
   services:
     queue_waypoints: /waypoint_buffer
     clear_waypoints: /waypoint_buffer/clear
+    takeoff: /offboard/takeoff
+    land: /offboard/land
 
 # --- SUPER (super_planner / fsm_node) -----------------------------------------
 # SUPER's world cloud + odom are produced by gz_sensor_interface/super_lidar.

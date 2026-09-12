@@ -151,9 +151,9 @@ class SkillsTestGui(tk.Tk):
 
         flight = ttk.LabelFrame(outer, text="Flight control", padding=4)
         flight.grid(row=1, column=0, pady=(8, 0), sticky="ew")
-        ttk.Button(flight, text="Take off", command=self._takeoff).grid(row=0, column=0, padx=(0, 8))
-        ttk.Button(flight, text="Land", command=self._land).grid(row=0, column=1)
-        ttk.Label(flight, text="Both commands require confirmation and publish Bool(data=True).").grid(
+        self._service_button(flight, "Take off", self._takeoff).grid(row=0, column=0, padx=(0, 8))
+        self._service_button(flight, "Land", self._land).grid(row=0, column=1)
+        ttk.Label(flight, text="Both commands require confirmation and send a service request.").grid(
             row=0, column=2, padx=16, sticky="w")
 
         work_area = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
@@ -377,22 +377,25 @@ class SkillsTestGui(tk.Tk):
         self.after(100, self._poll_camera_previews)
 
     def _takeoff(self) -> None:
-        self._confirm_and_publish("Take off", "Publish a takeoff command to the offboard FSM?", "takeoff")
+        self._confirm_and_request("Take off", "Request takeoff from the offboard FSM?", "takeoff")
 
     def _land(self) -> None:
-        self._confirm_and_publish("Land", "Publish a landing command to the offboard FSM?", "land")
+        self._confirm_and_request("Land", "Request native PX4 landing from the offboard FSM?", "land")
 
-    def _confirm_and_publish(self, title: str, prompt: str, operation: str) -> None:
+    def _confirm_and_request(self, title: str, prompt: str, operation: str) -> None:
         if not messagebox.askyesno(title, prompt, parent=self):
             self.status.set(f"{title} cancelled.")
             return
         try:
             settings = self._settings()
-            getattr(self._controller, operation)(settings)
         except Exception as error:
             self._report_error(error)
             return
-        self.status.set(f"{title} command published.")
+        self._run_service_action(
+            f"Requesting {title.lower()}...",
+            lambda: getattr(self._controller, operation)(settings),
+            lambda message: self.status.set(f"{title} accepted: {message}"),
+        )
 
     def _navigate(self) -> None:
         try:

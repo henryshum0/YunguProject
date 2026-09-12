@@ -15,7 +15,7 @@ without freezing if a configured service is unavailable.
 The connection panel requires the navigation configuration directory
 (`src/navigation/config/offboard`) and planner JSON (`src/search/config/yungu_planner.json`).
 The GUI loads their validated `SkillRuntimeConfig` before each flight or skill action; this supplies
-the frame ID, planner action, waypoint queue/clear services, and takeoff/land topics. Camera,
+the frame ID, planner action, waypoint queue/clear services, and takeoff/land services. Camera,
 vehicle-odometry, queue-status, and timeout settings remain independently editable.
 
 - **Navigate** accepts one `x, y, z, heading_deg` waypoint per line. Select ENU or NED; the
@@ -28,8 +28,9 @@ vehicle-odometry, queue-status, and timeout settings remain independently editab
   without publishing planner waypoint or marker topics.
 - **Plan and queue** calls `SearchSkill`, publishes the planner visualization, then displays the
   route after it was accepted by the offboard queue service.
-- **Take off** and **Land** publish the existing `Bool(data=True)` commands only after a confirmation
-  dialog.
+- **Take off** and **Land** call the configured `std_srvs/srv/Trigger` services only after a
+  confirmation dialog. A success response means the offboard FSM accepted the request; it does
+  not mean that the vehicle has already taken off, landed, or disarmed.
 - **Camera feeds** are a persistent sidebar, so they remain visible while navigating or planning.
   The front camera defaults to `/swan_gamma_v2/front_camera/image`; the follow camera defaults to
   `/swan_gamma_v2/follow_camera/image`. Each has its own ROS subscriber/executor, while the GUI

@@ -11,13 +11,6 @@ void OffboardNode::handleIdle()
     }
     publishIdleHold();
 
-    if (land_requested_) {
-        land_requested_ = false;
-        captureHold();
-        setState(State::LAND);
-        return;
-    }
-
     if (planner_reset_in_flight_) {
         return;
     }

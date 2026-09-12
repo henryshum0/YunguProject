@@ -92,6 +92,18 @@ digraph ProjectClassUml {
         <TR><TD ALIGN="LEFT">Abort active and pending route</TD></TR>
       </TABLE>
     >];
+    takeoff [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#F3F8FE"><B>TakeoffPrimitive</B></TD></TR>
+        <TR><TD ALIGN="LEFT">Request offboard takeoff Trigger service</TD></TR>
+      </TABLE>
+    >];
+    land [label=<
+      <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
+        <TR><TD BGCOLOR="#F3F8FE"><B>LandPrimitive</B></TD></TR>
+        <TR><TD ALIGN="LEFT">Request native landing Trigger service</TD></TR>
+      </TABLE>
+    >];
     plan [label=<
       <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#2E7DD1">
         <TR><TD BGCOLOR="#F3F8FE"><B>PlanSearchPrimitive</B></TD></TR>
@@ -139,7 +151,7 @@ digraph ProjectClassUml {
     offboard [label=<
       <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#E58B3B">
         <TR><TD BGCOLOR="#FDEDDC"><B>OffboardNode</B></TD></TR>
-        <TR><TD ALIGN="LEFT">state: INIT / ARMING / TAKEOFF / IDLE / MOVE / LAND<BR/>QueueWaypoints + ClearWaypoints services<BR/>takeoff / land commands and queue status</TD></TR>
+        <TR><TD ALIGN="LEFT">state: INIT / ARMING / TAKEOFF / IDLE / MOVE / LAND<BR/>QueueWaypoints + ClearWaypoints + Trigger services<BR/>queue-status telemetry</TD></TR>
       </TABLE>
     >];
     waypoint [label=<
@@ -177,7 +189,7 @@ digraph ProjectClassUml {
   ros_services [label=<
     <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#526D82">
       <TR><TD BGCOLOR="#F0F4F7"><B>ROS service contracts</B></TD></TR>
-      <TR><TD ALIGN="LEFT">PlanCoverage<BR/>QueueWaypoints<BR/>ClearWaypoints</TD></TR>
+      <TR><TD ALIGN="LEFT">PlanCoverage action<BR/>QueueWaypoints + ClearWaypoints<BR/>Trigger(takeoff) + Trigger(land)</TD></TR>
     </TABLE>
   >];
   px4_stack [label=<
@@ -194,12 +206,16 @@ digraph ProjectClassUml {
   controller -> navigate [label=" creates "];
   controller -> search [label=" creates "];
   controller -> plan [label=" creates "];
+  controller -> takeoff [label=" creates "];
+  controller -> land [label=" creates "];
 
   navigate -> skill [arrowhead=empty];
   search -> skill [arrowhead=empty];
   move -> primitive [arrowhead=empty];
   clear -> primitive [arrowhead=empty];
   plan -> primitive [arrowhead=empty];
+  takeoff -> primitive [arrowhead=empty];
+  land -> primitive [arrowhead=empty];
   navigate -> move [dir=both, arrowtail=diamond, label=" composes "];
   navigate -> clear [dir=both, arrowtail=diamond];
   search -> plan [dir=both, arrowtail=diamond, label=" composes "];
@@ -209,6 +225,8 @@ digraph ProjectClassUml {
   plan -> ros_services [style=dashed, label=" PlanCoverage "];
   move -> ros_services [style=dashed, label=" QueueWaypoints "];
   clear -> ros_services [style=dashed, label=" ClearWaypoints "];
+  takeoff -> ros_services [style=dashed, label=" Trigger(takeoff) "];
+  land -> ros_services [style=dashed, label=" Trigger(land) "];
   ros_services -> planner_node [style=dashed];
   ros_services -> offboard [style=dashed];
 

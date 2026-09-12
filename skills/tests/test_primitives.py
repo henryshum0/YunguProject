@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
+from std_srvs.srv import Trigger
 
 from coverage_planner.action import PlanCoverage
 from offboard_fsm.srv import ClearWaypoints, QueueWaypoints
@@ -12,8 +13,10 @@ from skills import (
     ClearWaypointsPrimitive,
     MovePrimitive,
     PlanSearchPrimitive,
+    LandPrimitive,
     SkillExecutionError,
     SkillTimeoutError,
+    TakeoffPrimitive,
 )
 from skills.tests.config_data import TEST_CONFIG
 
@@ -123,6 +126,13 @@ def _clear_response(count: int, *, success: bool = True) -> ClearWaypoints.Respo
     return response
 
 
+def _trigger_response(message: str = "accepted", *, success: bool = True) -> Trigger.Response:
+    response = Trigger.Response()
+    response.success = success
+    response.message = message
+    return response
+
+
 def test_move_queues_every_pose_with_waypoint_buffer_service(monkeypatch) -> None:
     client = FakeClient(_queue_response(2))
     node = FakeNode(client)
@@ -169,6 +179,51 @@ def test_clear_waypoints_returns_removed_count_and_times_out(monkeypatch) -> Non
 
     timed_out_client = FakeClient(_clear_response(0), done=False)
     timed_out = ClearWaypointsPrimitive(FakeNode(timed_out_client), config=TEST_CONFIG)
+    with pytest.raises(SkillTimeoutError, match="did not respond"):
+        timed_out.call()
+    assert timed_out_client.future.cancelled
+
+
+@pytest.mark.parametrize(
+    ("primitive_type", "expected_name", "expected_service"),
+    [
+        (TakeoffPrimitive, "takeoff", "/offboard/takeoff"),
+        (LandPrimitive, "land", "/offboard/land"),
+    ],
+)
+def test_flight_primitives_call_configured_trigger_services(
+    monkeypatch, primitive_type, expected_name, expected_service,
+) -> None:
+    client = FakeClient(_trigger_response("accepted"))
+    node = FakeNode(client)
+    monkeypatch.setattr(
+        "skills.primitives.flight.rclpy.spin_until_future_complete",
+        lambda node, future, timeout_sec: None,
+    )
+    primitive = primitive_type(node, config=TEST_CONFIG)
+    assert primitive.name == expected_name
+    assert primitive.service_name == expected_service
+    assert primitive.call() == "accepted"
+    assert node.service_name == expected_service
+    assert isinstance(client.requests[0], Trigger.Request)
+
+
+def test_flight_primitives_report_unavailable_rejected_and_timed_out_services(monkeypatch) -> None:
+    unavailable = TakeoffPrimitive(FakeNode(FakeClient(available=False)), config=TEST_CONFIG)
+    with pytest.raises(SkillTimeoutError, match="unavailable"):
+        unavailable.call()
+
+    rejected_client = FakeClient(_trigger_response("not ready", success=False))
+    monkeypatch.setattr(
+        "skills.primitives.flight.rclpy.spin_until_future_complete",
+        lambda node, future, timeout_sec: None,
+    )
+    rejected = LandPrimitive(FakeNode(rejected_client), config=TEST_CONFIG)
+    with pytest.raises(SkillExecutionError, match="not ready"):
+        rejected.call()
+
+    timed_out_client = FakeClient(_trigger_response(), done=False)
+    timed_out = TakeoffPrimitive(FakeNode(timed_out_client), config=TEST_CONFIG)
     with pytest.raises(SkillTimeoutError, match="did not respond"):
         timed_out.call()
     assert timed_out_client.future.cancelled

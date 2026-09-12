@@ -60,7 +60,7 @@ def test_search_skill_plans_then_queues_path_through_navigate(monkeypatch) -> No
     config = TEST_CONFIG.__class__(
         offboard=TEST_CONFIG.offboard.__class__(
             frame_id="world", queue_service="/goals", clear_service="/clear",
-            takeoff_topic="/takeoff", land_topic="/land", queue_status_topic="/status"),
+            takeoff_service="/takeoff", land_service="/land", queue_status_topic="/status"),
         coverage_planner=TEST_CONFIG.coverage_planner.__class__(
             frame_id="world", plan_service="/planner", planner_config_file=FilePath("/tmp/test-planner.json")),
     )

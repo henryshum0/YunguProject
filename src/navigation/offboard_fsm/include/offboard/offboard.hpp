@@ -6,7 +6,6 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
-#include <std_msgs/msg/bool.hpp>
 #include <nav_msgs/msg/path.hpp>
 
 #include "offboard_fsm/srv/clear_waypoints.hpp"
@@ -58,8 +57,8 @@ private:
     std::string goal_status_topic_{"fsm/goal_status"};
     std::string lio_state_topic_{"fastlio/lio_state"};
     std::string planner_reset_service_{"/fsm_node/reset"};
-    std::string takeoff_cmd_topic_{"/takeoff_cmd"};
-    std::string land_cmd_topic_{"/land_cmd"};
+    std::string takeoff_service_{"/offboard/takeoff"};
+    std::string land_service_{"/offboard/land"};
     std::string waypoint_queue_service_{"/waypoint_buffer"};
     std::string clear_waypoints_service_{"/waypoint_buffer/clear"};
     std::string waypoint_queue_status_topic_{"/waypoint_buffer/status"};
@@ -68,12 +67,11 @@ private:
     std::unique_ptr<SuperHandler> super_;
     std::unique_ptr<WaypointHandler> waypoints_;
 
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr takeoff_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_srv_;
     rclcpp::Service<offboard_fsm::srv::QueueWaypoints>::SharedPtr waypoint_queue_srv_;
     rclcpp::Service<offboard_fsm::srv::ClearWaypoints>::SharedPtr clear_waypoints_srv_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr waypoint_queue_status_pub_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr takeoff_cmd_sub_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr land_cmd_sub_;
     rclcpp::TimerBase::SharedPtr timer_;
 
     State state_{State::INIT};
@@ -105,7 +103,6 @@ private:
     geometry_msgs::msg::PoseStamped active_goal_;
 
     bool takeoff_requested_{false};
-    bool land_requested_{false};
 
     bool planner_active_{false};
     bool planner_cond_val_{false};
@@ -114,6 +111,8 @@ private:
     uint64_t published_waypoint_revision_{UINT64_MAX};
 
     void timerCallback();
+    void takeoffCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+                         std::shared_ptr<std_srvs::srv::Trigger::Response> res);
     void landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
                       std::shared_ptr<std_srvs::srv::Trigger::Response> res);
     void queueWaypointsCallback(
@@ -122,8 +121,6 @@ private:
     void clearWaypointsCallback(
         const std::shared_ptr<offboard_fsm::srv::ClearWaypoints::Request> req,
         std::shared_ptr<offboard_fsm::srv::ClearWaypoints::Response> res);
-    void takeoffCmdCallback(const std_msgs::msg::Bool::SharedPtr msg);
-    void landCmdCallback(const std_msgs::msg::Bool::SharedPtr msg);
 
     void setState(State s);
     const char *stateName() const;

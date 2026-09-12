@@ -8,10 +8,15 @@ from math import atan2, degrees
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
-from std_msgs.msg import Bool
 
-from skills import NavigateSkill, PlanSearchPrimitive, SearchSkill, SkillRuntimeConfig
+from skills import (
+    LandPrimitive,
+    NavigateSkill,
+    PlanSearchPrimitive,
+    SearchSkill,
+    SkillRuntimeConfig,
+    TakeoffPrimitive,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,17 +26,18 @@ class ConnectionSettings:
 
 
 class SkillController:
-    """Create configured skills and publish the existing flight-control commands."""
+    """Create configured skills and call the offboard FSM command services."""
 
     def __init__(self, node: Node) -> None:
         self._node = node
-        self._flight_publishers = {}
 
-    def takeoff(self, settings: ConnectionSettings) -> None:
-        self._publish_flight_command(settings.config.offboard.takeoff_topic)
+    def takeoff(self, settings: ConnectionSettings) -> str:
+        return TakeoffPrimitive(self._node, config=settings.config).call(
+            timeout_sec=settings.timeout_sec)
 
-    def land(self, settings: ConnectionSettings) -> None:
-        self._publish_flight_command(settings.config.offboard.land_topic)
+    def land(self, settings: ConnectionSettings) -> str:
+        return LandPrimitive(self._node, config=settings.config).call(
+            timeout_sec=settings.timeout_sec)
 
     def navigate(
         self, waypoints: tuple[tuple[float, float, float, float], ...], *, frame: str,
@@ -57,17 +63,6 @@ class SkillController:
     ) -> Path:
         return SearchSkill(self._node, config=settings.config).call(
             corners, timeout_sec=settings.timeout_sec)
-
-    def _publish_flight_command(self, topic: str) -> None:
-        publisher = self._flight_publishers.get(topic)
-        if publisher is None:
-            publisher = self._node.create_publisher(
-                Bool, topic, QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE))
-            self._flight_publishers[topic] = publisher
-        command = Bool()
-        command.data = True
-        publisher.publish(command)
-
 
 def format_path(path: Path) -> str:
     """Render a sparse ROS path as readable ENU waypoints for the result panel."""

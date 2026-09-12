@@ -191,6 +191,10 @@ def generate_launch_description():
             'offboard_fsm.services.queue_waypoints', '/waypoint_buffer')),
         'clear_waypoints_service': str(topic(
             'offboard_fsm.services.clear_waypoints', '/waypoint_buffer/clear')),
+        'takeoff_service': str(topic(
+            'offboard_fsm.services.takeoff', '/offboard/takeoff')),
+        'land_service': str(topic(
+            'offboard_fsm.services.land', '/offboard/land')),
         'waypoint_queue_status_topic': str(topic(
             'offboard_fsm.out.waypoint_queue_status', '/waypoint_buffer/status')),
         'cloud_in_topic': default_cloud_in,
@@ -261,8 +265,8 @@ def generate_launch_description():
                 'lio_state_topic': topic('fastlio.out.lio_state', 'fastlio/lio_state'),
                 'planner_reset_service': topic('offboard_fsm.out.planner_reset',
                                                '/fsm_node/reset'),
-                'takeoff_cmd_topic': topic('offboard_fsm.in.takeoff_cmd', '/takeoff_cmd'),
-                'land_cmd_topic': topic('offboard_fsm.in.land_cmd', '/land_cmd'),
+                'takeoff_service': LaunchConfiguration('takeoff_service'),
+                'land_service': LaunchConfiguration('land_service'),
             }],
         ),
 

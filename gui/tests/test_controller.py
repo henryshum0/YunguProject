@@ -14,7 +14,7 @@ SETTINGS = ConnectionSettings(
     config=SkillRuntimeConfig(
         offboard=OffboardSkillConfig(
             frame_id="map", queue_service="/queue", clear_service="/clear",
-            takeoff_topic="/takeoff", land_topic="/land", queue_status_topic="/status"),
+            takeoff_service="/takeoff", land_service="/land", queue_status_topic="/status"),
         coverage_planner=CoveragePlannerSkillConfig(
             frame_id="map", plan_service="/planner", planner_config_file=FilePath("/tmp/test-planner.json")),
     ),
@@ -22,22 +22,9 @@ SETTINGS = ConnectionSettings(
 )
 
 
-class FakePublisher:
-    def __init__(self) -> None:
-        self.messages = []
-
-    def publish(self, message) -> None:
-        self.messages.append(message)
-
-
 class FakeNode:
-    def __init__(self) -> None:
-        self.publishers = {}
-
-    def create_publisher(self, message_type, topic, qos):
-        publisher = FakePublisher()
-        self.publishers[topic] = publisher
-        return publisher
+    def create_publisher(self, *_args, **_kwargs):
+        raise AssertionError("flight commands must use services, not publishers")
 
 
 class FakeNavigateSkill:
@@ -72,20 +59,37 @@ class FakeSearchSkill(FakePlanSearchPrimitive):
     pass
 
 
-def test_controller_uses_settings_for_skills_and_flight_topics(monkeypatch) -> None:
+class FakeFlightPrimitive:
+    instances = []
+
+    def __init__(self, node, **kwargs) -> None:
+        self.kwargs = kwargs
+        self.calls = []
+        self.__class__.instances.append(self)
+
+    def call(self, *, timeout_sec):
+        self.calls.append(timeout_sec)
+        return "accepted"
+
+
+def test_controller_uses_settings_for_skills_and_flight_services(monkeypatch) -> None:
     import gui.controller as controller_module
 
     FakeNavigateSkill.instances.clear()
     monkeypatch.setattr(controller_module, "NavigateSkill", FakeNavigateSkill)
     monkeypatch.setattr(controller_module, "PlanSearchPrimitive", FakePlanSearchPrimitive)
     monkeypatch.setattr(controller_module, "SearchSkill", FakeSearchSkill)
+    monkeypatch.setattr(controller_module, "TakeoffPrimitive", FakeFlightPrimitive)
+    monkeypatch.setattr(controller_module, "LandPrimitive", FakeFlightPrimitive)
     node = FakeNode()
     controller = SkillController(node)
 
-    controller.takeoff(SETTINGS)
-    controller.land(SETTINGS)
-    assert node.publishers["/takeoff"].messages[0].data is True
-    assert node.publishers["/land"].messages[0].data is True
+    FakeFlightPrimitive.instances.clear()
+    assert controller.takeoff(SETTINGS) == "accepted"
+    assert controller.land(SETTINGS) == "accepted"
+    assert [primitive.kwargs for primitive in FakeFlightPrimitive.instances] == [
+        {"config": SETTINGS.config}, {"config": SETTINGS.config}]
+    assert [primitive.calls for primitive in FakeFlightPrimitive.instances] == [[4.0], [4.0]]
 
     assert controller.navigate(((1.0, 2.0, 3.0, 0.0),), frame="enu", settings=SETTINGS) == 1
     assert FakeNavigateSkill.instances[0].kwargs == {"config": SETTINGS.config}

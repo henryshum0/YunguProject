@@ -32,6 +32,8 @@ digraph SkillDependencies {
     plan [label="PlanSearchPrimitive\n4 ENU corners → Path", fillcolor="#EFE8FA", color="#7D58B7"];
     move [label="MovePrimitive\nPoseStamped[] → count", fillcolor="#EFE8FA", color="#7D58B7"];
     clear [label="ClearWaypointsPrimitive\nNone → cleared count", fillcolor="#EFE8FA", color="#7D58B7"];
+    takeoff [label="TakeoffPrimitive\nNone → acceptance message", fillcolor="#EFE8FA", color="#7D58B7"];
+    land [label="LandPrimitive\nNone → acceptance message", fillcolor="#EFE8FA", color="#7D58B7"];
   }
   subgraph cluster_ros {
     label="Running ROS nodes";
@@ -41,30 +43,33 @@ digraph SkillDependencies {
     offboard [label="OffboardNode", fillcolor="#FDEDDC", color="#E58B3B"];
   }
   paths [label="nav_msgs/msg/Path\n(sparse ENU route)", fillcolor="#F0F4F7", color="#526D82"];
-  takeoff_land [label="takeoff / land topics", fillcolor="#F0F4F7", color="#526D82"];
 
   gui -> controller [label="delegates actions"];
   controller -> config [label="uses"];
   controller -> navigate [label="navigate / clear"];
   controller -> plan [label="plan only"];
   controller -> search [label="plan and queue"];
-  controller -> takeoff_land [style=dashed, label="publishes"];
+  controller -> takeoff [label="takeoff"];
+  controller -> land [label="land"];
 
   config -> navigate [label="frame + services"];
   config -> search [label="frame + services"];
   config -> plan [label="frame + service"];
   config -> move [label="queue service"];
   config -> clear [label="clear service"];
+  config -> takeoff [label="takeoff service"];
+  config -> land [label="land service"];
 
   navigate -> move [label="composes"];
   navigate -> clear [label="composes"];
   search -> plan [label="composes"];
   search -> navigate [label="queues returned poses"];
 
-  plan -> planner [style=dashed, label="PlanCoverage"];
+  plan -> planner [style=dashed, label="PlanCoverage action"];
   planner -> paths [style=dashed, label="returns"];
   paths -> search [style=dashed, label="response"];
   move -> offboard [style=dashed, label="QueueWaypoints"];
   clear -> offboard [style=dashed, label="ClearWaypoints"];
-  takeoff_land -> offboard [style=dashed];
+  takeoff -> offboard [style=dashed, label="Trigger /offboard/takeoff"];
+  land -> offboard [style=dashed, label="Trigger /offboard/land"];
 }

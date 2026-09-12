@@ -19,10 +19,12 @@ from the offboard configuration directory and the coverage-planner startup JSON:
 from rclpy.node import Node
 from skills import (
     ClearWaypointsPrimitive,
+    LandPrimitive,
     MovePrimitive,
     NavigateSkill,
     PlanSearchPrimitive,
     SkillRuntimeConfig,
+    TakeoffPrimitive,
 )
 
 node = Node("mission_orchestrator")
@@ -37,6 +39,8 @@ path = search.call(((10.0, 10.0), (120.0, 10.0), (120.0, 80.0), (10.0, 80.0)))
 move = MovePrimitive(node, config=config)
 count = move.call(path.poses)
 cleared = ClearWaypointsPrimitive(node, config=config).call()
+takeoff_message = TakeoffPrimitive(node, config=config).call()
+land_message = LandPrimitive(node, config=config).call()
 ```
 
 `NavigateSkill` is the coordinate-based interface to `MovePrimitive`. Its waypoints use
@@ -86,6 +90,7 @@ finishes flying. Planner, queue, and clear-service readiness failures raise `Ski
 `SkillRuntimeConfig` validates `offboard_fsm.yaml`, `topics.yaml`, and the planner JSON before
 any ROS client is created. It requires matching ENU frame IDs, derives the planner action as
 `/coverage_planner/plan_coverage`, and reads queue, clear, takeoff, land, and queue-status names
-from `topics.yaml`. Calls raise `SkillTimeoutError` when the planner or offboard service is
+from `topics.yaml`. Takeoff and land call `std_srvs/srv/Trigger`; a successful response confirms
+FSM acceptance, while flight progress remains asynchronous. Calls raise `SkillTimeoutError` when the planner or offboard service is
 unavailable or does not respond, and `SkillExecutionError` when a service rejects a valid request
 or a planner action returns a failed result.

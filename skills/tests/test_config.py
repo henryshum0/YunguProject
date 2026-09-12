@@ -18,8 +18,8 @@ def test_runtime_config_loads_workspace_defaults() -> None:
     assert config.offboard.frame_id == "map"
     assert config.offboard.queue_service == "/waypoint_buffer"
     assert config.offboard.clear_service == "/waypoint_buffer/clear"
-    assert config.offboard.takeoff_topic == "/takeoff_cmd"
-    assert config.offboard.land_topic == "/land_cmd"
+    assert config.offboard.takeoff_service == "/offboard/takeoff"
+    assert config.offboard.land_service == "/offboard/land"
     assert config.offboard.queue_status_topic == "/waypoint_buffer/status"
     assert config.coverage_planner.frame_id == "map"
     assert config.coverage_planner.plan_service == "/coverage_planner/plan_coverage"
@@ -49,6 +49,10 @@ def test_runtime_config_rejects_missing_topic_keys_and_frame_mismatch(tmp_path: 
     with pytest.raises(SkillConfigError, match="does not match coverage planner frame_id"):
         SkillRuntimeConfig.load(tmp_path, PLANNER_CONFIG)
 
+    _write_offboard_configs(tmp_path, omit_takeoff=True)
+    with pytest.raises(SkillConfigError, match="services.takeoff is required"):
+        SkillRuntimeConfig.load(tmp_path, PLANNER_CONFIG)
+
 
 def _write_offboard_configs(
     directory: Path,
@@ -56,15 +60,22 @@ def _write_offboard_configs(
     frame_id: str = "map",
     queue_name: str = "/waypoint_buffer",
     omit_status: bool = False,
+    omit_takeoff: bool = False,
 ) -> None:
     directory.mkdir(exist_ok=True)
     (directory / "offboard_fsm.yaml").write_text(
         yaml.safe_dump({"offboard_fsm": {"frame_id": frame_id}}), encoding="utf-8")
     outgoing = {} if omit_status else {"waypoint_queue_status": "/waypoint_buffer/status"}
+    services = {
+        "queue_waypoints": queue_name,
+        "clear_waypoints": "/waypoint_buffer/clear",
+        "land": "/offboard/land",
+    }
+    if not omit_takeoff:
+        services["takeoff"] = "/offboard/takeoff"
     (directory / "topics.yaml").write_text(yaml.safe_dump({
         "offboard_fsm": {
-            "services": {"queue_waypoints": queue_name, "clear_waypoints": "/waypoint_buffer/clear"},
-            "in": {"takeoff_cmd": "/takeoff_cmd", "land_cmd": "/land_cmd"},
+            "services": services,
             "out": outgoing,
         },
     }), encoding="utf-8")

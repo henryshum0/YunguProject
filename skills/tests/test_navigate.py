@@ -75,7 +75,8 @@ def test_navigate_converts_single_enu_waypoint_and_queues(monkeypatch) -> None:
     config = TEST_CONFIG.__class__(
         offboard=TEST_CONFIG.offboard.__class__(
             frame_id="world", queue_service="/waypoint_buffer", clear_service="/waypoint_buffer/clear",
-            takeoff_topic="/takeoff_cmd", land_topic="/land_cmd", queue_status_topic="/waypoint_buffer/status"),
+            takeoff_service="/offboard/takeoff", land_service="/offboard/land",
+            queue_status_topic="/waypoint_buffer/status"),
         coverage_planner=TEST_CONFIG.coverage_planner.__class__(
             frame_id="world", plan_service="/coverage_planner/plan_coverage",
             planner_config_file=Path("/tmp/test-planner.json")),

@@ -144,12 +144,13 @@ counter-clockwise. Read complete API examples in
 | `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | Atomically append an ordered waypoint batch. |
 | `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | Abort the active target and remove pending waypoints. |
 | `/waypoint_buffer/status` | `nav_msgs/msg/Path` | Latched queue snapshot: active target, then pending targets. |
-| `/takeoff_cmd` | `std_msgs/msg/Bool` | Begin offboard arming and takeoff when the FSM is ready. |
-| `/land_cmd` | `std_msgs/msg/Bool` | Interrupt navigation and land. |
+| `/offboard/takeoff` | `std_srvs/srv/Trigger` | Accept the normal FSM arming/takeoff sequence from `INIT`. |
+| `/offboard/land` | `std_srvs/srv/Trigger` | Accept native PX4 landing; touchdown/disarm are asynchronous. |
 | `/waypoint_pose` | `geometry_msgs/msg/PoseStamped` | RViz/manual single-goal input, bridged to the queue service. |
 
 For the state-machine lifecycle, direct ROS examples, feedback topics, and
-failure behavior, use the [operations reference](docs/operations.md).
+failure behavior, use the [operations reference](docs/operations.md). The
+complete request/response contract is in [ROS interfaces](docs/ros_interfaces.md).
 
 ## Package responsibilities
 

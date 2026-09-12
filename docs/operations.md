@@ -62,9 +62,8 @@ The diagram source is [`assets/offboard_fsm_state_machine.dot`](assets/offboard_
 | `LAND` | Requests PX4 native `AUTO_LAND` and stops streaming offboard setpoints. After PX4 reports touchdown, it retries disarm until confirmation before returning to `INIT`. |
 
 ```bash
-ros2 topic pub --once /takeoff_cmd std_msgs/msg/Bool "{data: true}"
-ros2 topic pub --once /land_cmd std_msgs/msg/Bool "{data: true}"
-ros2 service call /offboard/land std_srvs/srv/Trigger
+ros2 service call /offboard/takeoff std_srvs/srv/Trigger "{}"
+ros2 service call /offboard/land std_srvs/srv/Trigger "{}"
 ```
 
 Landing interrupts `ARMING`, `TAKEOFF`, `IDLE`, and `MOVE`.
@@ -81,6 +80,8 @@ resets SUPER.
 | `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | Queue `geometry_msgs/msg/PoseStamped[]`; the response reports acceptance and count. |
 | `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | Clear active and pending waypoints; response reports count removed. |
 | `/waypoint_buffer/status` | `nav_msgs/msg/Path` | Reliable transient-local snapshot: active waypoint first, followed by pending waypoints. |
+| `/offboard/takeoff` | `std_srvs/srv/Trigger` | Accept a latched normal takeoff request only from `INIT`; arming remains asynchronous. |
+| `/offboard/land` | `std_srvs/srv/Trigger` | Accept native PX4 landing; touchdown/disarm remain asynchronous. |
 | `/waypoint_pose` | `geometry_msgs/msg/PoseStamped` | Manual/RViz single-goal input, bridged into the queue service. |
 | `/goal_pose` | `geometry_msgs/msg/PoseStamped` | Internal current-goal handoff from offboard FSM to SUPER. |
 | `/waypoint_markers` | `visualization_msgs/msg/MarkerArray` | Queue feedback: green queued, yellow active, cyan route. |

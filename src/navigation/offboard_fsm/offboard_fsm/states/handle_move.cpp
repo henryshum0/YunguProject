@@ -7,13 +7,6 @@ void OffboardNode::handleMove()
 {
     updatePlannerActivity();
 
-    if (land_requested_) {
-        land_requested_ = false;
-        captureHold();
-        setState(State::LAND);
-        return;
-    }
-
     if (const auto status = super_->getGoalStatus(); status &&
         (status->status == super_planner::msg::GoalStatus::STATUS_REACHED ||
          status->status == super_planner::msg::GoalStatus::STATUS_CLOSE ||

@@ -20,8 +20,8 @@ class OffboardSkillConfig:
     frame_id: str
     queue_service: str
     clear_service: str
-    takeoff_topic: str
-    land_topic: str
+    takeoff_service: str
+    land_service: str
     queue_status_topic: str
 
 
@@ -99,7 +99,6 @@ def _parse_offboard(fsm_payload: Mapping[str, Any], topics_payload: Mapping[str,
     fsm = _mapping(fsm_payload, "offboard_fsm")
     offboard_topics = _mapping(topics_payload, "offboard_fsm")
     services = _mapping(offboard_topics, "services", parent="offboard_fsm")
-    incoming = _mapping(offboard_topics, "in", parent="offboard_fsm")
     outgoing = _mapping(offboard_topics, "out", parent="offboard_fsm")
     return OffboardSkillConfig(
         frame_id=_frame_id(_required(fsm, "frame_id", "offboard_fsm"), "offboard_fsm.frame_id"),
@@ -107,10 +106,10 @@ def _parse_offboard(fsm_payload: Mapping[str, Any], topics_payload: Mapping[str,
                                 "offboard_fsm.services.queue_waypoints"),
         clear_service=_ros_name(_required(services, "clear_waypoints", "offboard_fsm.services"),
                                 "offboard_fsm.services.clear_waypoints"),
-        takeoff_topic=_ros_name(_required(incoming, "takeoff_cmd", "offboard_fsm.in"),
-                                "offboard_fsm.in.takeoff_cmd"),
-        land_topic=_ros_name(_required(incoming, "land_cmd", "offboard_fsm.in"),
-                             "offboard_fsm.in.land_cmd"),
+        takeoff_service=_ros_name(_required(services, "takeoff", "offboard_fsm.services"),
+                                  "offboard_fsm.services.takeoff"),
+        land_service=_ros_name(_required(services, "land", "offboard_fsm.services"),
+                               "offboard_fsm.services.land"),
         queue_status_topic=_ros_name(_required(outgoing, "waypoint_queue_status", "offboard_fsm.out"),
                                      "offboard_fsm.out.waypoint_queue_status"),
     )

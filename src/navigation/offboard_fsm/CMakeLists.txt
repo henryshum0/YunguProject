@@ -18,7 +18,6 @@ find_package(rclcpp_components REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(mars_quadrotor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
-find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -65,7 +64,6 @@ ament_target_dependencies(offboard_node
   px4_msgs
   mars_quadrotor_msgs
   std_srvs
-  std_msgs
   geometry_msgs
   nav_msgs
   visualization_msgs
@@ -126,7 +124,6 @@ ament_target_dependencies(offboard_component
   px4_msgs
   mars_quadrotor_msgs
   std_srvs
-  std_msgs
   geometry_msgs
   nav_msgs
   visualization_msgs

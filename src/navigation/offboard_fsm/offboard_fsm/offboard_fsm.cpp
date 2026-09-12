@@ -35,8 +35,8 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     goal_status_topic_ = declare_parameter("goal_status_topic", goal_status_topic_);
     lio_state_topic_ = declare_parameter("lio_state_topic", lio_state_topic_);
     planner_reset_service_ = declare_parameter("planner_reset_service", planner_reset_service_);
-    takeoff_cmd_topic_ = declare_parameter("takeoff_cmd_topic", takeoff_cmd_topic_);
-    land_cmd_topic_ = declare_parameter("land_cmd_topic", land_cmd_topic_);
+    takeoff_service_ = declare_parameter("takeoff_service", takeoff_service_);
+    land_service_ = declare_parameter("land_service", land_service_);
     waypoint_queue_service_ =
         declare_parameter("waypoint_queue_service", waypoint_queue_service_);
     clear_waypoints_service_ =
@@ -60,8 +60,12 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
         *this, waypoint_reached_dist_, waypoint_hold_time,
         [this]() { return px4_->getLocalPosition(); });
 
+    takeoff_srv_ = create_service<std_srvs::srv::Trigger>(
+        takeoff_service_,
+        std::bind(&OffboardNode::takeoffCallback, this,
+                  std::placeholders::_1, std::placeholders::_2));
     land_srv_ = create_service<std_srvs::srv::Trigger>(
-        "~/land",
+        land_service_,
         std::bind(&OffboardNode::landCallback, this,
                   std::placeholders::_1, std::placeholders::_2));
     waypoint_queue_srv_ = create_service<offboard_fsm::srv::QueueWaypoints>(
@@ -74,13 +78,6 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
                   std::placeholders::_1, std::placeholders::_2));
     waypoint_queue_status_pub_ = create_publisher<nav_msgs::msg::Path>(
         waypoint_queue_status_topic_, rclcpp::QoS(1).reliable().transient_local());
-
-    takeoff_cmd_sub_ = create_subscription<std_msgs::msg::Bool>(
-        takeoff_cmd_topic_, rclcpp::QoS(10).reliable(),
-        std::bind(&OffboardNode::takeoffCmdCallback, this, std::placeholders::_1));
-    land_cmd_sub_ = create_subscription<std_msgs::msg::Bool>(
-        land_cmd_topic_, rclcpp::QoS(10).reliable(),
-        std::bind(&OffboardNode::landCmdCallback, this, std::placeholders::_1));
 
     timer_ = create_wall_timer(update_period,
                                std::bind(&OffboardNode::timerCallback, this));
@@ -145,10 +142,6 @@ void OffboardNode::setState(State s)
     if (s == State::LAND) {
         // Landing may be interrupted and entered again; never reuse stale
         // native-land or disarm attempts from a prior touchdown.
-        // The Bool topic is edge-triggered: consume its request here so a
-        // completed land cannot trigger a second automatic land after the
-        // next takeoff reaches IDLE.
-        land_requested_ = false;
         land_command_requested_ = false;
         disarm_requested_ = false;
     }
@@ -177,31 +170,26 @@ double OffboardNode::stateElapsedSec() const
     return (now() - state_enter_t_).seconds();
 }
 
-void OffboardNode::takeoffCmdCallback(const std_msgs::msg::Bool::SharedPtr msg)
+void OffboardNode::takeoffCallback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> res)
 {
-    if (msg->data) {
-        // Latch a positive command until PX4 has actually armed.  A GUI sends
-        // this only once, while PX4 pre-arm checks can take several retries.
-        takeoff_requested_ = true;
-        RCLCPP_INFO(get_logger(), "Takeoff command received");
-    } else {
-        takeoff_requested_ = false;
+    if (state_ != State::INIT) {
+        res->success = false;
+        res->message = std::string("takeoff is only accepted in INIT (currently ") +
+                       stateName() + ")";
+        return;
     }
-}
 
-void OffboardNode::landCmdCallback(const std_msgs::msg::Bool::SharedPtr msg)
-{
-    if (!msg->data) {
-        land_requested_ = false;
-        return;
-    }
-    if (state_ == State::INIT || state_ == State::LAND) {
-        return;
-    }
-    land_requested_ = true;
-    RCLCPP_INFO(get_logger(), "Land command received - interrupting flight");
-    captureHold();
-    setState(State::LAND);
+    const bool already_requested = takeoff_requested_;
+    // Latch the request until normal readiness and arming checks complete.
+    // A client therefore submits it once even when PX4 pre-arm checks take time.
+    takeoff_requested_ = true;
+    RCLCPP_INFO(get_logger(), "Takeoff service request accepted");
+    res->success = true;
+    res->message = already_requested
+                       ? "takeoff request already accepted; waiting for readiness"
+                       : "takeoff accepted; waiting for normal readiness and arming checks";
 }
 
 void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> /*req*/,
@@ -218,10 +206,10 @@ void OffboardNode::landCallback(const std::shared_ptr<std_srvs::srv::Trigger::Re
         return;
     }
     captureHold();
-    RCLCPP_INFO(get_logger(), "Landing requested");
+    RCLCPP_INFO(get_logger(), "Landing service request accepted");
     setState(State::LAND);
     res->success = true;
-    res->message = "Landing";
+    res->message = "landing accepted; PX4 touchdown and disarm are asynchronous";
 }
 
 void OffboardNode::publishHold()

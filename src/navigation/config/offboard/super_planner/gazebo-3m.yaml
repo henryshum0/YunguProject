@@ -44,7 +44,7 @@ super_planner:
   # The A* braking trajectory is committed once on crossing this 1 m boundary.
   near_goal_braking_distance: 1.0
   near_goal_goal_speed: 0.0
-  robot_r: 0.6
+  robot_r: 0.4
   yaw_dot_max: 2
   # Yaw mode: 1 heading to velocity, 2 heading to goal
   yaw_mode: 1

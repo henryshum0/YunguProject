@@ -10,8 +10,8 @@ TEST_CONFIG = SkillRuntimeConfig(
         frame_id="map",
         queue_service="/waypoint_buffer",
         clear_service="/waypoint_buffer/clear",
-        takeoff_topic="/takeoff_cmd",
-        land_topic="/land_cmd",
+        takeoff_service="/offboard/takeoff",
+        land_service="/offboard/land",
         queue_status_topic="/waypoint_buffer/status",
     ),
     coverage_planner=CoveragePlannerSkillConfig(
