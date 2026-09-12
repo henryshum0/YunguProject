@@ -1,4 +1,4 @@
-"""Base interfaces shared by skills and ROS-backed primitives."""
+"""Base types shared by ROS-backed primitive adapters."""
 
 from __future__ import annotations
 
@@ -28,17 +28,4 @@ class Primitive(ABC, Generic[RequestT, ResultT]):
 
     @abstractmethod
     def call(self, request: RequestT, *, timeout_sec: float | None = None) -> ResultT:
-        """Execute the operation or raise a skill exception."""
-
-
-class Skill(ABC, Generic[RequestT, ResultT]):
-    """Base class for future higher-level compositions of primitives."""
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Stable, human-readable skill name."""
-
-    @abstractmethod
-    def call(self, request: RequestT, *, timeout_sec: float | None = None) -> ResultT:
-        """Execute the skill or raise a skill exception."""
+        """Execute the operation or raise a primitive exception."""

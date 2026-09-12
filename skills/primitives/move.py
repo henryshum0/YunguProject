@@ -9,7 +9,7 @@ from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 
 from offboard_fsm.srv import QueueWaypoints
-from skills.base import Primitive, SkillExecutionError, SkillTimeoutError
+from skills.primitives.base import Primitive, SkillExecutionError, SkillTimeoutError
 from skills.config import SkillRuntimeConfig
 
 

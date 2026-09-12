@@ -1,5 +1,6 @@
 """Low-level adapters for existing ROS 2 behavior nodes."""
 
+from skills.primitives.base import Primitive, SkillExecutionError, SkillTimeoutError
 from skills.primitives.clear_waypoints import ClearWaypointsPrimitive
 from skills.primitives.flight import LandPrimitive, TakeoffPrimitive
 from skills.primitives.move import MovePrimitive
@@ -10,5 +11,8 @@ __all__ = [
     "LandPrimitive",
     "MovePrimitive",
     "PlanSearchPrimitive",
+    "Primitive",
+    "SkillExecutionError",
+    "SkillTimeoutError",
     "TakeoffPrimitive",
 ]

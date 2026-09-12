@@ -7,7 +7,7 @@ import pytest
 
 from offboard_fsm.srv import ClearWaypoints, QueueWaypoints
 from skills import NavigateSkill, SkillTimeoutError
-from skills.frames import enu_yaw_quaternion, pose_stamped_from_enu_waypoint
+from skills.helper.frames import enu_yaw_quaternion, pose_stamped_from_enu_waypoint
 from skills.tests.config_data import TEST_CONFIG
 
 

@@ -12,7 +12,7 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 
 from coverage_planner.action import PlanCoverage
-from skills.base import Primitive, SkillExecutionError, SkillTimeoutError
+from skills.primitives.base import Primitive, SkillExecutionError, SkillTimeoutError
 from skills.config import SkillRuntimeConfig
 
 

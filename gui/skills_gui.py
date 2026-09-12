@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 import tkinter as tk
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -24,17 +25,11 @@ CAMERA_PREVIEW_HEIGHT = 480
 import rclpy
 from rclpy.node import Node
 
-from gui.controller import ConnectionSettings, SkillController, format_path
+from gui.controller import ConnectionSettings, SkillController
 from gui.camera_view import CameraPreview
 from gui.telemetry import OperationsTelemetry, QueueState, VehicleState
 from skills import SkillRuntimeConfig
-from gui.input_parser import (
-    parse_corners,
-    parse_frame,
-    parse_navigation_goal,
-    parse_timeout,
-    parse_waypoints,
-)
+from gui.input_parser import parse_timeout
 from gui.map_view import (
     MapLoadError,
     PlannerMap,
@@ -43,15 +38,19 @@ from gui.map_view import (
     heading_endpoint,
     load_planner_map,
     make_viewport,
-    rectangle_from_clicks,
-    route_points,
 )
+from gui.skill_interfaces import DEFAULT_SKILL_INTERFACES, SkillInterface
 
 
 class SkillsTestGui(tk.Tk):
     """Tk application with one serialized worker for ROS service actions."""
 
-    def __init__(self, node: Node) -> None:
+    def __init__(
+        self,
+        node: Node,
+        *,
+        skill_interfaces: Sequence[type[SkillInterface]] = DEFAULT_SKILL_INTERFACES,
+    ) -> None:
         super().__init__()
         self.title("Yungu Skills Test GUI")
         # Stacked 4:3 feeds keep both camera views wide and readable.
@@ -64,10 +63,8 @@ class SkillsTestGui(tk.Tk):
         self._closed = False
         self._map_data: PlannerMap | None = None
         self._map_viewport: Viewport | None = None
-        self._pending_map_click: tuple[float, float] | None = None
         self._route_preview: tuple[tuple[float, float], ...] = ()
         self._map_redraw_scheduled = False
-        self._navigation_goal: tuple[float, float, float, float] | None = None
         self._vehicle_state: VehicleState | None = None
         self._queue_state: QueueState | None = None
         self._operations_telemetry: OperationsTelemetry | None = None
@@ -76,6 +73,9 @@ class SkillsTestGui(tk.Tk):
         self._camera_labels: dict[str, tk.Label] = {}
         self._camera_statuses: dict[str, tk.StringVar] = {}
         self._build_variables()
+        if not skill_interfaces:
+            raise ValueError("at least one skill interface is required")
+        self._skill_interfaces = tuple(interface(self) for interface in skill_interfaces)
         self._build_layout()
         self._load_map()
         self.protocol("WM_DELETE_WINDOW", self._close)
@@ -95,28 +95,12 @@ class SkillsTestGui(tk.Tk):
         self.vehicle_odometry_topic = tk.StringVar(value="/gz/ground_truth/odom")
         self.waypoint_queue_status_topic = tk.StringVar(value="/waypoint_buffer/status")
         self.timeout_sec = tk.StringVar(value="10")
-        self.navigate_frame = tk.StringVar(value="ENU")
-        self.corner_values = [(tk.StringVar(), tk.StringVar()) for _ in range(4)]
         self.map_file = tk.StringVar(
             value=str(WORKSPACE_ROOT / "src" / "search" / "config" / "yungu_map.json"))
         self.map_status = tk.StringVar()
         self.map_mode = tk.StringVar(value="Navigate: click selects one ENU goal")
         self.telemetry_status = tk.StringVar(value="Telemetry stopped.")
-        self.navigation_goal_x = tk.StringVar()
-        self.navigation_goal_y = tk.StringVar()
-        self.navigation_goal_z = tk.StringVar(value="5.0")
-        self.navigation_goal_heading = tk.StringVar(value="0")
         self.status = tk.StringVar(value="Ready. Source ROS and start the required nodes first.")
-        for x_value, y_value in self.corner_values:
-            x_value.trace_add("write", self._on_corner_value_changed)
-            y_value.trace_add("write", self._on_corner_value_changed)
-        for value in (
-            self.navigation_goal_x,
-            self.navigation_goal_y,
-            self.navigation_goal_z,
-            self.navigation_goal_heading,
-        ):
-            value.trace_add("write", self._on_navigation_goal_value_changed)
 
     def _build_layout(self) -> None:
         outer = ttk.Frame(self, padding=10)
@@ -161,8 +145,8 @@ class SkillsTestGui(tk.Tk):
         outer.rowconfigure(2, weight=1)
         self._notebook = ttk.Notebook(work_area)
         work_area.add(self._notebook, weight=1)
-        self._build_navigate_tab(self._notebook)
-        self._build_search_tab(self._notebook)
+        for interface in self._skill_interfaces:
+            interface.install(self._notebook)
         self._notebook.bind("<<NotebookTabChanged>>", self._on_skill_tab_changed)
         operations = ttk.LabelFrame(work_area, text="Live operations map", padding=4)
         work_area.add(operations, weight=2)
@@ -181,62 +165,6 @@ class SkillsTestGui(tk.Tk):
         self.output.configure(yscrollcommand=scrollbar.set)
 
         self._build_camera_pane(outer)
-
-    def _build_navigate_tab(self, notebook: ttk.Notebook) -> None:
-        tab = ttk.Frame(notebook, padding=10)
-        notebook.add(tab, text="Navigate")
-        tab.columnconfigure(0, weight=1)
-        tab.rowconfigure(1, weight=1)
-        ttk.Label(tab, text="One waypoint per line: x, y, z, heading_deg").grid(
-            row=0, column=0, sticky="w")
-        self.waypoint_text = tk.Text(tab, height=6, width=60)
-        self.waypoint_text.grid(row=1, column=0, pady=6, sticky="nsew")
-        self.waypoint_text.insert("1.0", "10, 10, 5, 0\n20, 10, 5, 90")
-        controls = ttk.Frame(tab)
-        controls.grid(row=2, column=0, sticky="w")
-        ttk.Label(controls, text="Input frame").grid(row=0, column=0, padx=(0, 6))
-        ttk.Combobox(controls, textvariable=self.navigate_frame, values=("ENU", "NED"),
-                     width=8, state="readonly").grid(row=0, column=1, padx=(0, 8))
-        self._service_button(controls, "Queue navigation", self._navigate).grid(row=0, column=2, padx=(0, 8))
-        self._service_button(controls, "Clear route", self._clear_route).grid(row=0, column=3)
-
-        goal_controls = ttk.LabelFrame(tab, text="Map-selected ENU goal", padding=6)
-        goal_controls.grid(row=3, column=0, pady=(10, 0), sticky="ew")
-        for index, (label, value) in enumerate((
-            ("X", self.navigation_goal_x),
-            ("Y", self.navigation_goal_y),
-            ("Altitude", self.navigation_goal_z),
-            ("Heading°", self.navigation_goal_heading),
-        )):
-            ttk.Label(goal_controls, text=label).grid(row=0, column=index * 2, padx=(0, 4), pady=3, sticky="w")
-            ttk.Entry(goal_controls, textvariable=value, width=9).grid(
-                row=0, column=index * 2 + 1, padx=(0, 8), pady=3)
-        self._service_button(goal_controls, "Queue selected goal", self._queue_navigation_map_goal).grid(
-            row=1, column=0, columnspan=4, pady=(3, 0), sticky="w")
-        ttk.Button(goal_controls, text="Clear selection", command=self._clear_navigation_map_selection).grid(
-            row=1, column=4, columnspan=4, padx=(8, 0), pady=(3, 0), sticky="w")
-        ttk.Label(tab, text=("Select the Navigate tab, then click the persistent operations map. "
-                             "The map is display-only and does not validate flight paths."),
-                  wraplength=500).grid(row=4, column=0, pady=(8, 0), sticky="w")
-
-    def _build_search_tab(self, notebook: ttk.Notebook) -> None:
-        tab = ttk.Frame(notebook, padding=10)
-        notebook.add(tab, text="Coverage search")
-        ttk.Label(tab, text="Four search-area corners in ENU metres (x, y), or choose two map points.").grid(
-            row=0, column=0, columnspan=3, sticky="w")
-        for index, (x_value, y_value) in enumerate(self.corner_values, start=1):
-            ttk.Label(tab, text=f"Corner {index}").grid(row=index, column=0, padx=(0, 8), pady=3, sticky="w")
-            ttk.Entry(tab, textvariable=x_value, width=16).grid(row=index, column=1, padx=(0, 6), pady=3)
-            ttk.Entry(tab, textvariable=y_value, width=16).grid(row=index, column=2, pady=3)
-        controls = ttk.Frame(tab)
-        controls.grid(row=5, column=0, columnspan=3, pady=(8, 0), sticky="w")
-        self._service_button(controls, "Plan only", self._plan_search).grid(row=0, column=0, padx=(0, 8))
-        self._service_button(controls, "Plan and queue", self._search_and_queue).grid(row=0, column=1, padx=(0, 8))
-        ttk.Button(controls, text="Reset selection", command=self._reset_map_selection).grid(row=0, column=2)
-
-        ttk.Label(tab, text=("Select the Coverage Search tab, then use two clicks on the persistent "
-                             "operations map to fill SW, SE, NE, NW."), wraplength=500).grid(
-            row=6, column=0, columnspan=3, pady=(10, 0), sticky="w")
 
     def _build_operations_map(self, panel: ttk.LabelFrame) -> None:
         panel.columnconfigure(0, weight=1)
@@ -397,124 +325,18 @@ class SkillsTestGui(tk.Tk):
             lambda message: self.status.set(f"{title} accepted: {message}"),
         )
 
-    def _navigate(self) -> None:
-        try:
-            settings = self._settings()
-            waypoints = parse_waypoints(self.waypoint_text.get("1.0", "end"))
-            frame = parse_frame(self.navigate_frame.get())
-        except ValueError as error:
-            self._report_error(error)
-            return
-        self._run_service_action(
-            "Queueing navigation route...",
-            lambda: self._controller.navigate(waypoints, frame=frame, settings=settings),
-            lambda count: self._set_result(f"Queued {count} navigation waypoint(s)."),
-        )
-
-    def _queue_navigation_map_goal(self) -> None:
-        try:
-            settings = self._settings()
-            goal = parse_navigation_goal(
-                self.navigation_goal_x.get(),
-                self.navigation_goal_y.get(),
-                self.navigation_goal_z.get(),
-                self.navigation_goal_heading.get(),
-            )
-        except ValueError as error:
-            self._report_error(error)
-            return
-        self._run_service_action(
-            "Queueing selected map goal...",
-            lambda: self._controller.navigate((goal,), frame="enu", settings=settings),
-            lambda count: self._show_queued_navigation_goal(goal, count),
-        )
-
-    def _show_queued_navigation_goal(self, goal: tuple[float, float, float, float], count: int) -> None:
-        self._set_result(
-            f"Queued {count} selected map goal(s): x={goal[0]:.2f}, y={goal[1]:.2f}, "
-            f"z={goal[2]:.2f}, yaw={goal[3]:.1f} deg.")
-
-    def _clear_route(self) -> None:
-        try:
-            settings = self._settings()
-        except ValueError as error:
-            self._report_error(error)
-            return
-        self._run_service_action(
-            "Clearing active and queued route...",
-            lambda: self._controller.clear(settings),
-            lambda count: self._set_result(f"Cleared {count} active/queued waypoint(s)."),
-        )
-
-    def _plan_search(self) -> None:
-        self._run_search_action(queue=False)
-
-    def _search_and_queue(self) -> None:
-        self._run_search_action(queue=True)
-
-    def _run_search_action(self, *, queue: bool) -> None:
-        try:
-            settings = self._settings()
-            corners = parse_corners(tuple((x.get(), y.get()) for x, y in self.corner_values))
-        except ValueError as error:
-            self._report_error(error)
-            return
-        label = "Planning and queueing coverage route..." if queue else "Planning coverage route..."
-        action = self._controller.search_and_queue if queue else self._controller.plan_search
-        prefix = "Planned and queued" if queue else "Planned"
-        self._run_service_action(
-            label,
-            lambda: action(corners, settings=settings),
-            lambda path: self._show_search_result(prefix, path),
-        )
-
     def _on_skill_tab_changed(self, _event: tk.Event) -> None:
-        if self._notebook.index("current") == 0:
-            self.map_mode.set("Navigate mode: one click selects an ENU goal.")
-        else:
-            self.map_mode.set("Coverage Search mode: two clicks select an ENU rectangle.")
+        self._active_skill_interface().on_selected()
         self._schedule_map_redraw()
 
     def _on_operations_map_click(self, event: tk.Event) -> None:
         if self._map_viewport is None:
             return
-        if self._notebook.index("current") == 0:
-            self._on_navigation_map_click(event)
-        else:
-            self._on_map_click(event)
+        point = self._map_viewport.to_enu((float(event.x), float(event.y)))
+        self._active_skill_interface().on_map_click(point)
 
-    def _on_navigation_map_click(self, event: tk.Event) -> None:
-        if self._map_viewport is None:
-            return
-        x, y = self._map_viewport.to_enu((float(event.x), float(event.y)))
-        self.navigation_goal_x.set(f"{x:.3f}")
-        self.navigation_goal_y.set(f"{y:.3f}")
-        self._navigation_goal = self._current_navigation_goal()
-        self.map_status.set(
-            f"Selected ENU goal ({x:.2f}, {y:.2f}). Review altitude/heading, then queue it.")
-        self._schedule_map_redraw()
-
-    def _on_navigation_goal_value_changed(self, *_args: str) -> None:
-        self._navigation_goal = self._current_navigation_goal()
-        self._schedule_map_redraw()
-
-    def _current_navigation_goal(self) -> tuple[float, float, float, float] | None:
-        try:
-            return parse_navigation_goal(
-                self.navigation_goal_x.get(),
-                self.navigation_goal_y.get(),
-                self.navigation_goal_z.get(),
-                self.navigation_goal_heading.get(),
-            )
-        except ValueError:
-            return None
-
-    def _clear_navigation_map_selection(self) -> None:
-        self.navigation_goal_x.set("")
-        self.navigation_goal_y.set("")
-        self._navigation_goal = None
-        self.map_status.set("Navigation goal selection cleared.")
-        self._schedule_map_redraw()
+    def _active_skill_interface(self) -> SkillInterface:
+        return self._skill_interfaces[self._notebook.index("current")]
 
     def _draw_navigation_goal(self, goal: tuple[float, float, float, float], color: str, label: str) -> None:
         assert self._map_viewport is not None
@@ -558,37 +380,14 @@ class SkillsTestGui(tk.Tk):
             return
         self._map_data = map_data
         self.map_file.set(str(map_data.source))
-        self._pending_map_click = None
+        for interface in self._skill_interfaces:
+            interface.on_map_reloaded()
         self._route_preview = ()
         self.map_status.set(
             f"Loaded {map_data.source.name}: {len(map_data.occupied_areas)} occupied area(s).")
         self._schedule_map_redraw()
 
-    def _on_map_click(self, event: tk.Event) -> None:
-        if self._map_viewport is None:
-            return
-        point = self._map_viewport.to_enu((float(event.x), float(event.y)))
-        if self._pending_map_click is None:
-            self._pending_map_click = point
-            self.map_status.set(
-                f"First corner: ({point[0]:.2f}, {point[1]:.2f}). Click the opposite corner.")
-            self._schedule_map_redraw()
-            return
-        try:
-            corners = rectangle_from_clicks(self._pending_map_click, point)
-        except ValueError as error:
-            self._pending_map_click = None
-            self.map_status.set(str(error))
-            self._schedule_map_redraw()
-            return
-        self._pending_map_click = None
-        self._set_corners(corners)
-        self.map_status.set("Search rectangle selected: SW, SE, NE, NW populated in the corner fields.")
-
     def _on_map_resize(self, _event: tk.Event) -> None:
-        self._schedule_map_redraw()
-
-    def _on_corner_value_changed(self, *_args: str) -> None:
         self._schedule_map_redraw()
 
     def _schedule_map_redraw(self) -> None:
@@ -604,15 +403,8 @@ class SkillsTestGui(tk.Tk):
         if self._map_data is None:
             canvas.create_text(12, 12, anchor="nw", text="Load a planner map JSON to visualize it.")
             return
-        corners = self._current_corners()
         overlays = [self._route_preview]
-        if corners:
-            overlays.append(corners)
-        if self._pending_map_click is not None:
-            overlays.append((self._pending_map_click,))
-        selected_goal = self._current_navigation_goal()
-        if selected_goal is not None:
-            overlays.append(((selected_goal[0], selected_goal[1]),))
+        overlays.extend(interface.map_bounds_points() for interface in self._skill_interfaces)
         if self._vehicle_state is not None:
             overlays.append(((self._vehicle_state.x, self._vehicle_state.y),))
         if self._queue_state is not None:
@@ -628,18 +420,8 @@ class SkillsTestGui(tk.Tk):
         canvas.create_oval(origin_x - 5, origin_y - 5, origin_x + 5, origin_y + 5,
                            fill="#202020", outline="white", width=1)
         canvas.create_text(origin_x + 8, origin_y - 8, anchor="sw", text="origin", fill="#202020")
-        if corners:
-            canvas.create_line(
-                self._canvas_coordinates((*corners, corners[0])), fill="#009688", width=2.5)
-            for index, point in enumerate(corners, start=1):
-                x, y = self._map_viewport.to_canvas(point)
-                canvas.create_oval(x - 4, y - 4, x + 4, y + 4, fill="#009688", outline="white")
-                canvas.create_text(x + 6, y - 6, anchor="sw", text=str(index), fill="#00695c")
-        if self._pending_map_click is not None:
-            x, y = self._map_viewport.to_canvas(self._pending_map_click)
-            canvas.create_oval(x - 5, y - 5, x + 5, y + 5, fill="#ff9800", outline="white")
-        if selected_goal is not None:
-            self._draw_navigation_goal(selected_goal, "#00838f", "selected")
+        for interface in self._skill_interfaces:
+            interface.draw_map_overlay(canvas, self._map_viewport)
         if self._route_preview:
             if len(self._route_preview) > 1:
                 canvas.create_line(self._canvas_coordinates(self._route_preview), fill="#1565c0", width=2.5)
@@ -683,31 +465,6 @@ class SkillsTestGui(tk.Tk):
     def _canvas_coordinates(self, points: tuple[tuple[float, float], ...]) -> tuple[float, ...]:
         assert self._map_viewport is not None
         return tuple(value for point in points for value in self._map_viewport.to_canvas(point))
-
-    def _current_corners(self) -> tuple[tuple[float, float], ...]:
-        try:
-            return parse_corners(tuple((x.get(), y.get()) for x, y in self.corner_values))
-        except ValueError:
-            return ()
-
-    def _set_corners(self, corners: tuple[tuple[float, float], ...]) -> None:
-        for (x_value, y_value), (x, y) in zip(self.corner_values, corners):
-            x_value.set(f"{x:.3f}")
-            y_value.set(f"{y:.3f}")
-        self._schedule_map_redraw()
-
-    def _reset_map_selection(self) -> None:
-        self._pending_map_click = None
-        for x_value, y_value in self.corner_values:
-            x_value.set("")
-            y_value.set("")
-        self.map_status.set("Search rectangle cleared. Click two map points or enter four corners.")
-        self._schedule_map_redraw()
-
-    def _show_search_result(self, prefix: str, path: object) -> None:
-        self._route_preview = route_points(path)
-        self._schedule_map_redraw()
-        self._set_result(f"{prefix} coverage route.\n{format_path(path)}")
 
     def _start_operations_telemetry(self) -> None:
         try:

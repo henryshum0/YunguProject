@@ -3,6 +3,17 @@
 This is a plain Python package that talks to ROS 2 nodes already running in the
 background. It is not a colcon package.
 
+## Package layout
+
+- `primitives/` contains ROS client adapters and `primitives/base.py`, the
+  `Primitive` base class and common request errors.
+- `skills/` contains the composed `Skill` base class, `NavigateSkill`, and
+  `SearchSkill`.
+- `helper/frames.py` contains reusable ENU/NED waypoint and pose conversions.
+
+The top-level `skills` package continues to export the public classes for the
+examples below.
+
 Prepare an interactive shell by sourcing ROS and the workspace that contains the generated
 coverage-planner action:
 

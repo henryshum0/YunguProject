@@ -1,26 +1,22 @@
 """Composable Python interfaces to background ROS 2 behavior nodes."""
 
-from skills.base import (
-    Primitive,
-    Skill,
-    SkillExecutionError,
-    SkillTimeoutError,
-)
 from skills.config import (
     CoveragePlannerSkillConfig,
     OffboardSkillConfig,
     SkillConfigError,
     SkillRuntimeConfig,
 )
-from skills.navigate import NavigateSkill
 from skills.primitives import (
     ClearWaypointsPrimitive,
     LandPrimitive,
     MovePrimitive,
     PlanSearchPrimitive,
     TakeoffPrimitive,
+    Primitive,
+    SkillExecutionError,
+    SkillTimeoutError,
 )
-from skills.search import SearchSkill
+from skills.skills import NavigateSkill, SearchSkill, Skill
 
 __all__ = [
     "ClearWaypointsPrimitive",

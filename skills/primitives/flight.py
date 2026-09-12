@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 from std_srvs.srv import Trigger
 
-from skills.base import Primitive, SkillExecutionError, SkillTimeoutError
+from skills.primitives.base import Primitive, SkillExecutionError, SkillTimeoutError
 from skills.config import SkillRuntimeConfig
 
 

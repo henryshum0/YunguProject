@@ -2,6 +2,19 @@
 
 This plain Tkinter application tests the ROS-backed workspace skills. It is not a colcon package.
 
+## Skill-interface tabs
+
+The GUI uses a plug-in tab contract in [`skill_interfaces/base.py`](skill_interfaces/base.py).
+Each `SkillInterface` owns its controls, validation, ROS request dispatch, and
+persistent-map click/overlay behavior; the application supplies only shared
+connection settings, worker/status handling, telemetry, cameras, and the map.
+
+`NavigateSkillInterface` and `CoverageSearchSkillInterface` live in separate
+files under [`skill_interfaces/`](skill_interfaces/) and are the defaults. To
+add another skill view, implement `SkillInterface` in its own file and pass its
+class alongside the defaults when constructing `SkillsTestGui`; no changes to
+the shared map or camera layout are required.
+
 ```bash
 source /opt/ros/humble/setup.bash
 source /home/windshape/YunguProject/install/setup.bash

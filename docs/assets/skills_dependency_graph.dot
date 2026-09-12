@@ -2,32 +2,43 @@ digraph SkillDependencies {
   graph [
     rankdir=LR,
     bgcolor="white",
-    pad="0.2",
+    pad="0.25",
     nodesep="0.55",
-    ranksep="0.85",
+    ranksep="0.95",
     fontname="Arial",
     labelloc="t",
-    label="YunguProject skill and primitive dependency graph",
+    label="YunguProject logic, interface, and algorithm dependency graph",
     fontsize=22,
     fontcolor="#102A43"
   ];
   node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, margin="0.16,0.1"];
   edge [fontname="Arial", fontsize=9, color="#526D82", fontcolor="#334E68"];
 
-  gui [label="SkillsTestGui", fillcolor="#DDF5F2", color="#00A6A6"];
-  controller [label="SkillController", fillcolor="#DDF5F2", color="#00A6A6"];
-  config [label="SkillRuntimeConfig\n(frame + endpoint configuration)", fillcolor="#E1EFFC", color="#2E7DD1"];
-
-  subgraph cluster_skills {
-    label="Concrete skills";
+  subgraph cluster_logic {
+    label="Logic layer — operator orchestration (ends at concrete skills)";
     color="#2E7DD1";
+    fontcolor="#1F5B9C";
+    penwidth=1.8;
     style="rounded";
-    navigate [label="NavigateSkill\nENU/NED waypoint conversion", fillcolor="#E1EFFC", color="#2E7DD1"];
-    search [label="SearchSkill\nplan then queue", fillcolor="#E1EFFC", color="#2E7DD1"];
+
+    gui [label="SkillsTestGui", fillcolor="#DDF5F2", color="#00A6A6"];
+    controller [label="SkillController", fillcolor="#DDF5F2", color="#00A6A6"];
+    config [label="SkillRuntimeConfig\nframe + endpoint configuration", fillcolor="#E1EFFC", color="#2E7DD1"];
+
+    subgraph cluster_concrete_skills {
+      label="Concrete skills";
+      color="#7D58B7";
+      fontcolor="#65418D";
+      style="rounded,dashed";
+      navigate [label="NavigateSkill\nENU/NED waypoint conversion", fillcolor="#E1EFFC", color="#2E7DD1"];
+      search [label="SearchSkill\nplan then queue", fillcolor="#E1EFFC", color="#2E7DD1"];
+    }
   }
-  subgraph cluster_primitives {
-    label="ROS-backed primitives";
+  subgraph cluster_interfaces {
+    label="Primitive interface layer — ROS client boundary";
     color="#7D58B7";
+    fontcolor="#65418D";
+    penwidth=1.8;
     style="rounded";
     plan [label="PlanSearchPrimitive\n4 ENU corners → Path", fillcolor="#EFE8FA", color="#7D58B7"];
     move [label="MovePrimitive\nPoseStamped[] → count", fillcolor="#EFE8FA", color="#7D58B7"];
@@ -35,12 +46,16 @@ digraph SkillDependencies {
     takeoff [label="TakeoffPrimitive\nNone → acceptance message", fillcolor="#EFE8FA", color="#7D58B7"];
     land [label="LandPrimitive\nNone → acceptance message", fillcolor="#EFE8FA", color="#7D58B7"];
   }
-  subgraph cluster_ros {
-    label="Running ROS nodes";
+  subgraph cluster_algorithm {
+    label="Algorithm layer — begins at ROS 2 nodes";
     color="#E58B3B";
+    fontcolor="#9A5B20";
+    penwidth=1.8;
     style="rounded";
-    planner [label="CoveragePlannerNode", fillcolor="#FDEDDC", color="#E58B3B"];
-    offboard [label="OffboardNode", fillcolor="#FDEDDC", color="#E58B3B"];
+    planner [label="CoveragePlannerNode\nROS 2 action server", fillcolor="#FDEDDC", color="#E58B3B"];
+    coverage_algorithm [label="Coverage algorithm\nscanlines, obstacle routing, completion", fillcolor="#FFF8F1", color="#E58B3B"];
+    offboard [label="OffboardNode\nROS 2 service server", fillcolor="#FDEDDC", color="#E58B3B"];
+    super_algorithm [label="SUPER trajectory planner\nA* + MINCO optimization", fillcolor="#FFF8F1", color="#E58B3B"];
   }
   paths [label="nav_msgs/msg/Path\n(sparse ENU route)", fillcolor="#F0F4F7", color="#526D82"];
 
@@ -52,13 +67,8 @@ digraph SkillDependencies {
   controller -> takeoff [label="takeoff"];
   controller -> land [label="land"];
 
-  config -> navigate [label="frame + services"];
-  config -> search [label="frame + services"];
-  config -> plan [label="frame + service"];
-  config -> move [label="queue service"];
-  config -> clear [label="clear service"];
-  config -> takeoff [label="takeoff service"];
-  config -> land [label="land service"];
+  config -> navigate [label="configured frame + endpoints"];
+  config -> search [label="configured frame + endpoints"];
 
   navigate -> move [label="composes"];
   navigate -> clear [label="composes"];
@@ -72,4 +82,6 @@ digraph SkillDependencies {
   clear -> offboard [style=dashed, label="ClearWaypoints"];
   takeoff -> offboard [style=dashed, label="Trigger /offboard/takeoff"];
   land -> offboard [style=dashed, label="Trigger /offboard/land"];
+  planner -> coverage_algorithm [label="executes"];
+  offboard -> super_algorithm [style=dashed, label="goal / command topics"];
 }

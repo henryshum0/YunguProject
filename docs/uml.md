@@ -26,6 +26,15 @@ primitives. `SearchSkill` composes the planning primitive with navigation, so a
 successful plan is explicitly queued only by the search skill. The GUI can also
 use the plan primitive by itself for a non-publishing preview.
 
+The graph marks three ownership boundaries:
+
+- **Logic layer:** GUI, controller, runtime configuration, and concrete skills.
+  This layer ends at `NavigateSkill` and `SearchSkill`.
+- **Primitive interface layer:** ROS action/service client adapters. Primitives
+  are the boundary between application logic and ROS algorithms.
+- **Algorithm layer:** begins at the ROS 2 nodes, then continues into coverage
+  planning and SUPER trajectory algorithms.
+
 ## Edit and render
 
 The `.dot` files are the sources of truth. Re-render both SVG and PNG after

@@ -7,21 +7,16 @@ from collections.abc import Sequence
 from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 
-from skills.base import Skill
 from skills.config import SkillRuntimeConfig
-from skills.frames import WaypointInput, pose_stamped_from_enu_waypoint, to_enu_waypoints
+from skills.helper.frames import WaypointInput, pose_stamped_from_enu_waypoint, to_enu_waypoints
 from skills.primitives import ClearWaypointsPrimitive, MovePrimitive
+from skills.skills.base import Skill
 
 
 class NavigateSkill(Skill[WaypointInput, int]):
     """Send one or more ENU or NED coordinate waypoints to the offboard FSM."""
 
-    def __init__(
-        self,
-        node: Node,
-        *,
-        config: SkillRuntimeConfig,
-    ) -> None:
+    def __init__(self, node: Node, *, config: SkillRuntimeConfig) -> None:
         self._frame_id = config.offboard.frame_id
         self._move = MovePrimitive(node, config=config)
         self._clear = ClearWaypointsPrimitive(node, config=config)
@@ -49,7 +44,7 @@ class NavigateSkill(Skill[WaypointInput, int]):
         frame: str = "enu",
         timeout_sec: float | None = 10.0,
     ) -> int:
-        """Convert frame-native coordinates and publish them through ``MovePrimitive``."""
+        """Convert frame-native coordinates and queue them through ``MovePrimitive``."""
         poses = tuple(
             pose_stamped_from_enu_waypoint(waypoint, frame_id=self._frame_id)
             for waypoint in to_enu_waypoints(request, frame=frame)

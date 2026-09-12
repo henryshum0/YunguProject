@@ -54,8 +54,8 @@ class FakeNavigateSkill:
 def test_search_skill_plans_then_queues_path_through_navigate(monkeypatch) -> None:
     FakePlanSearchPrimitive.instances.clear()
     FakeNavigateSkill.instances.clear()
-    monkeypatch.setattr("skills.search.PlanSearchPrimitive", FakePlanSearchPrimitive)
-    monkeypatch.setattr("skills.search.NavigateSkill", FakeNavigateSkill)
+    monkeypatch.setattr("skills.skills.search.PlanSearchPrimitive", FakePlanSearchPrimitive)
+    monkeypatch.setattr("skills.skills.search.NavigateSkill", FakeNavigateSkill)
 
     config = TEST_CONFIG.__class__(
         offboard=TEST_CONFIG.offboard.__class__(
