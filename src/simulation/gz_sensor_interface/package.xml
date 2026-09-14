@@ -3,7 +3,7 @@
 <package format="3">
   <name>gz_sensor_interface</name>
   <version>0.1.0</version>
-  <description>Simulation-interaction layer: converts the horizontal LiDAR, IMU, and truth odometry into interfaces for FAST-LIO, SUPER, and offboard control.</description>
+  <description>Simulation-interaction layer: converts the horizontal LiDAR and truth odometry into interfaces for SUPER and offboard control.</description>
   <maintainer email="dev@yungu.local">Yungu Dev</maintainer>
   <license>Apache-2.0</license>
 

@@ -3,11 +3,11 @@
 # ============================================================================
 # Defines every ROS 2 topic exchanged between the modules of the stack:
 #   offboard fsm (offboard_node), SUPER (super_planner/fsm_node + super_bridge),
-#   FAST-LIO (fastlio_mapping), gz_sensor_interface and visualization.
+#   gz_sensor_interface and visualization.
 #
 # Each module has its own INPUT (subscribe) / OUTPUT (publish) topics; the
 # coordinate / data conversion between modules is done by the interaction
-# interface nodes (super_bridge, visual_tf, fastlio_visual, lidar_merge).
+# interface nodes (visual_tf and lidar_sensor).
 # Read by offboard.launch.py.
 
 # --- offboard fsm (offboard_node) -------------------------------------------
@@ -51,30 +51,11 @@ super:
     visualization:   "/visualization/{frontend_path,exp_traj,exp_sfc,ciri_debug_mkr,goal}"
 
 
-# --- FAST-LIO (fastlio_mapping) ----------------------------------------------
-fastlio:
-  # INPUT
-  in:
-    cloud:           /swan_gamma_v2/scan_horizontal/points_body
-    imu:             /livox/imu
-  # OUTPUT
-  out:
-    cloud_registered: /cloud_registered              # camera_init frame
-    odometry:         /Odometry                      # camera_init -> body
-    lio_state:        fastlio/lio_state              # FAST-LIO health (offboard_fsm)
-    # FAST-LIO odometry fed into PX4 EKF2 as external vision (published by
-    # offboard_fsm/fastlio_handler, the C++ replacement for fastlio_px4_bridge.py).
-    vehicle_visual_odometry: /fmu/in/vehicle_visual_odometry
-
 # --- visualization ------------------------------------------------------------
 visualization:
   in:
-    fastlio_cloud:   /cloud_registered               # FAST-LIO camera_init
-    fastlio_odom:    /Odometry
     lidar_slam_odom: /lidar_slam/odom
     truth_odom:      /gz/ground_truth/odom
   out:
-    fastlio_cloud:   /fastlio_cloud                  # world frame
-    fastlio_odom:    /fastlio_odom
     gt_path:         /gt_path
     birdview_cloud:  /birdview_cloud

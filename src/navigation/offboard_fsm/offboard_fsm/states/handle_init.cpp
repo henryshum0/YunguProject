@@ -13,8 +13,8 @@ void OffboardNode::handleInit()
     }
     publishHold();
 
-    if (super_->isLioError() || super_->isPlannerFail()) {
-        RCLCPP_WARN(get_logger(), "Planner or odometry is not ready");
+    if (super_->isPlannerFail()) {
+        RCLCPP_WARN(get_logger(), "Planner is not ready");
         return;
     }
 
@@ -30,7 +30,7 @@ void OffboardNode::handleInit()
         return;
     }
 
-    // Wait until the whole system is ready (odom + fastlio + planner +
+    // Wait until the whole system is ready (odom + planner +
     // landed & disarmed), then arm OFFBOARD mode and await takeoff.
     if (!systemReady()) {
         return;

@@ -7,7 +7,6 @@ SuperHandler::SuperHandler(rclcpp::Node &node,
                            const std::string &cmd_topic,
                            const std::string &goal_topic,
                            const std::string &planner_state_topic,
-                           const std::string &lio_state_topic,
                            const std::string &reset_service,
                            const std::string &goal_status_topic)
     : node_(node)
@@ -27,9 +26,6 @@ SuperHandler::SuperHandler(rclcpp::Node &node,
     planner_state_sub_ = node_.create_subscription<super_planner::msg::PlannerState>(
         planner_state_topic, qos_super,
         std::bind(&SuperHandler::plannerStateCallback, this, std::placeholders::_1));
-    lio_state_sub_ = node_.create_subscription<fast_lio::msg::LioState>(
-        lio_state_topic, qos_super,
-        std::bind(&SuperHandler::lioStateCallback, this, std::placeholders::_1));
     goal_status_sub_ = node_.create_subscription<super_planner::msg::GoalStatus>(
         goal_status_topic, rclcpp::QoS(10).reliable(),
         std::bind(&SuperHandler::goalStatusCallback, this, std::placeholders::_1));
@@ -46,11 +42,6 @@ void SuperHandler::cmdCallback(const mars_quadrotor_msgs::msg::PositionCommand::
 void SuperHandler::plannerStateCallback(const super_planner::msg::PlannerState::SharedPtr msg)
 {
     planner_state_ = msg;
-}
-
-void SuperHandler::lioStateCallback(const fast_lio::msg::LioState::SharedPtr msg)
-{
-    lio_state_ = msg;
 }
 
 void SuperHandler::goalStatusCallback(const super_planner::msg::GoalStatus::SharedPtr msg)
@@ -70,20 +61,9 @@ SuperHandler::getPlannerState() const
     return planner_state_;
 }
 
-std::shared_ptr<const fast_lio::msg::LioState>
-SuperHandler::getLioState() const
-{
-    return lio_state_;
-}
-
 bool SuperHandler::isPlannerFail() const
 {
     return planner_state_ != nullptr && planner_state_->fail;
-}
-
-bool SuperHandler::isLioError() const
-{
-    return lio_state_ != nullptr && lio_state_->error;
 }
 
 bool SuperHandler::isPlannerReady() const

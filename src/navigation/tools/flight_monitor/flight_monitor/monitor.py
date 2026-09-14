@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # NOTE: shebang is /usr/bin/python3 (not `env python3`) on purpose: this system
 # has a conda Python 3.14 on PATH that cannot load the cp310 rclpy C extension.
-"""monitor.py — Real-time fusion monitor: Gazebo GT vs FAST-LIO vs PX4 fused.
+"""monitor.py — Real-time navigation monitor: Gazebo ground truth vs PX4.
 
 One window, four 2D panels (no 3D — avoids the broken mpl_toolkits on this box):
 
@@ -16,13 +16,7 @@ One window, four 2D panels (no 3D — avoids the broken mpl_toolkits on this box
 
 Topics (all best_effort, matching the rest of the project):
   /odom            Gazebo ground truth, nav_msgs/Odometry, frame world
-  /Odometry        FAST-LIO output,    nav_msgs/Odometry, frame camera_init
-  /lidar_slam/odom PX4 EKF2 fused,     nav_msgs/Odometry, frame world
-
-FAST-LIO is transformed from camera_init into world via the static TF
-world -> camera_init published by offboard.launch.py when use_fastlio is
-enabled (spawn pose + lidar offset), so all three streams are compared in
-one frame.
+  /gz/odom_super   PX4 odometry converted to ENU, nav_msgs/Odometry, frame world
 
 Run it while the stack is up, in any terminal:
 
@@ -47,9 +41,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-from rclpy.time import Time
 from nav_msgs.msg import Odometry
-from tf2_ros import Buffer, TransformListener
 
 MAX_PTS = 6000        # points kept per trajectory
 MAX_ERR = 4000        # points kept per error series
@@ -57,14 +49,13 @@ FOLLOW_RADIUS = 25.0  # [m] XY view keeps the drone centered in this window
 ANIM_MS = 100         # redraw period [ms]
 N_PER_SEC = 20        # expected points per second per source (for time windows)
 
-COLORS = {"gt": "green", "px4": "red", "fastlio": "blue"}
-LABELS = {"gt": "GT", "px4": "PX4 fused", "fastlio": "FAST-LIO"}
+COLORS = {"gt": "green", "px4": "red"}
+LABELS = {"gt": "GT", "px4": "PX4 / SUPER odometry"}
 
 # ------------------------------------------------------------------ process
 # htop-like process tracking: name substrings to watch, sample interval.
-PROC_NAMES = ("px4", "gz sim", "fastlio_mapping", "fastlio_px4_bridge",
-              "lidar_sensor", "imu_bridge", "truth_odom",
-              "super_bridge", "visual_tf",
+PROC_NAMES = ("px4", "gz sim", "lidar_sensor", "truth_odom", "super_lidar",
+              "visual_tf",
               "offboard_node", "MicroXRCEAgent", "monitor.py")
 CPU_TICKS = 20        # refresh CPU panel every 20 frames (2 s at 100 ms)
 CLK_TCK = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
@@ -113,23 +104,19 @@ class FusionMonitorNode(Node):
         super().__init__("fusion_monitor")
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
 
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
-
         # (x, y, z, yaw, t_ns) per source, trimmed to MAX_PTS
-        self.traj = {"gt": deque(), "px4": deque(), "fastlio": deque()}
+        self.traj = {"gt": deque(), "px4": deque()}
         # error series vs the latest GT sample at arrival: (t_ns, horiz, vert)
-        self.err = {"px4": deque(), "fastlio": deque()}
+        self.err = {"px4": deque()}
         self._gt_latest = None
         # subscriptions (rclpy spin thread) mutate the deques while the GUI
         # thread reads them — a lock makes the snapshots safe.
         self.lock = threading.Lock()
 
         self.create_subscription(Odometry, "/odom", self._cb_gt, qos)
-        self.create_subscription(Odometry, "/lidar_slam/odom", self._cb_px4, qos)
-        self.create_subscription(Odometry, "/Odometry", self._cb_fastlio, qos)
+        self.create_subscription(Odometry, "/gz/odom_super", self._cb_px4, qos)
         self.get_logger().info(
-            "fusion monitor: /odom + /lidar_slam/odom + /Odometry (FAST-LIO -> world via TF)")
+            "navigation monitor: /odom + /gz/odom_super (both ENU world frame)")
 
     # ------------------------------------------------------------------ subs
     def _cb_gt(self, m: Odometry):
@@ -141,20 +128,6 @@ class FusionMonitorNode(Node):
         p = m.pose.pose.position
         self._push("px4", p.x, p.y, p.z, _yaw_of(m.pose.pose.orientation))
         self._push_err("px4", p.x, p.y, p.z)
-
-    def _cb_fastlio(self, m: Odometry):
-        # FAST-LIO lives in camera_init; move it into world via the static TF
-        # published by start_fastlio.sh before comparing with the other two.
-        try:
-            t = self.tf_buffer.lookup_transform("world", "camera_init", Time())
-        except Exception:
-            return  # TF not up yet — try again on the next message
-        p = m.pose.pose.position
-        x = p.x + t.transform.translation.x
-        y = p.y + t.transform.translation.y
-        z = p.z + t.transform.translation.z
-        self._push("fastlio", x, y, z, _yaw_of(m.pose.pose.orientation))
-        self._push_err("fastlio", x, y, z)
 
     # ----------------------------------------------------------------- utils
     def _push(self, key, x, y, z, yaw):
@@ -198,7 +171,7 @@ def main():
     spin.start()
 
     fig = plt.figure(figsize=(15, 11))
-    fig.canvas.manager.set_window_title("Fusion Monitor — GT / FAST-LIO / PX4 fused")
+    fig.canvas.manager.set_window_title("Navigation Monitor — GT / PX4")
     gs = fig.add_gridspec(3, 2, height_ratios=[1, 1, 0.9])
 
     ax_xy = fig.add_subplot(gs[0, 0])
@@ -220,7 +193,7 @@ def main():
         ax_xy.set_xlabel("x [m] (east)"); ax_xy.set_ylabel("y [m] (north)")
         ax_xy.grid(True); ax_xy.set_aspect("equal")
 
-        for key in ("gt", "px4", "fastlio"):
+        for key in ("gt", "px4"):
             arr = _arr(key, node)
             if len(arr) == 0:
                 continue
@@ -245,7 +218,7 @@ def main():
 
         # live readout (positions, in the XY corner)
         info = []
-        for key in ("gt", "px4", "fastlio"):
+        for key in ("gt", "px4"):
             arr = _arr(key, node)
             if len(arr):
                 info.append(f"{LABELS[key]}: ({arr[-1,0]:6.2f}, {arr[-1,1]:6.2f}, {arr[-1,2]:6.2f})")
@@ -259,7 +232,7 @@ def main():
         ax_z.set_title("Height z vs time (world)")
         ax_z.set_xlabel("time [s]"); ax_z.set_ylabel("z [m]")
         ax_z.grid(True)
-        for key in ("gt", "px4", "fastlio"):
+        for key in ("gt", "px4"):
             arr = _arr(key, node)
             if len(arr) < 2:
                 continue
@@ -276,7 +249,7 @@ def main():
             ax.grid(True)
             with node.lock:
                 err_snap = {k: list(v) for k, v in node.err.items()}
-            for key, style in (("px4", "-"), ("fastlio", "--")):
+            for key, style in (("px4", "-"),):
                 dq = err_snap[key]
                 if len(dq) < 2:
                     continue

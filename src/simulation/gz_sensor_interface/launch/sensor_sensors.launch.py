@@ -3,7 +3,6 @@
 Launches the Gazebo sensor bridge + coordinate conversions for the swan_gamma
 drone (topics/params read from src/simulation/config/gz_sensor_interface.yaml):
   - lidar_sensor : transform the horizontal LiDAR into base_link
-  - imu_bridge   : /livox/imu_raw -> /livox/imu (monotonic stamps)
   - truth_odom   : /odom -> /gz/ground_truth/odom
 """
 import os
@@ -65,14 +64,6 @@ def generate_launch_description():
                 'horizontal.t': _cfg(config_path, 'lidar_sensor.horizontal.t',
                                      [0.0, 0.0, 0.16]),
                 'horizontal.roll': _cfg(config_path, 'lidar_sensor.horizontal.roll', 0.0),
-            }],
-        ),
-        Node(
-            package='gz_sensor_interface', executable='imu_bridge', name='imu_bridge',
-            output='screen',
-            parameters=[{
-                'input_topic': _cfg(config_path, 'imu_bridge.input_topic', '/livox/imu_raw'),
-                'output_topic': _cfg(config_path, 'imu_bridge.output_topic', '/livox/imu'),
             }],
         ),
         Node(

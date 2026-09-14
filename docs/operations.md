@@ -12,17 +12,16 @@ the next launch.
 | File or directory | Purpose | Important settings |
 |---|---|---|
 | [`src/simulation/config/simulation.yaml`](../src/simulation/config/simulation.yaml) | PX4/Gazebo model, world, bridge, and uXRCE settings | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
-| [`src/simulation/config/gz_sensor_interface.yaml`](../src/simulation/config/gz_sensor_interface.yaml) | Gazebo sensor bridge topics, frames, and extrinsics | `lidar_sensor.*`, `imu_bridge.*`, `truth_odom.*`, `super_lidar.*` |
+| [`src/simulation/config/gz_sensor_interface.yaml`](../src/simulation/config/gz_sensor_interface.yaml) | Gazebo sensor bridge topics, frames, and extrinsics | `lidar_sensor.*`, `truth_odom.*`, `super_lidar.*` |
 | [`src/simulation/config/visualization.yaml`](../src/simulation/config/visualization.yaml) | TF, birdview, path, point-cloud, and RViz settings | `frames.*`, `visual_tf.*`, `birdview.*`, `rviz.*` |
 | [`src/simulation/config/birdview.yaml`](../src/simulation/config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
-| [`src/navigation/config/offboard/topics.yaml`](../src/navigation/config/offboard/topics.yaml) | Shared navigation ROS endpoints | `offboard_fsm.*`, `super.*`, `fastlio.*`, `gz_sensor_interface.*`, `visualization.*` |
-| [`src/navigation/config/offboard/offboard_fsm.yaml`](../src/navigation/config/offboard/offboard_fsm.yaml) | Offboard state machine and planner integration | `update_rate`, arming/takeoff/landing settings, queue settings, `goal_height`, planner/FAST-LIO configuration |
+| [`src/navigation/config/offboard/topics.yaml`](../src/navigation/config/offboard/topics.yaml) | Shared navigation ROS endpoints | `offboard_fsm.*`, `super.*`, and visualization endpoints |
+| [`src/navigation/config/offboard/offboard_fsm.yaml`](../src/navigation/config/offboard/offboard_fsm.yaml) | Offboard state machine and planner integration | `update_rate`, arming/takeoff/landing settings, queue settings, `goal_height`, planner configuration |
 | [`src/navigation/config/offboard/super_planner/`](../src/navigation/config/offboard/super_planner/) | SUPER A*, ROG-Map, and trajectory optimization | `fsm.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
 | [`src/search/config/`](../src/search/config/) | Coverage planner JSON and reusable map geometry | `*_planner.json`, `*_map.json` |
 
 Set `offboard.visualization: false` in the offboard configuration for a fully
-headless navigation run. Use `use_fastlio:=false` with the combined launcher to
-test controller/planner behavior without starting FAST-LIO.
+headless navigation run.
 
 ### Per-run simulation overrides
 
@@ -33,20 +32,17 @@ test controller/planner behavior without starting FAST-LIO.
 | `GZ_VERSION` | `harmonic` | Gazebo transport version used by bridges. |
 | `HEADLESS=1` | unset | Run Gazebo server without the GUI. |
 | `rviz:=false`, `rviz_freelook:=false` | `true` | Disable either RViz window in the visualization launcher. |
-| `use_fastlio:=false` | `false` in the combined launcher | Do not start FAST-LIO or its PX4 visual-odometry bridge. |
 
 ```bash
 PX4_MODEL=swan_gamma_v1 PX4_WORLD=indoor_dining ./utils/start_sim.sh
 HEADLESS=1 ./utils/start_sim.sh
-ros2 launch offboard_fsm offboard.launch.py use_fastlio:=false
 ros2 launch visualization visualization.launch.py rviz:=false
 ```
 
 ## Offboard state machine
 
 `offboard_node` owns vehicle flight-state transitions. It waits for healthy
-odometry, planner readiness, and (when enabled) FAST-LIO before accepting a
-takeoff command.
+odometry and planner readiness before accepting a takeoff command.
 
 ![Offboard FSM state machine](assets/offboard_fsm_state_machine.png)
 
@@ -138,10 +134,9 @@ For coverage planning plus explicit queueing, use `SearchSkill`.
 | Topic | Type | Description |
 |---|---|---|
 | `/gz/odom_super` | `nav_msgs/msg/Odometry` | PX4 local odometry converted from NED to ENU for SUPER. |
-| `/cloud_registered` | `sensor_msgs/msg/PointCloud2` | World-frame LiDAR cloud used by ROG-Map. |
+| `/gz/point_cloud_super` | `sensor_msgs/msg/PointCloud2` | World-frame LiDAR cloud used by ROG-Map. |
 | `/planning/pos_cmd` | `mars_quadrotor_msgs/msg/PositionCommand` | SUPER position, velocity, acceleration, yaw, and yaw-rate command. |
 | `fsm/planner_state` | `super_planner/msg/PlannerState` | SUPER high-level state. |
-| `fastlio/lio_state` | `fast_lio/msg/LioState` | FAST-LIO health. |
 | `/fmu/out/vehicle_local_position_v1` | `px4_msgs/msg/VehicleLocalPosition` | Raw PX4 NED local position. |
 | `/fmu/out/vehicle_status_v4` | `px4_msgs/msg/VehicleStatus` | PX4 arming and navigation state. |
 
@@ -160,17 +155,18 @@ The recorder starts on the first goal and writes `cmd_log/goal_<NNN>_<timestamp>
 
 The diagram source is [`assets/module_dependency_graph.dot`](assets/module_dependency_graph.dot).
 
-- `gz_sensor_interface` provides Gazebo LiDAR/IMU/odometry transformations.
+- `gz_sensor_interface` provides Gazebo LiDAR and odometry transformations.
 - `offboard_fsm` provides state management, queue services, manual-goal bridge,
-  and FAST-LIO-to-PX4 external-vision forwarding.
-- SUPER plans local trajectories; FAST-LIO supplies localization when enabled.
+  and the ENU-to-PX4-NED control boundary.
+- SUPER plans local trajectories using the sensor interface's world cloud and
+  odometry.
 - `coverage_planner` is independent of flight execution and returns sparse ENU
   routes through its service.
 - `visualization`, `flight_monitor`, and `benchmark` are optional tools.
 
-The visualization `world` frame is anchored at the drone launch origin, as are
-FAST-LIO `camera_init` and the PX4 ENU origin. The ground-truth path is shifted
-by the spawn offset so it aligns with LiDAR and sensor-interface output.
+The visualization `world` frame is anchored at the drone launch origin, as is
+the PX4 ENU origin. The ground-truth path is shifted by the spawn offset so it
+aligns with LiDAR and sensor-interface output.
 
 ## Related references
 

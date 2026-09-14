@@ -15,7 +15,7 @@ offboard_fsm:
   frame_id: map
 
   # Use the /clock simulation clock for all time handling (true for a Gazebo
-  # simulation, false to use the real system clock). Aligned with FAST-LIO.
+  # simulation, false to use the real system clock).
   use_sim_time: false
 
   # State machine update rate [Hz]
@@ -81,9 +81,3 @@ offboard_fsm:
   # windows + birdview live in the separate visualization package, launched via
   # visualization.launch.py.)
   visualization: true
-
-  # --- FAST-LIO integration --------------------------------------------------
-  # FAST-LIO params file: a file name resolved against
-  # src/navigation/config/offboard/, or an
-  # absolute path.
-  fastlio_config: fastlio_swan_gamma_effect.yaml

@@ -20,7 +20,7 @@ setup(
     zip_safe=True,
     maintainer='windshape',
     maintainer_email='windshape@example.com',
-    description='Flight observability: fusion monitor + command-trajectory recorder/plotter',
+    description='Flight observability: navigation monitor + command-trajectory recorder/plotter',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [

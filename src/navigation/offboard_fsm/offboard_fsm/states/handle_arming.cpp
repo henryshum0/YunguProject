@@ -8,7 +8,7 @@ void OffboardNode::handleArming()
     publishHold();
 
     // Heartbeat loss (armed but no longer healthy) -> back to INIT.
-    if (super_->isLioError() || !super_->isPlannerReady()) {
+    if (!super_->isPlannerReady()) {
         RCLCPP_WARN(get_logger(), "Heartbeat/link failed during ARMING - back to INIT");
         setState(State::INIT);
         return;

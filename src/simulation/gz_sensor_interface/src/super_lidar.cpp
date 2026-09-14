@@ -63,7 +63,7 @@ void quatMul(const double *a, const double *b, double *out)
 }
 
 // Build a sensor_msgs/PointCloud2 from xyz arrays + an rgb-ish intensity, in the
-// same layout FAST-LIO/SUPER expect (fields x, y, z, intensity).
+// layout expected by SUPER (fields x, y, z, intensity).
 void buildCloud(const std::vector<float> &xs, const std::vector<float> &ys,
                 const std::vector<float> &zs, const std::vector<float> &ints,
                 const rclcpp::Time &stamp, const std::string &frame_id,

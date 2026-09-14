@@ -1,16 +1,15 @@
 # visualization — visualization layer config.
 #
 # Centralizes the TF tree, topic names, spawn offset and RViz switches used by
-# the visualization package (visual_tf, gt_path, fastlio_visual,
-# birdview_publisher). Read by visualization/launch/visualization.launch.py.
+# the visualization package (visual_tf, gt_path, birdview_publisher). Read by
+# visualization/launch/visualization.launch.py.
 #
 # The visualization world frame is anchored at the drone launch position
-# (= FAST-LIO camera_init origin = PX4 ENU origin), not the Gazebo world origin.
+# (= PX4 ENU origin), not the Gazebo world origin.
 
 # --- frames ------------------------------------------------------------------
 frames:
   world:          world         # drone launch-origin world frame
-  camera_init:    camera_init   # FAST-LIO map frame (anchored at launch origin)
   body:           body
   base_link:      base_link
   lidar_link:     lidar_link
@@ -21,7 +20,6 @@ visual_tf:
   odom_topic: /gz/odom_super     # PX4 ENU odom (from super_lidar), already in
                                  # the launch-origin world frame -> world->body
   static:
-    world_to_camera_init: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]  # x y z qx qy qz qw
     body_to_base_link:    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
     base_link_to_lidar:   [0.0, 0.0, 0.16, 0.0, 0.0, 0.0, 1.0]
 
@@ -35,14 +33,6 @@ gt_path:
   spawn_offset_x:   0.0
   spawn_offset_y:   0.0
   spawn_offset_z:   0.0
-
-# --- FAST-LIO visualization (fastlio_visual) ---------------------------------
-fastlio_visual:
-  cloud_in_topic:  /cloud_registered    # FAST-LIO camera_init cloud
-  cloud_out_topic: /fastlio_cloud
-  odom_in_topic:   /Odometry
-  odom_out_topic:  /fastlio_odom
-  world_frame:     world
 
 # --- birdview overlay (birdview_publisher) -----------------------------------
 # Optional top-down aerial map reference. If you don't use it, set

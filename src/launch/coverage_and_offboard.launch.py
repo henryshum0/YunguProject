@@ -34,16 +34,8 @@ def generate_launch_description() -> LaunchDescription:
                 "Its map_file is resolved relative to that JSON."
             ),
         ),
-        DeclareLaunchArgument(
-            "use_fastlio",
-            default_value="false",
-            description="Launch FAST-LIO and its PX4 visual-odometry bridge.",
-        ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(str(offboard_launch)),
-            launch_arguments={
-                "use_fastlio": LaunchConfiguration("use_fastlio"),
-            }.items(),
         ),
         Node(
             package="coverage_planner",

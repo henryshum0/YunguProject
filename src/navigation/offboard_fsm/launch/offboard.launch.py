@@ -5,7 +5,6 @@ src/navigation/config/offboard/offboard_fsm.yaml and all inter-module topics
 from src/navigation/config/offboard/topics.yaml, then configures and starts
 the nodes:
 
-  - optional fastlio_mapping + fastlio_handler (FAST-LIO + PX4 visual-odometry bridge)
   - offboard_node (state machine)
   - super_bridge (PX4 odom + horizontal LiDAR cloud -> SUPER world cloud/odom)
   - goal_marker_node (waypoint ingestion + marking)
@@ -25,7 +24,6 @@ import yaml
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 
 
@@ -86,14 +84,6 @@ def generate_launch_description():
         return _dget(topics, key, default)
 
     # ---- Derived paths --------------------------------------------------------
-    # FAST-LIO params: bare name resolves against src/navigation/config/offboard/.
-    fastlio_cfg_name = str(cfg('fastlio_config', 'fastlio_swan_gamma_effect.yaml'))
-    default_fastlio_config = fastlio_cfg_name
-    if navigation_config_dir is not None:
-        cand = cfg_dir / fastlio_cfg_name
-        if cand.is_file():
-            default_fastlio_config = str(cand)
-
     # SUPER planner config: bare name resolves against
     # src/navigation/config/offboard/super_planner/.
     planner_cfg_name = str(cfg('planner_config', 'gazebo-smooth.yaml'))
@@ -206,40 +196,7 @@ def generate_launch_description():
             for name, val in topic_args.items()
         ],
         DeclareLaunchArgument('use_sim_time', default_value=use_sim_time),
-        DeclareLaunchArgument(
-            'use_fastlio', default_value='true',
-            description='Launch FAST-LIO and its PX4 visual-odometry bridge.'),
-        DeclareLaunchArgument('fastlio_config', default_value=default_fastlio_config),
         DeclareLaunchArgument('planner_config', default_value=fsm_config_path),
-
-        # Optional FAST-LIO layer; consumes the horizontal body-frame cloud + IMU from
-        # gz_sensor_interface, launched separately.
-        # FAST-LIO reads its input topics (horizontal cloud + IMU) from topics.yaml;
-        # these override the defaults inside fastlio_swan_gamma_effect.yaml.
-        Node(package='fast_lio', executable='fastlio_mapping', name='fastlio_mapping',
-             output='screen',
-             condition=IfCondition(LaunchConfiguration('use_fastlio')),
-             parameters=[
-                 LaunchConfiguration('fastlio_config'),
-                 {
-                     # FAST-LIO reads these under the `common` namespace (it does
-                     # not declare/use a top-level use_sim_time, so leave that out).
-                     'common.lid_topic': topic('fastlio.in.cloud',
-                                               '/swan_gamma_v2/scan_horizontal/points_body'),
-                     'common.imu_topic': topic('fastlio.in.imu', '/livox/imu'),
-                 },
-             ]),
-
-        # FAST-LIO -> PX4 visual odometry bridge (C++ replacement for the old
-        # scripts/fastlio_px4_bridge.py).
-        Node(package='offboard_fsm', executable='fastlio_handler',
-             name='fastlio_handler', output='screen',
-             condition=IfCondition(LaunchConfiguration('use_fastlio')),
-             parameters=[{
-                 'odom_topic': topic('fastlio.out.odometry', '/Odometry'),
-                 'ev_topic': topic('fastlio.out.vehicle_visual_odometry',
-                                   '/fmu/in/vehicle_visual_odometry'),
-             }]),
 
         # PX4 offboard state machine.
         Node(
@@ -262,7 +219,6 @@ def generate_launch_description():
                 'waypoint_queue_status_topic': LaunchConfiguration('waypoint_queue_status_topic'),
                 'planner_state_topic': topic('super.out.planner_state', 'fsm/planner_state'),
                 'goal_status_topic': topic('super.out.goal_status', 'fsm/goal_status'),
-                'lio_state_topic': topic('fastlio.out.lio_state', 'fastlio/lio_state'),
                 'planner_reset_service': topic('offboard_fsm.out.planner_reset',
                                                '/fsm_node/reset'),
                 'takeoff_service': LaunchConfiguration('takeoff_service'),

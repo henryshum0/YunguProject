@@ -27,13 +27,10 @@ configuration files:
 - `src/simulation/config/simulation.yaml`
 - `src/navigation/config/offboard/offboard_fsm.yaml`
 - `src/navigation/config/offboard/topics.yaml`
-- `src/navigation/config/offboard/fastlio_swan_gamma_effect.yaml`
 
 In particular, its `use_sim_time` value is read from
 `src/navigation/config/offboard/offboard_fsm.yaml`; the combined launcher does not override it.
 
-FAST-LIO is enabled by default. Disable it for controller/planner testing with
-`use_fastlio:=false`. The combined launch starts the coverage planning service
-and waypoint queue services; planning a route does not automatically enqueue it
-to the vehicle. Use `SearchSkill` or `/waypoint_buffer` to queue a returned
-route.
+The combined launch starts the coverage planning action server and waypoint
+queue services; planning a route does not automatically enqueue it to the
+vehicle. Use `SearchSkill` or `/waypoint_buffer` to queue a returned route.

@@ -44,18 +44,7 @@ bridge:
       subscriber_queue_size: 5
       publisher_queue_size: 5
 
-    # IMU direct from gz (same sim clock as the lidar clouds — no PX4
-    # timestamp anchoring). /livox/imu_raw is monotonicized by imu_relay
-    # (ros2 run lidar_bridge imu_relay) before FAST-LIO consumes /livox/imu.
-    - ros_topic_name: "/livox/imu_raw"
-      gz_topic_name: "/world/yungu/model/swan_gamma_v2_0/link/base_link/sensor/imu_sensor/imu"
-      ros_type_name: "sensor_msgs/msg/Imu"
-      gz_type_name: "gz.msgs.IMU"
-      direction: GZ_TO_ROS
-      subscriber_queue_size: 10
-      publisher_queue_size: 10
-
-    # Gazebo ground truth odometry (for debug comparison vs FAST-LIO / PX4 fusion)
+    # Gazebo ground truth odometry (for comparison against PX4/SUPER odometry)
     # NOTE: the benchmarkdemo branch's swan_gamma_v2 model no longer carries its
     # own OdometryPublisher plugin; the one in swan_uav_v2 publishes to the
     # model-instance topic /model/<model>_0/odometry (gz appends "_0" to the

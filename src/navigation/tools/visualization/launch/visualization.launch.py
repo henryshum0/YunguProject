@@ -3,13 +3,11 @@
 Launches (topics/params read from src/simulation/config/visualization.yaml):
   - visual_tf         : TF tree anchored at the drone launch-origin world frame
   - gt_path           : Gazebo truth -> /gt_path in the launch-origin world
-  - fastlio_visual    : FAST-LIO cloud/odom republished in the visualization world
   - birdview_publisher: aerial top-down map overlay (optional)
   - rviz2 (optional)  : birdview (top-down) and freelook (3D) windows
 
-The visualization world frame is anchored at the drone launch position (same as
-FAST-LIO camera_init / PX4 ENU origin). Gazebo truth odom is shifted by the
-spawn offset so /gt_path aligns with the FAST-LIO cloud and SUPER cloud in RViz.
+The visualization world frame is anchored at the drone launch position. Gazebo
+truth odom is shifted by the spawn offset so it aligns with SUPER in RViz.
 """
 import os
 from pathlib import Path
@@ -126,7 +124,6 @@ def generate_launch_description():
             parameters=[{
                 'odom_topic': _cfg(config_path, 'visual_tf.odom_topic', '/gz/odom_super'),
                 'world_frame': world_frame,
-                'camera_init_frame': _cfg(config_path, 'frames.camera_init', 'camera_init'),
                 'body_frame': _cfg(config_path, 'frames.body', 'body'),
                 'base_frame': _cfg(config_path, 'frames.base_link', 'base_link'),
                 'lidar_frame': _cfg(config_path, 'frames.lidar_link', 'lidar_link'),
@@ -143,21 +140,6 @@ def generate_launch_description():
                 'spawn_offset_x': LaunchConfiguration('spawn_offset_x'),
                 'spawn_offset_y': LaunchConfiguration('spawn_offset_y'),
                 'spawn_offset_z': LaunchConfiguration('spawn_offset_z'),
-            }],
-        ),
-        Node(
-            package='visualization', executable='fastlio_visual.py',
-            name='fastlio_visual', output='screen',
-            parameters=[{
-                'cloud_in_topic': _cfg(config_path, 'fastlio_visual.cloud_in_topic',
-                                       '/cloud_registered'),
-                'cloud_out_topic': _cfg(config_path, 'fastlio_visual.cloud_out_topic',
-                                        '/fastlio_cloud'),
-                'odom_in_topic': _cfg(config_path, 'fastlio_visual.odom_in_topic',
-                                      '/Odometry'),
-                'odom_out_topic': _cfg(config_path, 'fastlio_visual.odom_out_topic',
-                                       '/fastlio_odom'),
-                'world_frame': world_frame,
             }],
         ),
         Node(

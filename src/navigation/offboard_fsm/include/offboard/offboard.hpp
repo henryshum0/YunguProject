@@ -55,7 +55,6 @@ private:
     std::string goal_topic_{"/goal_pose"};
     std::string planner_state_topic_{"fsm/planner_state"};
     std::string goal_status_topic_{"fsm/goal_status"};
-    std::string lio_state_topic_{"fastlio/lio_state"};
     std::string planner_reset_service_{"/fsm_node/reset"};
     std::string takeoff_service_{"/offboard/takeoff"};
     std::string land_service_{"/offboard/land"};

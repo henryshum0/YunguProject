@@ -33,7 +33,6 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     goal_topic_ = declare_parameter("goal_topic", goal_topic_);
     planner_state_topic_ = declare_parameter("planner_state_topic", planner_state_topic_);
     goal_status_topic_ = declare_parameter("goal_status_topic", goal_status_topic_);
-    lio_state_topic_ = declare_parameter("lio_state_topic", lio_state_topic_);
     planner_reset_service_ = declare_parameter("planner_reset_service", planner_reset_service_);
     takeoff_service_ = declare_parameter("takeoff_service", takeoff_service_);
     land_service_ = declare_parameter("land_service", land_service_);
@@ -53,7 +52,7 @@ OffboardNode::OffboardNode(const rclcpp::NodeOptions &options)
     px4_ = std::make_unique<Px4Handler>(*this, local_pos_topic_, status_topic_,
                                         land_detected_topic_);
     super_ = std::make_unique<SuperHandler>(
-        *this, cmd_topic_, goal_topic_, planner_state_topic_, lio_state_topic_,
+        *this, cmd_topic_, goal_topic_, planner_state_topic_,
         planner_reset_service_, goal_status_topic_);
 
     waypoints_ = std::make_unique<WaypointHandler>(
@@ -301,9 +300,6 @@ void OffboardNode::publishWaypointQueueIfChanged()
 bool OffboardNode::systemReady() const
 {
     if (!px4_->hasValidPosition()) {
-        return false;
-    }
-    if (super_->isLioError()) {
         return false;
     }
     if (!super_->isPlannerReady()) {

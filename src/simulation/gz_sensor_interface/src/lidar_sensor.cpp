@@ -1,7 +1,7 @@
 // lidar_sensor — express the remaining level Gazebo LiDAR in base_link.
 //
 // The raw gpu_lidar cloud is sensor-local. This node applies the fixed
-// horizontal LiDAR mounting transform and republishes it for FAST-LIO/SUPER.
+// horizontal LiDAR mounting transform and republishes it for SUPER.
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/point_field.hpp>

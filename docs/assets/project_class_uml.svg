@@ -205,7 +205,7 @@
 <polygon fill="#f0f4f7" stroke="transparent" points="2795,-28 2795,-43 2979,-43 2979,-28 2795,-28"/>
 <text text-anchor="start" x="2832.5" y="-34" font-family="Arial" font-weight="bold" font-size="10.00">PX4 / Gazebo / sensors</text>
 <text text-anchor="start" x="2797" y="-18" font-family="Arial" font-size="10.00">PX4 SITL, Gazebo, gz_sensor_interface,</text>
-<text text-anchor="start" x="2817.5" y="-7" font-family="Arial" font-size="10.00">FAST&#45;LIO, LiDAR, front camera</text>
+<text text-anchor="start" x="2841.5" y="-7" font-family="Arial" font-size="10.00">LiDAR, front camera</text>
 <polygon fill="none" stroke="#526d82" points="2794,-1.5 2794,-44.5 2980,-44.5 2980,-1.5 2794,-1.5"/>
 </g>
 <!-- telemetry&#45;&gt;px4_stack -->

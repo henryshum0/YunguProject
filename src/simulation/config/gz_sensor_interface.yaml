@@ -1,7 +1,7 @@
 # gz_sensor_interface — Gazebo sensor bridge + coordinate conversion config.
 #
 # Centralizes the ROS 2 topics / frames / mounting extrinsics used by the
-# sensor interface package (lidar_sensor, imu_bridge, truth_odom, super_lidar).
+# sensor interface package (lidar_sensor, truth_odom, super_lidar).
 # Read by src/simulation/gz_sensor_interface/launch/sensor_sensors.launch.py.
 #
 # Model naming: topic prefixes use the Gazebo model name (default swan_gamma_v2).
@@ -18,11 +18,6 @@ lidar_sensor:
   horizontal:
     roll: 0.0
     t: [0.0, 0.0, 0.16]
-
-# --- IMU (imu_bridge) -------------------------------------------------------
-imu_bridge:
-  input_topic:  /livox/imu_raw
-  output_topic: /livox/imu
 
 # --- ground-truth odometry (truth_odom) --------------------------------------
 truth_odom:

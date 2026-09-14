@@ -3,7 +3,7 @@
 <package format="3">
   <name>visualization</name>
   <version>0.1.0</version>
-  <description>Visualization layer: TF tree and coordinate conversions that align FAST-LIO / SUPER / truth data in a single world frame anchored at the drone launch position, for RViz.</description>
+  <description>Visualization layer: TF tree and coordinate conversions that align SUPER and Gazebo truth data in a launch-origin world frame for RViz.</description>
   <maintainer email="dev@yungu.local">Yungu Dev</maintainer>
   <license>Apache-2.0</license>
 

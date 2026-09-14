@@ -2,7 +2,7 @@
 
 These diagrams document the maintainable command path in YunguProject. They
 intentionally omit third-party and generated internals such as ROS 2, PX4,
-Gazebo, FAST-LIO, and vendor libraries; those systems are shown as external
+Gazebo, and vendor libraries; those systems are shown as external
 ROS boundaries instead of being misrepresented as project-owned classes.
 
 ## Architectural class UML

@@ -2,8 +2,8 @@
 
 Flight observability tools (merged from `monitor/` and `cmd_record`):
 
-- **monitor** — realtime fusion monitor: Gazebo GT vs FAST-LIO vs PX4 fused
-  trajectories (XY, z, horizontal/vertical error panels) plus a CPU/mem panel.
+- **monitor** — realtime navigation monitor: Gazebo ground truth vs PX4/SUPER
+  odometry (XY, z, horizontal/vertical error panels) plus a CPU/mem panel.
 - **cmd_record** — goal-triggered recorder for SUPER's command trajectory plus
   the real drone odometry. Each time you click a goal, it starts recording the
   commanded trajectory (`/planning/pos_cmd`) together with the real odometry
@@ -23,8 +23,7 @@ ros2 run flight_monitor monitor
 
 One window, four 2D panels: XY top-down (follows the drone), z vs time,
 horizontal/vertical error vs GT, and a process CPU/mem panel. Topics:
-`/odom` (GT), `/Odometry` (FAST-LIO), `/lidar_slam/odom` (PX4 fused) — all
-best-effort.
+`/odom` (GT) and `/gz/odom_super` (PX4/SUPER ENU odometry) — both best-effort.
 
 ## Features
 
@@ -181,7 +180,7 @@ src/navigation/tools/flight_monitor/
 ├── package.xml
 ├── setup.py
 ├── flight_monitor/
-│   ├── monitor.py           # realtime fusion monitor (GT/FAST-LIO/PX4 + CPU)
+│   ├── monitor.py           # realtime navigation monitor (GT/PX4 + CPU)
 │   ├── cmd_record_node.py   # goal-triggered recorder node
 │   └── plot_csv.py          # post-hoc CSV visualizer
 └── launch/

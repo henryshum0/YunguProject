@@ -1,7 +1,7 @@
 # YunguProject
 
 YunguProject is a ROS 2 Humble autonomy workspace for a simulated PX4 UAV. It
-combines Gazebo and PX4 SITL, LiDAR localization, obstacle-aware trajectory
+combines Gazebo and PX4 SITL, LiDAR-based obstacle mapping, obstacle-aware trajectory
 planning, coverage-route planning, and an operator GUI. The default
 environment is the Yungu map and `swan_gamma_v2` vehicle.
 
@@ -23,8 +23,8 @@ ROS interfaces
         ▼
 Search                 Navigation                         Simulation
 coverage_planner  →  offboard_fsm → SUPER → PX4    ←  Gazebo / sensor bridge
-                         ▲        ▲
-                    FAST-LIO   LiDAR/odometry
+                         ▲
+                 LiDAR world cloud + odometry
 ```
 
 A coverage request is planned by `coverage_planner`, returned as a sparse ENU
@@ -39,7 +39,7 @@ second step.
 |---|---|
 | [`gui/`](gui/) and [`gui.py`](gui.py) | Tkinter operator/test GUI: flight controls, live camera and operations map, navigation, and coverage search. |
 | [`skills/`](skills/) | Plain Python ROS client interfaces: `NavigateSkill`, `SearchSkill`, and their primitives. |
-| [`src/navigation/`](src/navigation/) | Flight execution: `offboard_fsm`, SUPER, FAST-LIO, Livox driver, PX4 messages, and navigation tools. |
+| [`src/navigation/`](src/navigation/) | Flight execution: `offboard_fsm`, SUPER, Livox driver, PX4 messages, and navigation tools. |
 | [`src/search/`](src/search/) | `coverage_planner` plus independent Yungu map and planner configuration. |
 | [`src/simulation/`](src/simulation/) | Gazebo-facing sensor interface and simulation configuration. |
 | [`src/launch/`](src/launch/) | Cross-package launch orchestration, including coverage planner plus offboard FSM. |
@@ -79,7 +79,7 @@ following commands in each prepared terminal:
 # Terminal 1: Gazebo, PX4 SITL, MicroXRCE agent, and Gazebo bridges.
 ./utils/start_sim.sh
 
-# Terminal 2: LiDAR, IMU, and ground-truth sensor bridging.
+# Terminal 2: LiDAR and ground-truth sensor bridging.
 ros2 launch gz_sensor_interface sensor_sensors.launch.py
 
 # Terminal 3: offboard FSM, SUPER, and the coverage-planning action server.
@@ -156,9 +156,9 @@ complete request/response contract is in [ROS interfaces](docs/ros_interfaces.md
 
 ### Simulation and perception
 
-- `gz_sensor_interface` converts and relays Gazebo LiDAR, IMU, and odometry.
-- `FAST_LIO` supplies LiDAR-inertial odometry; `livox_ros_driver2` supports the
-  physical LiDAR path.
+- `gz_sensor_interface` converts Gazebo LiDAR and odometry into SUPER's
+  world-frame inputs.
+- `livox_ros_driver2` remains available for the physical LiDAR path.
 - `VisionFlow-PX4` supplies PX4 SITL, the Yungu Gazebo world, vehicle models,
   and bridged front/follow camera image streams.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install dependencies for building SUPER and FAST-LIO (ROS 2 Humble / Ubuntu 22.04).
+# Install dependencies for building the navigation and search stack (ROS 2 Humble / Ubuntu 22.04).
 #
 # What it installs:
 #   1. System libraries: Eigen, PCL, yaml-cpp, QHull, FLANN, fmt, glfw/glew, ncurses, dw
@@ -76,8 +76,8 @@ $SUDO apt-get install -y \
 # $SUDO apt-get install -y \
 #     "ros-${ROS_DISTRO}-rosfmt" \
 #     "ros-${ROS_DISTRO}-livox-ros-driver2" \
-#     || echo "NOTE: rosfmt / livox-ros-driver2 not available via apt. FAST-LIO "
-#        "requires livox_ros_driver2 - build it from source if missing:"
+#     || echo "NOTE: rosfmt / livox-ros-driver2 not available via apt. Build the"
+#        "Livox driver from source when it is needed for physical hardware:"
 #        "  git clone https://github.com/Livox-SDK/livox_ros_driver2.git"
 
 # ---------------------------------------------------------------------------

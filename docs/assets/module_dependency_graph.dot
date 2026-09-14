@@ -27,17 +27,13 @@ digraph ModuleDependencyGraph {
   Gazebo [label="Gazebo\ngz-sim", fillcolor="#FEF5E7", color="#CA6F1E"];
   PX4 [label="PX4 SITL\nEKF2 + offboard control", fillcolor="#FDEDEC", color="#B03A2E"];
   Adapter [label="gz_sensor_interface\nsensor + world-frame adapter", fillcolor="#F4F6F7", color="#566573"];
-  FastLio [label="FAST-LIO\nLiDAR-inertial odometry", fillcolor="#EBF5FB", color="#2874A6"];
   Super [label="SUPER\nfsm_node trajectory planner", fillcolor="#E8F8F5", color="#148F77"];
   Offboard [label="offboard_fsm\noffboard_node", fillcolor="#EAF2F8", color="#2E86C1"];
   Goals [label="waypoint client / RViz", fillcolor="#FBFCFC", color="#7B7D7D"];
 
   Gazebo -> PX4 [dir=both, label="GZ bridge:\nsensors / actuators"];
-  Gazebo -> Adapter [label="ROS-GZ bridge:\nLiDAR, IMU, truth odom"];
+  Gazebo -> Adapter [label="ROS-GZ bridge:\nLiDAR, truth odom"];
   PX4 -> Adapter [label="vehicle odometry"];
-  Adapter -> FastLio [label="horizontal LiDAR cloud + IMU"];
-  FastLio -> PX4 [label="external visual odometry"];
-  FastLio -> Offboard [label="LIO health"];
   Adapter -> Super [label="/gz/point_cloud_super\n/gz/odom_super"];
   Goals -> Offboard [label="/waypoint_pose"];
   Offboard -> Super [label="/goal_pose\nreset service"];

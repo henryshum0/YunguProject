@@ -23,7 +23,6 @@
   <depend>visualization_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>super_planner</depend>
-  <depend>fast_lio</depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
 

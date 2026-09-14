@@ -1,20 +1,15 @@
 // visual_tf — publish the TF tree that keeps every visualization aligned in one
 // world frame anchored at the drone launch position.
 //
-// The visualization world frame coincides with the drone launch position, which
-// is where FAST-LIO's camera_init origin and PX4's ENU local origin sit. Both
-// origins overlap, but FAST-LIO's camera_init axes are aligned to the drone's
-// launch heading (camera_init x == first-frame body heading), which may differ
-// from the PX4 ENU world x axis. So:
-//   - world -> camera_init : static, translation 0, rotation = the drone's
-//                            launch heading (captured from the first PX4 odom)
+// The visualization world frame coincides with the drone launch position. The
+// tree is:
 //   - world -> body        : dynamic, from the PX4 ENU odom (/gz/odom_super,
 //                            already in the launch-position frame)
 //   - body  -> base_link   : identity (base_link == IMU origin)
 //   - base_link -> lidar_link : static, the 0.16 m lidar mounting height
 //
-// This lets RViz (fixed frame = world) display FAST-LIO /cloud_registered and
-// SUPER /gz/point_cloud_super all aligned at the drone.
+// This lets RViz (fixed frame = world) display SUPER /gz/point_cloud_super
+// aligned at the drone.
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
@@ -40,7 +35,6 @@ public:
     declare_parameter("body_frame", "body");
     declare_parameter("base_frame", "base_link");
     declare_parameter("lidar_frame", "lidar_link");
-    declare_parameter("camera_init_frame", "camera_init");
     declare_parameter("lidar_offset_z", 0.16);
 
     odom_topic_ = get_parameter("odom_topic").as_string();
@@ -48,7 +42,6 @@ public:
     body_frame_ = get_parameter("body_frame").as_string();
     base_frame_ = get_parameter("base_frame").as_string();
     lidar_frame_ = get_parameter("lidar_frame").as_string();
-    camera_init_frame_ = get_parameter("camera_init_frame").as_string();
     lidar_offset_z_ = get_parameter("lidar_offset_z").as_double();
 
     static_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
@@ -73,16 +66,6 @@ private:
     publishStatic(body_frame_, base_frame_, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
     // base_link -> lidar_link: +0.16 m up (lidar mounting height).
     publishStatic(base_frame_, lidar_frame_, 0.0, 0.0, lidar_offset_z_, 1.0, 0.0, 0.0, 0.0);
-    // world -> camera_init: publish an initial identity so the frame exists;
-    // once the first PX4 odom arrives we republish with the launch-heading
-    // rotation (see onOdom).
-    publishStatic(world_frame_, camera_init_frame_, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
-  }
-
-  void publishCameraInit(const geometry_msgs::msg::Quaternion &q)
-  {
-    publishStatic(world_frame_, camera_init_frame_, 0.0, 0.0, 0.0,
-                  q.w, q.x, q.y, q.z);
   }
 
   void publishStatic(const std::string &parent, const std::string &child,
@@ -117,17 +100,6 @@ private:
     tf.transform.rotation = m->pose.pose.orientation;
     tf_broadcaster_->sendTransform(tf);
 
-    // Capture the drone's launch heading from the first odom sample and anchor
-    // world -> camera_init to it (camera_init x == the drone's launch heading).
-    if (!camera_init_set_) {
-      camera_init_set_ = true;
-      publishCameraInit(m->pose.pose.orientation);
-      RCLCPP_INFO(get_logger(),
-                  "visual_tf: camera_init anchored to launch heading "
-                  "(qw=%.3f qx=%.3f qy=%.3f qz=%.3f)",
-                  m->pose.pose.orientation.w, m->pose.pose.orientation.x,
-                  m->pose.pose.orientation.y, m->pose.pose.orientation.z);
-    }
   }
 
   std::string odom_topic_;
@@ -135,9 +107,7 @@ private:
   std::string body_frame_;
   std::string base_frame_;
   std::string lidar_frame_;
-  std::string camera_init_frame_;
   double lidar_offset_z_;
-  bool camera_init_set_{false};
 
   std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_broadcaster_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;

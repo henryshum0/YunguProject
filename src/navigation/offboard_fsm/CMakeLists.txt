@@ -23,7 +23,6 @@ find_package(visualization_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(super_planner REQUIRED)
-find_package(fast_lio REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/QueueWaypoints.srv"
@@ -68,27 +67,8 @@ ament_target_dependencies(offboard_node
   nav_msgs
   visualization_msgs
   super_planner
-  fast_lio
 )
 target_link_libraries(offboard_node "${cpp_typesupport_target}")
-
-# --- FAST-LIO -> PX4 visual odometry bridge (C++ replacement for the legacy
-#     scripts/fastlio_px4_bridge.py) ---
-add_executable(fastlio_handler
-  offboard_fsm/fastlio_handler_main.cpp
-  offboard_fsm/fastlio_handler.cpp
-)
-
-target_include_directories(fastlio_handler PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
-ament_target_dependencies(fastlio_handler
-  rclcpp
-  px4_msgs
-  nav_msgs
-)
 
 # --- Goal marker node (RViz 2D Goal Pose -> /goal_marker markers) ---
 add_executable(goal_marker_node
@@ -128,7 +108,6 @@ ament_target_dependencies(offboard_component
   nav_msgs
   visualization_msgs
   super_planner
-  fast_lio
 )
 target_link_libraries(offboard_component "${cpp_typesupport_target}")
 
@@ -141,7 +120,6 @@ rclcpp_components_register_node(offboard_component
 install(TARGETS
   offboard_node
   goal_marker_node
-  fastlio_handler
   offboard_component
   DESTINATION lib/${PROJECT_NAME}
 )

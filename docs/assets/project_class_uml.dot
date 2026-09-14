@@ -195,7 +195,7 @@ digraph ProjectClassUml {
   px4_stack [label=<
     <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" COLOR="#526D82">
       <TR><TD BGCOLOR="#F0F4F7"><B>PX4 / Gazebo / sensors</B></TD></TR>
-      <TR><TD ALIGN="LEFT">PX4 SITL, Gazebo, gz_sensor_interface,<BR/>FAST-LIO, LiDAR, front camera</TD></TR>
+      <TR><TD ALIGN="LEFT">PX4 SITL, Gazebo, gz_sensor_interface,<BR/>LiDAR, front camera</TD></TR>
     </TABLE>
   >];
 
