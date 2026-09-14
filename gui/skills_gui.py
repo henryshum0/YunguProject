@@ -25,7 +25,7 @@ CAMERA_PREVIEW_HEIGHT = 480
 import rclpy
 from rclpy.node import Node
 
-from gui.controller import ConnectionSettings, SkillController
+from gui.skill_interfaces.controller import ConnectionSettings, SkillController
 from gui.camera_view import CameraPreview
 from gui.telemetry import OperationsTelemetry, QueueState, VehicleState
 from skills import SkillRuntimeConfig

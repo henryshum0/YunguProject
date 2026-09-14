@@ -6,7 +6,7 @@ import pytest
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 
-from gui.controller import ConnectionSettings, SkillController, format_path
+from gui.skill_interfaces.controller import ConnectionSettings, SkillController, format_path
 from skills.config import CoveragePlannerSkillConfig, OffboardSkillConfig, SkillRuntimeConfig
 
 
@@ -73,7 +73,7 @@ class FakeFlightPrimitive:
 
 
 def test_controller_uses_settings_for_skills_and_flight_services(monkeypatch) -> None:
-    import gui.controller as controller_module
+    import gui.skill_interfaces.controller as controller_module
 
     FakeNavigateSkill.instances.clear()
     monkeypatch.setattr(controller_module, "NavigateSkill", FakeNavigateSkill)
@@ -99,7 +99,7 @@ def test_controller_uses_settings_for_skills_and_flight_services(monkeypatch) ->
 
 
 def test_controller_propagates_skill_errors(monkeypatch) -> None:
-    import gui.controller as controller_module
+    import gui.skill_interfaces.controller as controller_module
 
     class FailingNavigate(FakeNavigateSkill):
         def call(self, waypoints, *, frame, timeout_sec):

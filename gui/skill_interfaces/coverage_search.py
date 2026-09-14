@@ -8,7 +8,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from gui.controller import format_path
+from gui.skill_interfaces.controller import format_path
 from gui.input_parser import parse_corners
 from gui.map_view import Viewport, rectangle_from_clicks, route_points
 from gui.skill_interfaces.base import Point, SkillInterface
