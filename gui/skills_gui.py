@@ -9,6 +9,7 @@ import tkinter as tk
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from queue import Empty, Queue
+from threading import Event
 from time import monotonic
 from tkinter import filedialog, messagebox, ttk
 
@@ -19,14 +20,22 @@ if str(WORKSPACE_ROOT) not in sys.path:
 import rclpy
 from rclpy.node import Node
 
-from gui.controller import ConnectionSettings, SkillController, format_path
+from gui.controller import (
+    ConnectionSettings,
+    SkillController,
+    format_path,
+    format_progress,
+    format_search_result,
+)
 from gui.camera_view import CameraPreview
 from gui.telemetry import OperationsTelemetry, QueueState, VehicleState
-from skills import SkillRuntimeConfig
+from skills import SearchProgress, SkillConfigError, SkillRuntimeConfig
 from gui.input_parser import (
     parse_corners,
     parse_frame,
+    parse_mission_timeout,
     parse_navigation_goal,
+    parse_target_classes,
     parse_timeout,
     parse_waypoints,
 )
@@ -69,6 +78,15 @@ class SkillsTestGui(tk.Tk):
         self._operations_telemetry: OperationsTelemetry | None = None
         self._camera_preview: CameraPreview | None = None
         self._camera_photo: tk.PhotoImage | None = None
+        self._camera_raw_topic: str | None = None
+        self._mission_stop = Event()
+        self._mission_running = False
+        self._mission_progress: Queue[SearchProgress] = Queue()
+        self._mission_targets: tuple[tuple[str, float, float], ...] = ()
+        self._truth_targets: tuple[tuple[str, float, float], ...] = ()
+        self._truth_field = None
+        self._truth_source: str | None = None
+        self._detection_config_error: str | None = None
         self._build_variables()
         self._build_layout()
         self._load_map()
@@ -76,6 +94,7 @@ class SkillsTestGui(tk.Tk):
         self.after(50, self._poll_completed_actions)
         self.after(50, self._poll_camera_preview)
         self.after(100, self._poll_operations_telemetry)
+        self.after(200, self._poll_mission_progress)
         self.after_idle(self._start_camera_preview)
         self.after_idle(self._start_operations_telemetry)
 
@@ -84,11 +103,22 @@ class SkillsTestGui(tk.Tk):
             value=str(WORKSPACE_ROOT / "src" / "navigation" / "config" / "offboard"))
         self.planner_config_file = tk.StringVar(
             value=str(WORKSPACE_ROOT / "src" / "search" / "config" / "yungu_planner.json"))
+        self.detection_config_file = tk.StringVar(
+            value=str(WORKSPACE_ROOT / "src" / "detection" / "config" / "detection.yaml"))
+        # Simulation only: lets a finished mission be read against the true target
+        # positions. Clear it on a real vehicle, where there is no such file.
+        self.truth_targets_file = tk.StringVar(
+            value=str(WORKSPACE_ROOT / "src" / "detection" / "config" / "targets.yaml"))
         self.camera_image_topic = tk.StringVar(value="/swan_gamma_v2/front_camera/image")
         self.vehicle_odometry_topic = tk.StringVar(value="/gz/ground_truth/odom")
         self.waypoint_queue_status_topic = tk.StringVar(value="/waypoint_buffer/status")
         self.timeout_sec = tk.StringVar(value="10")
         self.navigate_frame = tk.StringVar(value="ENU")
+        self.mission_classes = tk.StringVar(value="vehicle")
+        self.mission_timeout_sec = tk.StringVar(value="900")
+        self.mission_stop_on_first = tk.BooleanVar(value=True)
+        self.mission_status = tk.StringVar(value="No mission running.")
+        self.show_truth_targets = tk.BooleanVar(value=False)
         self.corner_values = [(tk.StringVar(), tk.StringVar()) for _ in range(4)]
         self.map_file = tk.StringVar(
             value=str(WORKSPACE_ROOT / "src" / "search" / "config" / "yungu_map.json"))
@@ -127,6 +157,8 @@ class SkillsTestGui(tk.Tk):
         fields = [
             ("Navigation config directory", self.navigation_config_dir),
             ("Planner config JSON", self.planner_config_file),
+            ("Detection config YAML", self.detection_config_file),
+            ("Ground truth YAML (sim)", self.truth_targets_file),
             ("Camera image topic", self.camera_image_topic),
             ("Vehicle odometry topic", self.vehicle_odometry_topic),
             ("Queue status topic", self.waypoint_queue_status_topic),
@@ -154,6 +186,7 @@ class SkillsTestGui(tk.Tk):
         work_area.add(self._notebook, weight=1)
         self._build_navigate_tab(self._notebook)
         self._build_search_tab(self._notebook)
+        self._build_mission_tab(self._notebook)
         self._notebook.bind("<<NotebookTabChanged>>", self._on_skill_tab_changed)
         operations = ttk.LabelFrame(work_area, text="Live operations map", padding=6)
         work_area.add(operations, weight=1)
@@ -229,6 +262,61 @@ class SkillsTestGui(tk.Tk):
                              "operations map to fill SW, SE, NE, NW."), wraplength=500).grid(
             row=6, column=0, columnspan=3, pady=(10, 0), sticky="w")
 
+    def _build_mission_tab(self, notebook: ttk.Notebook) -> None:
+        """The complete skill: plan a route, fly it, and watch detection while it flies."""
+        tab = ttk.Frame(notebook, padding=10)
+        notebook.add(tab, text="Search mission")
+        tab.columnconfigure(0, weight=1)
+        ttk.Label(tab, text=(
+            "Runs search + navigation + detection as one mission: it plans a coverage route for "
+            "the corners from the Coverage Search tab, queues it, and watches the detector while "
+            "the route is flown. The vehicle must already be airborne and holding."),
+            wraplength=520).grid(row=0, column=0, columnspan=4, sticky="w")
+
+        parameters = ttk.LabelFrame(tab, text="Mission parameters", padding=6)
+        parameters.grid(row=1, column=0, columnspan=4, pady=(10, 0), sticky="ew")
+        ttk.Label(parameters, text="Look for").grid(row=0, column=0, padx=(0, 6), pady=3, sticky="w")
+        ttk.Combobox(parameters, textvariable=self.mission_classes, width=24,
+                     values=("vehicle", "person", "car", "pedestrian", "vehicle, person")).grid(
+            row=0, column=1, padx=(0, 16), pady=3, sticky="w")
+        ttk.Label(parameters, text="Mission timeout (s)").grid(
+            row=0, column=2, padx=(0, 6), pady=3, sticky="w")
+        ttk.Entry(parameters, textvariable=self.mission_timeout_sec, width=10).grid(
+            row=0, column=3, pady=3, sticky="w")
+        ttk.Checkbutton(parameters, text="Stop as soon as a target is confirmed",
+                        variable=self.mission_stop_on_first).grid(
+            row=1, column=0, columnspan=4, pady=(4, 0), sticky="w")
+        ttk.Label(parameters, text=(
+            "Group names person and vehicle cover the classes the detector confuses with one "
+            "another; a comma-separated list of detector classes also works."),
+            wraplength=520).grid(row=2, column=0, columnspan=4, pady=(4, 0), sticky="w")
+
+        controls = ttk.Frame(tab)
+        controls.grid(row=2, column=0, columnspan=4, pady=(10, 0), sticky="w")
+        self._mission_run_button = self._service_button(
+            controls, "Run search mission", self._run_search_mission)
+        self._mission_run_button.grid(row=0, column=0, padx=(0, 8))
+        # Deliberately not a service button: it must stay usable while the
+        # mission occupies the worker, which is the whole point of a stop.
+        self._mission_stop_button = ttk.Button(controls, text="Stop mission",
+                                               command=self._stop_search_mission)
+        self._mission_stop_button.grid(row=0, column=1, padx=(0, 8))
+        self._mission_stop_button.state(["disabled"])
+        ttk.Button(controls, text="Clear found targets",
+                   command=self._clear_mission_targets).grid(row=0, column=2, padx=(0, 8))
+        ttk.Checkbutton(controls, text="Show ground truth on map",
+                        variable=self.show_truth_targets,
+                        command=self._on_show_truth_toggled).grid(row=0, column=3)
+
+        ttk.Label(tab, textvariable=self.mission_status, wraplength=520,
+                  foreground="#0d47a1").grid(row=3, column=0, columnspan=4, pady=(10, 0), sticky="w")
+        ttk.Label(tab, text=(
+            "Land stays available while a mission runs. Confirmed targets are drawn on the "
+            "operations map in magenta; the reported position is what the mission estimated by "
+            "back-projecting its detections. In simulation the result also lists the true "
+            "position and the error, read from the ground-truth YAML."),
+            wraplength=520).grid(row=4, column=0, columnspan=4, pady=(8, 0), sticky="w")
+
     def _build_operations_map(self, panel: ttk.LabelFrame) -> None:
         panel.columnconfigure(0, weight=1)
         panel.rowconfigure(3, weight=1)
@@ -269,7 +357,11 @@ class SkillsTestGui(tk.Tk):
         controls.grid(row=1, column=0, pady=(8, 6), sticky="w")
         ttk.Button(controls, text="Start / reconnect preview", command=self._start_camera_preview).grid(
             row=0, column=0, padx=(0, 8))
-        ttk.Button(controls, text="Stop preview", command=self._stop_camera_preview).grid(row=0, column=1)
+        ttk.Button(controls, text="Stop preview", command=self._stop_camera_preview).grid(
+            row=0, column=1, padx=(0, 8))
+        self._overlay_button = ttk.Button(
+            controls, text="Show detection boxes", command=self._toggle_detection_overlay)
+        self._overlay_button.grid(row=0, column=2)
         self.camera_status = tk.StringVar(value="Preview stopped.")
         ttk.Label(controls, textvariable=self.camera_status, wraplength=220).grid(
             row=1, column=0, columnspan=2, pady=(5, 0), sticky="w")
@@ -290,14 +382,25 @@ class SkillsTestGui(tk.Tk):
         timeout = parse_timeout(self.timeout_sec.get())
         navigation_config_dir = self.navigation_config_dir.get().strip()
         planner_config_file = self.planner_config_file.get().strip()
+        detection_config_file = self.detection_config_file.get().strip() or None
         if not navigation_config_dir:
             raise ValueError("navigation config directory must not be empty")
         if not planner_config_file:
             raise ValueError("planner config JSON must not be empty")
-        return ConnectionSettings(
-            config=SkillRuntimeConfig.load(navigation_config_dir, planner_config_file),
-            timeout_sec=timeout,
-        )
+        try:
+            config = SkillRuntimeConfig.load(
+                navigation_config_dir, planner_config_file, detection_config_file)
+        except SkillConfigError as error:
+            if detection_config_file is None:
+                raise
+            # Detection is only needed by the mission. Navigation and coverage
+            # planning must keep working without it, so fall back and let the
+            # mission report the exact reason it cannot run.
+            config = SkillRuntimeConfig.load(navigation_config_dir, planner_config_file)
+            self._detection_config_error = str(error)
+        else:
+            self._detection_config_error = None
+        return ConnectionSettings(config=config, timeout_sec=timeout)
 
     def _start_camera_preview(self) -> None:
         topic = self.camera_image_topic.get().strip()
@@ -310,6 +413,33 @@ class SkillsTestGui(tk.Tk):
             return
         self.camera_status.set(f"Waiting for images on {topic}...")
         self.camera_label.configure(image="", text="Waiting for camera frames...")
+
+    def _toggle_detection_overlay(self) -> None:
+        """Switch the preview between the raw camera and the detector's overlay.
+
+        The overlay is published by the detection layer, so its topic comes from
+        the detection configuration rather than being spelled out here.
+        """
+        if self._camera_raw_topic is not None:
+            topic, self._camera_raw_topic = self._camera_raw_topic, None
+            self.camera_image_topic.set(topic)
+            self._overlay_button.configure(text="Show detection boxes")
+            self._start_camera_preview()
+            return
+        try:
+            settings = self._settings()
+        except (ValueError, SkillConfigError) as error:
+            self._report_error(error)
+            return
+        if settings.config.detection is None:
+            self._report_error(ValueError(
+                self._detection_config_error
+                or "no detection configuration loaded; set the detection config YAML"))
+            return
+        self._camera_raw_topic = self.camera_image_topic.get()
+        self.camera_image_topic.set(settings.config.detection.image_overlay_topic)
+        self._overlay_button.configure(text="Show raw camera")
+        self._start_camera_preview()
 
     def _stop_camera_preview(self, *, update_status: bool = True) -> None:
         preview, self._camera_preview = self._camera_preview, None
@@ -431,11 +561,147 @@ class SkillsTestGui(tk.Tk):
             lambda path: self._show_search_result(prefix, path),
         )
 
+    def _run_search_mission(self) -> None:
+        try:
+            settings = self._settings()
+            corners = parse_corners(tuple((x.get(), y.get()) for x, y in self.corner_values))
+            classes = parse_target_classes(self.mission_classes.get())
+            mission_timeout = parse_mission_timeout(self.mission_timeout_sec.get())
+        except (ValueError, SkillConfigError) as error:
+            self._report_error(error)
+            return
+        if settings.config.detection is None:
+            self._report_error(ValueError(
+                self._detection_config_error
+                or "no detection configuration loaded; set the detection config YAML"))
+            return
+
+        stop_on_first = bool(self.mission_stop_on_first.get())
+        # Land must stay usable for the whole flight, and the worker thread is
+        # about to start spinning this node, so create its publisher now.
+        self._controller.prepare_flight_commands(settings)
+        self._mission_stop.clear()
+        self._mission_running = True
+        self._mission_targets = ()
+        while not self._mission_progress.empty():
+            self._mission_progress.get_nowait()
+        self._mission_stop_button.state(["!disabled"])
+        self.mission_status.set(
+            f"Mission starting: looking for {', '.join(classes)} over the selected area"
+            f"{' (stops on the first confirmed target)' if stop_on_first else ' (full sweep)'}.")
+        self._schedule_map_redraw()
+        self._run_service_action(
+            "Running search mission...",
+            lambda: self._controller.run_search_mission(
+                corners,
+                classes=classes,
+                settings=settings,
+                mission_timeout_sec=mission_timeout,
+                stop_on_first_detection=stop_on_first,
+                stop_requested=self._mission_stop.is_set,
+                on_progress=self._mission_progress.put,
+            ),
+            self._show_mission_result,
+        )
+
+    def _stop_search_mission(self) -> None:
+        if not self._mission_running:
+            self.mission_status.set("No mission running.")
+            return
+        self._mission_stop.set()
+        self.mission_status.set("Stop requested; aborting the route...")
+
+    def _clear_mission_targets(self) -> None:
+        self._mission_targets = ()
+        self.mission_status.set("Found targets cleared from the map.")
+        self._schedule_map_redraw()
+
+    def _show_mission_result(self, result: object) -> None:
+        self._mission_finished()
+        self._mission_targets = tuple(
+            (target.class_id, target.position[0], target.position[1]) for target in result.targets)
+        self.mission_status.set(result.message)
+        self._set_result(format_search_result(result, self._truth_matches(result.targets)))
+        self._schedule_map_redraw()
+
+    def _truth_matches(self, targets):
+        """Pair each estimated target with the simulated ground truth, if available.
+
+        Simulation only, and only for reading the result: the mission itself never
+        sees the truth, so what it reports stays the estimate it actually made.
+        """
+        field = self._load_truth_field()
+        if field is None or not targets:
+            return None
+        try:
+            from detection.truth import match_to_truth
+
+            return match_to_truth([target.position for target in targets], field)
+        except Exception as error:  # noqa: BLE001 - a convenience, never required
+            self._report_error(error)
+            return None
+
+    def _load_truth_field(self):
+        """Load (and cache) the ground-truth targets named in the settings."""
+        path = self.truth_targets_file.get().strip()
+        if not path:
+            self._truth_field, self._truth_source, self._truth_targets = None, None, ()
+            return None
+        if path == self._truth_source:
+            return self._truth_field
+        try:
+            from detection.config import DetectionConfig, load_targets
+
+            detection = DetectionConfig.load(self.detection_config_file.get().strip())
+            field = load_targets(path, ground_z_m=detection.world.ground_z_m)
+        except Exception as error:  # noqa: BLE001 - the truth file is optional
+            self._truth_field, self._truth_source, self._truth_targets = None, path, ()
+            self.mission_status.set(f"Ground truth unavailable: {error}")
+            return None
+        self._truth_field = field
+        self._truth_source = path
+        self._truth_targets = tuple(
+            (target.class_id, target.position[0], target.position[1]) for target in field.targets)
+        return field
+
+    def _on_show_truth_toggled(self) -> None:
+        if self.show_truth_targets.get():
+            self._load_truth_field()
+        self._schedule_map_redraw()
+
+    def _mission_finished(self) -> None:
+        self._mission_running = False
+        self._mission_stop.clear()
+        self._mission_stop_button.state(["disabled"])
+
+    def _poll_mission_progress(self) -> None:
+        if self._closed:
+            return
+        progress = None
+        while True:
+            try:
+                progress = self._mission_progress.get_nowait()
+            except Empty:
+                break
+        if progress is not None and self._mission_running:
+            self.mission_status.set(format_progress(progress))
+            targets = tuple(
+                (target.class_id, target.position[0], target.position[1])
+                for target in progress.targets)
+            if targets != self._mission_targets:
+                self._mission_targets = targets
+                self._schedule_map_redraw()
+        self.after(200, self._poll_mission_progress)
+
     def _on_skill_tab_changed(self, _event: tk.Event) -> None:
-        if self._notebook.index("current") == 0:
+        index = self._notebook.index("current")
+        if index == 0:
             self.map_mode.set("Navigate mode: one click selects an ENU goal.")
-        else:
+        elif index == 1:
             self.map_mode.set("Coverage Search mode: two clicks select an ENU rectangle.")
+        else:
+            self.map_mode.set(
+                "Search mission mode: two clicks select the ENU rectangle the mission searches.")
         self._schedule_map_redraw()
 
     def _on_operations_map_click(self, event: tk.Event) -> None:
@@ -580,6 +846,10 @@ class SkillsTestGui(tk.Tk):
             overlays.append(((self._vehicle_state.x, self._vehicle_state.y),))
         if self._queue_state is not None:
             overlays.append(self._queue_state.points)
+        if self._mission_targets:
+            overlays.append(tuple((x, y) for _class_id, x, y in self._mission_targets))
+        if self.show_truth_targets.get() and self._truth_targets:
+            overlays.append(tuple((x, y) for _class_id, x, y in self._truth_targets))
         width = max(float(canvas.winfo_width()), 100.0)
         height = max(float(canvas.winfo_height()), 100.0)
         self._map_viewport = make_viewport(bounds_for(self._map_data, *overlays), width, height)
@@ -620,13 +890,41 @@ class SkillsTestGui(tk.Tk):
             for point in queue_points[1:]:
                 x, y = self._map_viewport.to_canvas(point)
                 canvas.create_oval(x - 4, y - 4, x + 4, y + 4, fill="#7e57c2", outline="white")
+        if self.show_truth_targets.get():
+            for class_id, x, y in self._truth_targets:
+                self._draw_truth_target(class_id, x, y)
+        for class_id, x, y in self._mission_targets:
+            self._draw_found_target(class_id, x, y)
         if self._vehicle_state is not None:
             self._draw_vehicle(self._vehicle_state)
         canvas.create_text(
             8, 8, anchor="nw", fill="#303030",
             text=(f"{self._map_data.source.name} | red: occupied | green: search area | "
-                  "blue: planned route | orange: active queue | purple: pending queue | black: vehicle"),
+                  "blue: planned route | orange: active queue | purple: pending queue | "
+                  "magenta: found target | grey: ground truth | black: vehicle"),
         )
+
+    def _draw_truth_target(self, class_id: str, x: float, y: float) -> None:
+        """Mark where a target really is, to read the estimate against."""
+        assert self._map_viewport is not None
+        canvas_x, canvas_y = self._map_viewport.to_canvas((x, y))
+        self.map_canvas.create_polygon(
+            canvas_x, canvas_y - 9, canvas_x + 9, canvas_y, canvas_x, canvas_y + 9,
+            canvas_x - 9, canvas_y, fill="", outline="#546e7a", width=2)
+        self.map_canvas.create_text(
+            canvas_x + 11, canvas_y + 11, anchor="nw", fill="#546e7a",
+            text=f"truth {class_id}")
+
+    def _draw_found_target(self, class_id: str, x: float, y: float) -> None:
+        """Mark a target the mission confirmed, in the frame the map already uses."""
+        assert self._map_viewport is not None
+        canvas_x, canvas_y = self._map_viewport.to_canvas((x, y))
+        self.map_canvas.create_polygon(
+            canvas_x, canvas_y - 8, canvas_x + 8, canvas_y, canvas_x, canvas_y + 8,
+            canvas_x - 8, canvas_y, fill="#d500f9", outline="white", width=1.5)
+        self.map_canvas.create_text(
+            canvas_x + 10, canvas_y - 10, anchor="sw", fill="#aa00c7",
+            text=f"{class_id} ({x:.1f}, {y:.1f})")
 
     def _draw_vehicle(self, vehicle: VehicleState) -> None:
         assert self._map_viewport is not None
@@ -762,6 +1060,9 @@ class SkillsTestGui(tk.Tk):
         try:
             on_success(future.result())  # type: ignore[operator]
         except Exception as error:
+            if self._mission_running:
+                self._mission_finished()
+                self.mission_status.set(f"Mission failed: {error}")
             self._report_error(error)
 
     def _set_result(self, result: str) -> None:

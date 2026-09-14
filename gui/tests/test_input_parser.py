@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from gui.input_parser import parse_corners, parse_frame, parse_navigation_goal, parse_timeout, parse_waypoints
+from gui.input_parser import (
+    parse_corners,
+    parse_frame,
+    parse_mission_timeout,
+    parse_navigation_goal,
+    parse_target_classes,
+    parse_timeout,
+    parse_waypoints,
+)
 
 
 def test_parse_waypoints_supports_comma_or_space_separated_rows() -> None:
@@ -40,3 +48,24 @@ def test_parse_navigation_goal_normalizes_heading_and_rejects_invalid_values() -
     assert parse_navigation_goal("1", "2", "5", "450") == (1.0, 2.0, 5.0, 90.0)
     with pytest.raises(ValueError, match="goal altitude"):
         parse_navigation_goal("1", "2", "nan", "0")
+
+
+def test_parse_target_classes_accepts_groups_and_detector_classes() -> None:
+    assert parse_target_classes("vehicle") == ("vehicle",)
+    assert parse_target_classes("car, van") == ("car", "van")
+    assert parse_target_classes(" person ") == ("person",)
+
+
+def test_parse_target_classes_rejects_what_the_detector_cannot_report() -> None:
+    with pytest.raises(ValueError, match="at least one target class"):
+        parse_target_classes("   ")
+    with pytest.raises(ValueError, match="unknown target class 'plane'"):
+        parse_target_classes("plane")
+
+
+def test_parse_mission_timeout_requires_a_positive_number() -> None:
+    assert parse_mission_timeout("900") == 900.0
+    with pytest.raises(ValueError, match="mission timeout"):
+        parse_mission_timeout("0")
+    with pytest.raises(ValueError, match="mission timeout"):
+        parse_mission_timeout("later")

@@ -30,9 +30,15 @@ pkill -9 -x MicroXRCEAgent      2>/dev/null
 pkill -9 -f "parameter_bridge"  2>/dev/null
 pkill -9 -f "tf_bridge"         2>/dev/null
 
+# GZ camera image bridge (ros_gz_image image_bridge) — bridges the front
+# camera; not covered by the parameter_bridge kill above, so it otherwise
+# lingers after Ctrl+C and holds the camera topic.
+pkill -9 -f "ros_gz_image"      2>/dev/null
+pkill -9 -f "image_bridge"      2>/dev/null
+
 # Report anything that is still alive.
 sleep 1
-leftover="$(pgrep -af 'px4|gz sim|gz-server|MicroXRCEAgent|parameter_bridge|tf_bridge|PX4 SITL' 2>/dev/null | grep -v 'grep' || true)"
+leftover="$(pgrep -af 'px4|gz sim|gz-server|MicroXRCEAgent|parameter_bridge|tf_bridge|ros_gz_image|image_bridge|PX4 SITL' 2>/dev/null | grep -v 'grep' || true)"
 if [[ -n "${leftover}" ]]; then
   echo "WARNING: these processes are still running:" >&2
   echo "${leftover}" >&2

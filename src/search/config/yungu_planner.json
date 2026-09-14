@@ -7,7 +7,7 @@
     "markers": "/coverage_planner/markers"
   },
   "flight": {
-    "altitude_m": 25.0,
+    "altitude_m": 15.0,
     "ground_elevation_m": 0.0,
     "horizontal_clearance_m": 3.0
   },

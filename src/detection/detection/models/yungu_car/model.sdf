@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<!-- Passenger-car stand-in for the mock detection loop.
+     Primitive geometry only, so the model spawns without any external mesh or
+     texture resource. The model origin is the ground contact plane and +X is the
+     driving direction, so the spawn yaw is the vehicle heading. Overall envelope
+     4.40 x 1.80 x 1.50 m, matching src/detection/config/targets.yaml. -->
+<sdf version="1.9">
+  <model name="yungu_car">
+    <static>true</static>
+    <link name="body">
+      <visual name="chassis">
+        <pose>0 0 0.55 0 0 0</pose>
+        <geometry><box><size>4.40 1.80 0.70</size></box></geometry>
+        <material>
+          <ambient>0.06 0.12 0.34 1</ambient>
+          <diffuse>0.13 0.30 0.82 1</diffuse>
+        </material>
+      </visual>
+      <visual name="cabin">
+        <pose>-0.20 0 1.20 0 0 0</pose>
+        <geometry><box><size>2.20 1.60 0.60</size></box></geometry>
+        <material>
+          <ambient>0.08 0.14 0.28 1</ambient>
+          <diffuse>0.20 0.38 0.70 1</diffuse>
+        </material>
+      </visual>
+      <visual name="wheel_fl">
+        <pose>1.45 0.85 0.32 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.32</radius><length>0.22</length></cylinder></geometry>
+        <material><ambient>0.05 0.05 0.05 1</ambient><diffuse>0.10 0.10 0.10 1</diffuse></material>
+      </visual>
+      <visual name="wheel_fr">
+        <pose>1.45 -0.85 0.32 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.32</radius><length>0.22</length></cylinder></geometry>
+        <material><ambient>0.05 0.05 0.05 1</ambient><diffuse>0.10 0.10 0.10 1</diffuse></material>
+      </visual>
+      <visual name="wheel_rl">
+        <pose>-1.45 0.85 0.32 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.32</radius><length>0.22</length></cylinder></geometry>
+        <material><ambient>0.05 0.05 0.05 1</ambient><diffuse>0.10 0.10 0.10 1</diffuse></material>
+      </visual>
+      <visual name="wheel_rr">
+        <pose>-1.45 -0.85 0.32 1.5707963268 0 0</pose>
+        <geometry><cylinder><radius>0.32</radius><length>0.22</length></cylinder></geometry>
+        <material><ambient>0.05 0.05 0.05 1</ambient><diffuse>0.10 0.10 0.10 1</diffuse></material>
+      </visual>
+      <collision name="body_collision">
+        <pose>0 0 0.75 0 0 0</pose>
+        <geometry><box><size>4.40 1.80 1.50</size></box></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

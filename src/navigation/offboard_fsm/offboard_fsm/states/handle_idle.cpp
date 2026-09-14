@@ -18,6 +18,19 @@ void OffboardNode::handleIdle()
         return;
     }
 
+    // Retire a waypoint the reach check already cleared, without waiting for a
+    // planner status that may never arrive. When the FSM reaches a waypoint
+    // before SUPER declares the goal met, the planner is reset straight to
+    // WAIT_GOAL and never reports STATUS_REACHED for it. That is harmless for a
+    // waypoint that has a successor, because promoting the next one replaces it
+    // — but the last waypoint of a route would otherwise stay "active" forever,
+    // so the queue snapshot never empties and nothing downstream can tell that
+    // the route finished.
+    if (waypoints_->hasReachedCurrent() && waypoints_->currentGoal().has_value()) {
+        waypoints_->completeCurrent();
+        stuck_recovery_attempted_ = false;
+    }
+
     if (planner_reset_in_flight_) {
         return;
     }

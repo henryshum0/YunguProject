@@ -19,6 +19,9 @@ the next launch.
 | [`src/navigation/config/offboard/offboard_fsm.yaml`](../src/navigation/config/offboard/offboard_fsm.yaml) | Offboard state machine and planner integration | `update_rate`, arming/takeoff/landing settings, queue settings, `goal_height`, planner/FAST-LIO configuration |
 | [`src/navigation/config/offboard/super_planner/`](../src/navigation/config/offboard/super_planner/) | SUPER A*, ROG-Map, and trajectory optimization | `fsm.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
 | [`src/search/config/`](../src/search/config/) | Coverage planner JSON and reusable map geometry | `*_planner.json`, `*_map.json` |
+| [`src/detection/config/detection.yaml`](../src/detection/config/detection.yaml) | Detection contract shared by the mock and a real detector | `world.*`, `camera.*`, `topics.*`, `localizer.*` |
+| [`src/detection/config/mock_detector.yaml`](../src/detection/config/mock_detector.yaml) | Simulation-only mock detector and its error model | `rate_hz`, `seed`, `visibility.*`, `error_model.*`, `overlay.*` |
+| [`src/detection/config/targets.yaml`](../src/detection/config/targets.yaml) | Simulated ground-truth targets and the Gazebo spawn offset | `world_origin_in_gz`, `models`, `targets` |
 
 Set `offboard.visualization: false` in the offboard configuration for a fully
 headless navigation run. Use `use_fastlio:=false` with the combined launcher to
@@ -41,6 +44,24 @@ HEADLESS=1 ./utils/start_sim.sh
 ros2 launch offboard_fsm offboard.launch.py use_fastlio:=false
 ros2 launch visualization visualization.launch.py rviz:=false
 ```
+
+### Bringing the system up
+
+| Command | Starts |
+|---|---|
+| [`./utils/start_all.sh`](../utils/start_all.sh) | Simulator and vehicle stack in one terminal; `Ctrl+C` stops both. `--gui` adds the operator GUI, `--headless` drops the Gazebo GUI, and `name:=value` arguments pass through to the stack launch. |
+| [`src/launch/yungu_stack.launch.py`](../src/launch/yungu_stack.launch.py) | The vehicle stack: sensor bridging, navigation, coverage planning, detection. Each layer is an argument (`sensors`, `navigation`, `detection`, `visualization`, `mock_detector`, `spawn_targets`, `use_fastlio`, `coverage_config`). |
+| `./utils/start_sim.sh` | The simulator alone: Gazebo, PX4 SITL, the uXRCE agent, and the Gazebo bridges. |
+
+The individual layer launches still work on their own; the stack launch only
+includes them. Startup order does not matter — ROS subscriptions bind late, and
+the detection target spawner waits (`spawn_wait`) for the Gazebo world.
+
+Note for anyone adding arguments to the stack launch: launch configurations are
+inherited by included descriptions, so a name must not collide with one an
+included launch already declares. `offboard.launch.py` uses `planner_config` for
+the SUPER trajectory-planner config, which is why the coverage planner JSON is
+`coverage_config` here.
 
 ## Offboard state machine
 
@@ -130,7 +151,47 @@ rclpy.shutdown()
 ```
 
 For batch navigation and ENU/NED conversion, use [`NavigateSkill`](../skills/README.md).
-For coverage planning plus explicit queueing, use `SearchSkill`.
+For coverage planning plus explicit queueing, use `SearchSkill.plan_and_queue`; for the complete
+search + navigation + detection mission, use `SearchSkill.call`, the
+[`Search mission` GUI tab](../gui/README.md), or
+[`run_search_detection_demo.py`](../run_search_detection_demo.py).
+
+## Detection
+
+The detection layer publishes what the camera sees and where that is on the map.
+In simulation the detector is `mock_detector`, which projects the ground-truth
+targets in `targets.yaml` through the camera model and applies a calibrated error
+model; `target_localizer` then places each box on the ground plane, and
+`detection_overlay` draws the boxes onto the camera stream as a debug view. All
+three are started by one launcher. See [the detection reference](../src/detection/README.md)
+for the design, the interface a real detector must meet, and known limitations.
+
+```bash
+ros2 launch detection detection.launch.py                  # targets + mock + localizer
+ros2 launch detection detection.launch.py spawn:=false     # targets are already in the world
+ros2 launch detection detection.launch.py mock:=false      # a real detector publishes instead
+ros2 launch detection detection.launch.py overlay:=false   # skip the debug overlay
+ros2 run detection spawn_targets --detection-config src/detection/config/detection.yaml \
+    --targets-config src/detection/config/targets.yaml \
+    --models-dir src/detection/detection/models --remove
+```
+
+| Topic | Type | Description |
+|---|---|---|
+| `/detection/detections` | `vision_msgs/msg/Detection2DArray` | Image-plane boxes in the camera frame, stamped with the frame's capture time. |
+| `/detection/detections_world` | `vision_msgs/msg/Detection3DArray` | The same detections on the ground plane in the `map` ENU frame; `id` joins them to the boxes above. |
+| `/detection/markers` | `visualization_msgs/msg/MarkerArray` | RViz markers for world detections. |
+| `/detection/image_overlay` | `sensor_msgs/msg/Image` | Debug view from `detection_overlay`: the front-camera frame with boxes drawn on it. The GUI's **Show detection boxes** button switches the camera preview to it. |
+
+World-frame detections, and the target positions a search reports, are
+**estimates**: a detection box back-projected onto the ground plane. In
+simulation `detection.truth.match_to_truth` pairs an estimate with the true
+target for reading a result; the detection path itself never uses it.
+
+Detection runs entirely on the wall clock, taking its vehicle pose from
+`/gz/odom_super` (already ENU in the launch-origin frame and already restamped
+with `now()` by `super_lidar`). Bridged Gazebo topics carry the simulation clock
+instead, which is why the pose does not come from `/gz/ground_truth/odom`.
 
 ## Planning and feedback
 
@@ -165,6 +226,8 @@ The diagram source is [`assets/module_dependency_graph.dot`](assets/module_depen
 - SUPER plans local trajectories; FAST-LIO supplies localization when enabled.
 - `coverage_planner` is independent of flight execution and returns sparse ENU
   routes through its service.
+- `detection` supplies the simulation mock detector and the target localizer;
+  the localizer and the configuration are reused unchanged with a real detector.
 - `visualization`, `flight_monitor`, and `benchmark` are optional tools.
 
 The visualization `world` frame is anchored at the drone launch origin, as are
@@ -175,6 +238,7 @@ by the spawn offset so it aligns with LiDAR and sensor-interface output.
 
 - [Combined coverage-planner and offboard launcher](../src/launch/README.md)
 - [Coverage planner service and map configuration](../src/search/uav-coverage-route-planner/README.md)
+- [Detection layer, mock detector, and target localizer](../src/detection/README.md)
 - [GUI controls and map behavior](../gui/README.md)
 - [Skills API](../skills/README.md)
 - [Architectural UML and skill dependency graphs](uml.md)
