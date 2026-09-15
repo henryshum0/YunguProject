@@ -1,5 +1,0 @@
-geometry_msgs/PoseStamped[] waypoints
----
-bool success
-string message
-uint32 queued_count
