@@ -28,7 +28,7 @@ from rclpy.node import Node
 from gui.skill_interfaces.controller import ConnectionSettings, SkillController
 from gui.camera_view import CameraPreview
 from gui.telemetry import OperationsTelemetry, QueueState, VehicleState
-from skills import SkillRuntimeConfig
+from skills import SkillConfigError, SkillRuntimeConfig
 from gui.input_parser import parse_timeout
 from gui.map_view import (
     MapLoadError,
@@ -72,6 +72,12 @@ class SkillsTestGui(tk.Tk):
         self._camera_photos: dict[str, tk.PhotoImage] = {}
         self._camera_labels: dict[str, tk.Label] = {}
         self._camera_statuses: dict[str, tk.StringVar] = {}
+        # Overlay toggle swaps the front feed to the detector's overlay topic and
+        # remembers the raw topic so it can switch back.
+        self._front_camera_raw_topic: str | None = None
+        # Set when a detection config was named but could not be loaded, so the
+        # search-mission tab can report the exact reason it cannot start.
+        self._detection_config_error: str | None = None
         self._build_variables()
         if not skill_interfaces:
             raise ValueError("at least one skill interface is required")
@@ -90,6 +96,12 @@ class SkillsTestGui(tk.Tk):
             value=str(WORKSPACE_ROOT / "src" / "navigation" / "config" / "offboard"))
         self.planner_config_file = tk.StringVar(
             value=str(WORKSPACE_ROOT / "src" / "search" / "config" / "yungu_planner.json"))
+        self.detection_config_file = tk.StringVar(
+            value=str(WORKSPACE_ROOT / "src" / "detection" / "config" / "detection.yaml"))
+        # Simulation only: lets a finished mission be read against the true target
+        # positions. Clear it on a real vehicle, where there is no such file.
+        self.truth_targets_file = tk.StringVar(
+            value=str(WORKSPACE_ROOT / "src" / "detection" / "config" / "targets.yaml"))
         self.front_camera_image_topic = tk.StringVar(value="/swan_gamma_v2/front_camera/image")
         self.follow_camera_image_topic = tk.StringVar(value="/swan_gamma_v2/follow_camera/image")
         self.vehicle_odometry_topic = tk.StringVar(value="/gz/ground_truth/odom")
@@ -118,6 +130,8 @@ class SkillsTestGui(tk.Tk):
         fields = [
             ("Navigation config directory", self.navigation_config_dir),
             ("Planner config JSON", self.planner_config_file),
+            ("Detection config YAML", self.detection_config_file),
+            ("Ground truth YAML (sim)", self.truth_targets_file),
             ("Front camera image topic", self.front_camera_image_topic),
             ("Follow camera image topic", self.follow_camera_image_topic),
             ("Vehicle odometry topic", self.vehicle_odometry_topic),
@@ -207,7 +221,11 @@ class SkillsTestGui(tk.Tk):
         controls.grid(row=1, column=0, pady=(8, 6), sticky="w")
         ttk.Button(controls, text="Start / reconnect feeds", command=self._start_camera_previews).grid(
             row=0, column=0, padx=(0, 8))
-        ttk.Button(controls, text="Stop feeds", command=self._stop_camera_previews).grid(row=0, column=1)
+        ttk.Button(controls, text="Stop feeds", command=self._stop_camera_previews).grid(
+            row=0, column=1, padx=(0, 8))
+        self._overlay_button = ttk.Button(
+            controls, text="Show detection boxes", command=self._toggle_detection_overlay)
+        self._overlay_button.grid(row=0, column=2)
 
         for row, (key, title) in enumerate((
             ("front", "Front camera"),
@@ -241,14 +259,25 @@ class SkillsTestGui(tk.Tk):
         timeout = parse_timeout(self.timeout_sec.get())
         navigation_config_dir = self.navigation_config_dir.get().strip()
         planner_config_file = self.planner_config_file.get().strip()
+        detection_config_file = self.detection_config_file.get().strip() or None
         if not navigation_config_dir:
             raise ValueError("navigation config directory must not be empty")
         if not planner_config_file:
             raise ValueError("planner config JSON must not be empty")
-        return ConnectionSettings(
-            config=SkillRuntimeConfig.load(navigation_config_dir, planner_config_file),
-            timeout_sec=timeout,
-        )
+        try:
+            config = SkillRuntimeConfig.load(
+                navigation_config_dir, planner_config_file, detection_config_file)
+        except SkillConfigError as error:
+            if detection_config_file is None:
+                raise
+            # Detection is only needed by the mission. Navigation and coverage
+            # planning must keep working without it, so fall back and let the
+            # mission report the exact reason it cannot run.
+            config = SkillRuntimeConfig.load(navigation_config_dir, planner_config_file)
+            self._detection_config_error = str(error)
+        else:
+            self._detection_config_error = None
+        return ConnectionSettings(config=config, timeout_sec=timeout)
 
     def _start_camera_previews(self) -> None:
         """Start independent ROS image subscribers for the two persistent feeds."""
@@ -279,6 +308,34 @@ class SkillsTestGui(tk.Tk):
             label.configure(image="", text="Camera preview stopped.")
             if update_status:
                 self._camera_statuses[key].set("Preview stopped.")
+
+    def _toggle_detection_overlay(self) -> None:
+        """Switch the front feed between the raw camera and the detector's overlay.
+
+        The overlay is published by the detection layer, so its topic comes from
+        the detection configuration rather than being spelled out here. Only the
+        front feed is switched; the follow camera keeps showing the raw stream.
+        """
+        if self._front_camera_raw_topic is not None:
+            topic, self._front_camera_raw_topic = self._front_camera_raw_topic, None
+            self.front_camera_image_topic.set(topic)
+            self._overlay_button.configure(text="Show detection boxes")
+            self._start_camera_previews()
+            return
+        try:
+            settings = self._settings()
+        except (ValueError, SkillConfigError) as error:
+            self._report_error(error)
+            return
+        if settings.config.detection is None:
+            self._report_error(ValueError(
+                self._detection_config_error
+                or "no detection configuration loaded; set the detection config YAML"))
+            return
+        self._front_camera_raw_topic = self.front_camera_image_topic.get()
+        self.front_camera_image_topic.set(settings.config.detection.image_overlay_topic)
+        self._overlay_button.configure(text="Show raw camera")
+        self._start_camera_previews()
 
     def _poll_camera_previews(self) -> None:
         if self._closed:
