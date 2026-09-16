@@ -6,6 +6,7 @@ from gui.skill_interfaces import (
     DEFAULT_SKILL_INTERFACES,
     CoverageSearchSkillInterface,
     NavigateSkillInterface,
+    SearchMissionSkillInterface,
     SkillInterface,
 )
 
@@ -37,5 +38,6 @@ def test_default_interfaces_are_pluggable_skill_interface_classes() -> None:
     assert DEFAULT_SKILL_INTERFACES == (
         NavigateSkillInterface,
         CoverageSearchSkillInterface,
+        SearchMissionSkillInterface,
     )
     assert all(issubclass(interface, SkillInterface) for interface in DEFAULT_SKILL_INTERFACES)

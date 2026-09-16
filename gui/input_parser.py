@@ -5,6 +5,8 @@ from __future__ import annotations
 from math import isfinite
 from typing import Sequence
 
+from skills import expand_classes
+
 
 Waypoint = tuple[float, float, float, float]
 Corner = tuple[float, float]
@@ -60,6 +62,28 @@ def parse_timeout(value: str) -> float:
     timeout = _finite(value, "timeout")
     if timeout <= 0.0:
         raise ValueError("timeout must be greater than zero")
+    return timeout
+
+
+def parse_target_classes(value: str) -> tuple[str, ...]:
+    """Parse the comma-separated target classes a search mission looks for.
+
+    Accepts the operator-facing group names (``person``, ``vehicle``) as well as
+    detector class names, and rejects anything the detector cannot report, so a
+    typo fails here instead of quietly never matching.
+    """
+    names = [name.strip() for name in value.replace(",", " ").split()]
+    if not names:
+        raise ValueError("enter at least one target class, for example 'vehicle'")
+    expand_classes(names)   # validates only; the skill expands them itself
+    return tuple(names)
+
+
+def parse_mission_timeout(value: str) -> float:
+    """Parse the ceiling on one search mission, in seconds."""
+    timeout = _finite(value, "mission timeout")
+    if timeout <= 0.0:
+        raise ValueError("mission timeout must be greater than zero")
     return timeout
 
 

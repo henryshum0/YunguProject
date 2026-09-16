@@ -9,10 +9,14 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from rclpy.node import Node
 
+from collections.abc import Sequence
+
 from skills import (
     LandPrimitive,
     NavigateSkill,
     PlanSearchPrimitive,
+    SearchProgress,
+    SearchResult,
     SearchSkill,
     SkillRuntimeConfig,
     TakeoffPrimitive,
@@ -63,6 +67,57 @@ class SkillController:
     ) -> Path:
         return SearchSkill(self._node, config=settings.config).call(
             corners, timeout_sec=settings.timeout_sec)
+
+def format_search_result(result: SearchResult, truth_matches: Sequence | None = None) -> str:
+    """Render a finished mission for the result panel.
+
+    Target positions are what the mission *estimated*: each detection box
+    back-projected onto the ground plane and averaged over frames. When
+    ``truth_matches`` is supplied — simulation only, from
+    ``detection.truth.match_to_truth`` — the true position is printed underneath
+    so the error can be read directly instead of worked out by hand.
+    """
+    lines = [
+        result.message,
+        "",
+        f"success            : {result.success}",
+        f"found              : {result.found}",
+        f"termination_reason : {result.termination_reason}",
+        f"route progress     : {result.waypoints_completed}/{result.waypoints_total} "
+        f"({result.route_completion * 100:.0f}%)",
+        f"detector frames    : {result.detector_frames}",
+    ]
+    if result.targets:
+        lines.append("targets (estimate = back-projected from the detections):")
+        matches = list(truth_matches) if truth_matches is not None else [None] * len(result.targets)
+        for target, match in zip(result.targets, matches):
+            x, y, z = target.position
+            lines.append(
+                f"  - {target.class_id:<12} estimate ({x:8.2f}, {y:8.2f}, {z:6.2f})  "
+                f"hits={target.hits}  best_score={target.best_score:.2f}")
+            if match is not None:
+                lines.append(
+                    f"    {'':<12} truth    ({match.position[0]:8.2f}, {match.position[1]:8.2f}, "
+                    f"{match.position[2]:6.2f})  {match.target_id} [{match.class_id}]  "
+                    f"error {match.error_m:.2f} m")
+            elif truth_matches is not None:
+                lines.append(f"    {'':<12} truth    no target nearby (possible false positive)")
+    else:
+        lines.append("targets: none confirmed")
+    lines.append("")
+    lines.append(format_path(result.path))
+    return "\n".join(lines)
+
+
+def format_progress(progress: SearchProgress) -> str:
+    """Render a one-line in-flight mission status."""
+    remaining = ("queue not reported yet" if progress.waypoints_remaining is None
+                 else f"{progress.waypoints_completed}/{progress.waypoints_total} waypoint(s)")
+    found = (", ".join(f"{target.class_id} at ({target.position[0]:.1f}, {target.position[1]:.1f})"
+                       for target in progress.targets) or "none yet")
+    return (f"Mission running {progress.elapsed_sec:.0f}s: {remaining}, "
+            f"{progress.detector_frames} detector frame(s), found: {found}")
+
 
 def format_path(path: Path) -> str:
     """Render a sparse ROS path as readable ENU waypoints for the result panel."""
