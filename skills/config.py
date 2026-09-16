@@ -35,19 +35,40 @@ class CoveragePlannerSkillConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class DetectionSkillConfig:
+    """Skills-relevant endpoints declared by the detection subsystem contract."""
+
+    frame_id: str
+    detections_topic: str
+    detections_world_topic: str
+    image_overlay_topic: str
+    vehicle_odom_topic: str
+    config_file: Path
+
+
+@dataclass(frozen=True, slots=True)
 class SkillRuntimeConfig:
     """One immutable configuration source for all navigation/search skills."""
 
     offboard: OffboardSkillConfig
     coverage_planner: CoveragePlannerSkillConfig
+    #: Present only when a detection configuration was supplied; skills that need
+    #: detections raise a configuration error when it is missing.
+    detection: DetectionSkillConfig | None = None
 
     @classmethod
     def load(
         cls,
         navigation_config_dir: str | Path,
         planner_config_file: str | Path,
+        detection_config_file: str | Path | None = None,
     ) -> "SkillRuntimeConfig":
-        """Load offboard YAML and coverage-planner JSON from explicit paths."""
+        """Load offboard YAML, coverage-planner JSON, and optional detection YAML.
+
+        ``detection_config_file`` is optional so navigation-only and search-only
+        applications keep working unchanged; it is required by ``DetectSkill``
+        and by the full ``SearchMissionSkill`` mission.
+        """
         config_dir = Path(navigation_config_dir).expanduser().resolve()
         fsm_file = config_dir / "offboard_fsm.yaml"
         topics_file = config_dir / "topics.yaml"
@@ -78,7 +99,40 @@ class SkillRuntimeConfig:
                 "offboard_fsm.frame_id "
                 f"'{offboard.frame_id}' does not match coverage planner frame_id "
                 f"'{coverage.frame_id}'")
-        return cls(offboard=offboard, coverage_planner=coverage)
+
+        detection = None
+        if detection_config_file is not None:
+            detection = _load_detection(detection_config_file)
+            if detection.frame_id != offboard.frame_id:
+                raise SkillConfigError(
+                    f"detection world frame_id '{detection.frame_id}' does not match "
+                    f"offboard_fsm.frame_id '{offboard.frame_id}'")
+        return cls(offboard=offboard, coverage_planner=coverage, detection=detection)
+
+
+def _load_detection(detection_config_file: str | Path) -> DetectionSkillConfig:
+    """Validate the detection contract through the detection package's own loader."""
+    config_file = Path(detection_config_file).expanduser().resolve()
+    if not config_file.is_file():
+        raise SkillConfigError(f"detection config file does not exist: '{config_file}'")
+    try:
+        from detection.config import DetectionConfig, DetectionConfigError
+    except ImportError as exc:
+        raise SkillConfigError(
+            "the detection package is unavailable; source the built workspace overlay "
+            "before loading a detection-aware skill configuration") from exc
+    try:
+        config = DetectionConfig.load(config_file)
+    except DetectionConfigError as exc:
+        raise SkillConfigError(f"invalid detection config '{config_file}': {exc}") from exc
+    return DetectionSkillConfig(
+        frame_id=config.world.frame_id,
+        detections_topic=config.topics.detections,
+        detections_world_topic=config.topics.detections_world,
+        image_overlay_topic=config.topics.image_overlay,
+        vehicle_odom_topic=config.topics.vehicle_odom,
+        config_file=config_file,
+    )
 
 
 def _load_yaml_mapping(path: Path, label: str) -> Mapping[str, Any]:
