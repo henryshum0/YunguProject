@@ -3,14 +3,14 @@
 <package format="3">
   <name>flight_monitor</name>
   <version>0.1.0</version>
-  <description>Flight observability tools: realtime Gazebo ground-truth versus PX4/SUPER monitor and goal-triggered command-trajectory recorder with CSV output and live plotting.</description>
+  <description>Flight observability tools: realtime Gazebo ground-truth versus PX4/EGO monitor and goal-triggered command-trajectory recorder with CSV output and live plotting.</description>
   <maintainer email="windshape@example.com">windshape</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>mars_quadrotor_msgs</exec_depend>
+  <exec_depend>quadrotor_msgs</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-matplotlib</exec_depend>
 

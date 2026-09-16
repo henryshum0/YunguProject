@@ -5,7 +5,7 @@ world frame (anchored at the drone launch position).
 The Gazebo truth odom (/gz/ground_truth/odom) is expressed in the Gazebo world
 origin (0,0,0), while the visualization world frame is anchored at the drone
 launch position (= PX4 ENU origin). This node subtracts the spawn offset so the
-truth path lines up with SUPER's world cloud in RViz.
+truth path lines up with EGO's world cloud in RViz.
 
 Subscribes:  /gz/ground_truth/odom  (nav_msgs/Odometry, Gazebo truth, gz origin)
 Publishes:   /gt_path              (nav_msgs/Path, frame world = launch origin)

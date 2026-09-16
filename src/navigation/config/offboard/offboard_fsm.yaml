@@ -1,0 +1,29 @@
+# Flight-state settings for the single-drone EGO/PX4 adapter.
+offboard_fsm:
+  frame_id: world
+  update_rate_hz: 50.0
+  warmup_sec: 1.0
+  takeoff_height_m: 5.0
+  takeoff_speed_mps: 0.6
+  takeoff_tolerance_m: 0.3
+  arm_retry_sec: 1.0
+  command_timeout_sec: 0.5
+  goal_accept_timeout_sec: 8.0
+
+ego_planner:
+  # EGO uses a fixed local occupancy grid.  This is deliberately local: the
+  # complete Yungu collider map is much larger than a practical dense grid.
+  grid_resolution_m: 0.5
+  map_size_x_m: 60.0
+  map_size_y_m: 60.0
+  map_size_z_m: 16.0
+  local_update_range_x_m: 8.0
+  local_update_range_y_m: 8.0
+  local_update_range_z_m: 6.0
+  ground_height_m: -2.0
+  virtual_ceiling_height_m: 14.0
+  obstacle_inflation_m: 0.5
+  max_velocity_mps: 2.0
+  max_acceleration_mps2: 3.0
+  max_jerk_mps3: 4.0
+  planning_horizon_m: 7.5

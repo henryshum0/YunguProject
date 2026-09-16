@@ -1,0 +1,31 @@
+# Single-drone EGO/PX4 integration endpoints.  These names are consumed by the
+# workspace launch, offboard_fsm, skills, and GUI configuration loader.
+offboard_fsm:
+  in:
+    # PX4's uXRCE DDS bridge appends a message-version suffix for these two
+    # versioned interfaces.  The unversioned names exist in the ROS graph but
+    # have no PX4 publisher, so use the concrete endpoints emitted by SITL.
+    local_position: /fmu/out/vehicle_local_position_v1
+    vehicle_status: /fmu/out/vehicle_status_v4
+    land_detected: /fmu/out/vehicle_land_detected
+    ego_position_command: /ego_planner/position_cmd
+    ego_state: /ego_planner/state
+  out:
+    ego_goal: /move_base_simple/goal
+    offboard_control_mode: /fmu/in/offboard_control_mode
+    trajectory_setpoint: /fmu/in/trajectory_setpoint
+    vehicle_command: /fmu/in/vehicle_command
+    waypoint_queue_status: /waypoint_buffer/status
+  services:
+    queue_waypoints: /waypoint_buffer
+    clear_waypoints: /waypoint_buffer/clear
+    takeoff: /offboard/takeoff
+    land: /offboard/land
+
+ego_planner:
+  odometry: /gz/odom_super
+  cloud: /gz/point_cloud_super
+  goal: /move_base_simple/goal
+  state: /ego_planner/state
+  bspline: /ego_planner/bspline
+  position_command: /ego_planner/position_cmd

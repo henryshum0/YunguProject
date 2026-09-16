@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <description>
     Gazebo benchmark: randomly generates a flat map with gate/pillar obstacles
-    (as a world .sdf) for testing the SUPER planner under obstacle-dense
+    (as a world .sdf) for testing the EGO planner under obstacle-dense
     environments. Density is controlled by discretizing the map into an NxN
     grid and setting the number of objects per cell; a clearing distance keeps
     a minimum gap between obstacles.

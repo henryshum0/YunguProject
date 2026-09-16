@@ -1,7 +1,7 @@
 {
   "schema_version": "1.2",
   "map_file": "yungu_map.json",
-  "frame_id": "map",
+  "frame_id": "world",
   "output_topics": {
     "waypoints": "/coverage_planner/waypoints",
     "markers": "/coverage_planner/markers"

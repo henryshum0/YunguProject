@@ -22,13 +22,13 @@ ROS interfaces
         │ PlanCoverage ──► sparse ENU Path ──► QueueWaypoints
         ▼
 Search                 Navigation                         Simulation
-coverage_planner  →  offboard_fsm → SUPER → PX4    ←  Gazebo / sensor bridge
+coverage_planner  →  offboard_fsm → EGO-Planner → PX4    ←  Gazebo / sensor bridge
                          ▲
                  LiDAR world cloud + odometry
 ```
 
 A coverage request is planned by `coverage_planner`, returned as a sparse ENU
-`Path`, accepted atomically by `offboard_fsm`, then flown by SUPER and PX4
+`Path`, accepted atomically by `offboard_fsm`, then flown by EGO-Planner and PX4
 offboard control. Planning does **not** queue or publish a route by itself;
 `SearchSkill` or the GUI's **Plan and queue** action performs that explicit
 second step.
@@ -39,7 +39,7 @@ second step.
 |---|---|
 | [`gui/`](gui/) and [`gui.py`](gui.py) | Tkinter operator/test GUI: flight controls, live camera and operations map, navigation, and coverage search. |
 | [`skills/`](skills/) | Plain Python ROS client interfaces: `NavigateSkill`, `SearchSkill`, and their primitives. |
-| [`src/navigation/`](src/navigation/) | Flight execution: `offboard_fsm`, SUPER, Livox driver, PX4 messages, and navigation tools. |
+| [`src/navigation/`](src/navigation/) | Flight execution: `offboard_fsm`, EGO-Planner, PX4 messages, and navigation tools. |
 | [`src/search/`](src/search/) | `coverage_planner` plus independent Yungu map and planner configuration. |
 | [`src/simulation/`](src/simulation/) | Gazebo-facing sensor interface and simulation configuration. |
 | [`src/launch/`](src/launch/) | Cross-package launch orchestration, including coverage planner plus offboard FSM. |
@@ -82,10 +82,10 @@ following commands in each prepared terminal:
 # Terminal 2: LiDAR and ground-truth sensor bridging.
 ros2 launch gz_sensor_interface sensor_sensors.launch.py
 
-# Terminal 3: offboard FSM, SUPER, and the coverage-planning action server.
+# Terminal 3: EGO-Planner, PX4 offboard adapter, and coverage planning.
 ros2 launch "$PWD/src/launch/coverage_and_offboard.launch.py"
 
-# Terminal 4 (optional): RViz and birdview tools.
+# Terminal 4 (optional): RViz tools.
 ros2 launch visualization visualization.launch.py
 
 # Terminal 5: operator GUI.
@@ -146,7 +146,7 @@ counter-clockwise. Read complete API examples in
 | `/waypoint_buffer/status` | `nav_msgs/msg/Path` | Latched queue snapshot: active target, then pending targets. |
 | `/offboard/takeoff` | `std_srvs/srv/Trigger` | Accept the normal FSM arming/takeoff sequence from `INIT`. |
 | `/offboard/land` | `std_srvs/srv/Trigger` | Accept native PX4 landing; touchdown/disarm are asynchronous. |
-| `/waypoint_pose` | `geometry_msgs/msg/PoseStamped` | RViz/manual single-goal input, bridged to the queue service. |
+| `/move_base_simple/goal` | `geometry_msgs/msg/PoseStamped` | Internal EGO manual-goal topic; normal clients use the queue service. |
 
 For the state-machine lifecycle, direct ROS examples, feedback topics, and
 failure behavior, use the [operations reference](docs/operations.md). The
@@ -156,7 +156,7 @@ complete request/response contract is in [ROS interfaces](docs/ros_interfaces.md
 
 ### Simulation and perception
 
-- `gz_sensor_interface` converts Gazebo LiDAR and odometry into SUPER's
+- `gz_sensor_interface` converts Gazebo LiDAR and odometry into EGO-Planner's
   world-frame inputs.
 - `livox_ros_driver2` remains available for the physical LiDAR path.
 - `VisionFlow-PX4` supplies PX4 SITL, the Yungu Gazebo world, vehicle models,
@@ -166,16 +166,15 @@ complete request/response contract is in [ROS interfaces](docs/ros_interfaces.md
 
 - `offboard_fsm` owns arming, takeoff, landing, queue services, and the
   ENU-to-PX4-NED boundary.
-- SUPER (`super_planner`, `rog_map`, and supporting packages) plans local safe
-  trajectories from each active waypoint.
-- `px4_msgs` and `mars_quadrotor_msgs` provide ROS message definitions.
+- EGO-Planner plans local safe trajectories from each active waypoint.
+- `px4_msgs` and `quadrotor_msgs` provide ROS message definitions.
 
 ### Search and operator tooling
 
 - `coverage_planner` plans obstacle-aware single-UAV coverage routes from the
   configured map and a requested search rectangle. Its package README covers
   the action and JSON schema: [`src/search/uav-coverage-route-planner/README.md`](src/search/uav-coverage-route-planner/README.md).
-- `visualization`, `flight_monitor`, and `benchmark` provide RViz/birdview,
+- `visualization`, `flight_monitor`, and `benchmark` provide RViz,
   recording, and planner-evaluation utilities.
 - [`src/launch/README.md`](src/launch/README.md) documents the combined
   coverage-planner/offboard launcher.
@@ -187,7 +186,7 @@ Configuration is grouped by owner:
 - [`src/simulation/config/`](src/simulation/config/) for Gazebo, bridge,
   sensor, and visualization settings;
 - [`src/navigation/config/offboard/`](src/navigation/config/offboard/) for
-  offboard FSM, shared topic names, and SUPER settings;
+  offboard FSM, EGO local-grid settings, and shared topic names;
 - [`src/search/config/`](src/search/config/) for planner mission settings and
   reusable map geometry.
 

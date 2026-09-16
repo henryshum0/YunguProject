@@ -82,7 +82,7 @@ Visualization Manager:
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
-      Name: Occupied Map (Red)
+      Name: EGO Inflated Occupancy Map (Red)
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 4
@@ -93,7 +93,7 @@ Visualization Manager:
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /rog_map/inf_occ
+        Value: /grid_map/occupancy_inflate
       Use Fixed Frame: true
     - Alpha: 1
       Buffer Length: 1

@@ -22,14 +22,14 @@ planning can take longer than a normal service request.
 By default, the action calculates only. Set `publish_result=true` only when
 the planner's Path/MarkerArray visualization should be refreshed.
 
-## Offboard FSM services
+## EGO/PX4 offboard services
 
 | Endpoint | Type | Request | Successful response | Meaning |
 |---|---|---|---|---|
-| `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | `PoseStamped[] waypoints` | `success`, `message`, `queued_count` | Atomically append the ordered route. Empty batches are rejected. |
-| `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | none | `success`, `message`, `cleared_count` | Abort the active target and clear all pending targets. |
-| `/offboard/takeoff` | `std_srvs/srv/Trigger` | none | `success`, `message` | Accept a normal FSM takeoff request only while the FSM is in `INIT`; it remains latched while readiness and arming checks run. |
-| `/offboard/land` | `std_srvs/srv/Trigger` | none | `success`, `message` | Accept native PX4 landing outside `INIT` and `LAND`. Touchdown and disarm occur asynchronously in the FSM. |
+| `/waypoint_buffer` | `offboard_fsm/srv/QueueWaypoints` | `PoseStamped[] waypoints` | `success`, `message`, `queued_count` | Atomically append an ordered ENU route. A queued point becomes EGO's next manual goal only after takeoff. |
+| `/waypoint_buffer/clear` | `offboard_fsm/srv/ClearWaypoints` | none | `success`, `message`, `cleared_count` | Drop the active and pending route, stop forwarding EGO commands, and hold the current PX4 pose. |
+| `/offboard/takeoff` | `std_srvs/srv/Trigger` | none | `success`, `message` | Accept a takeoff request only from `INIT`. Arming, OFFBOARD entry, and climb occur asynchronously. |
+| `/offboard/land` | `std_srvs/srv/Trigger` | none | `success`, `message` | Abort navigation and request native PX4 LAND. Touchdown/disarm remain asynchronous. |
 
 For example:
 
@@ -39,8 +39,18 @@ ros2 service call /offboard/land std_srvs/srv/Trigger "{}"
 ```
 
 A successful `Trigger` response confirms command acceptance, not that the
-vehicle has become airborne, landed, or disarmed. Observe FSM/vehicle
-telemetry for physical progress.
+vehicle has become airborne, landed, or disarmed. Observe vehicle telemetry
+for physical progress.
+
+## Internal EGO interfaces
+
+The FSM is the only normal client of these internal endpoints:
+
+| Endpoint | Type | Meaning |
+|---|---|---|
+| `/move_base_simple/goal` | `geometry_msgs/msg/PoseStamped` | One ENU EGO manual goal, including the requested altitude. |
+| `/ego_planner/state` | `std_msgs/msg/String` | Reliable EGO state: `INIT`, `WAIT_TARGET`, planning/executing states, or `ERROR`. The FSM completes a route point only after observing execution followed by `WAIT_TARGET`. |
+| `/ego_planner/position_cmd` | `quadrotor_msgs/msg/PositionCommand` | EGO ENU position, velocity, acceleration, yaw, and yaw-rate command forwarded by the FSM to PX4 as NED. |
 
 ## Read-only queue state
 
@@ -49,5 +59,4 @@ telemetry for physical progress.
 poses are pending targets in execution order. It is telemetry, not a command
 endpoint.
 
-`/waypoint_pose` remains a manual/RViz `geometry_msgs/msg/PoseStamped` input
-to `goal_marker_node`; that node calls the queue service on behalf of RViz.
+The queue status is telemetry, not an EGO goal or PX4 command interface.

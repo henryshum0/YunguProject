@@ -13,15 +13,10 @@ the next launch.
 |---|---|---|
 | [`src/simulation/config/simulation.yaml`](../src/simulation/config/simulation.yaml) | PX4/Gazebo model, world, bridge, and uXRCE settings | `model`, `world`, `gz_version`, `xrce_port`, `bridge.*` |
 | [`src/simulation/config/gz_sensor_interface.yaml`](../src/simulation/config/gz_sensor_interface.yaml) | Gazebo sensor bridge topics, frames, and extrinsics | `lidar_sensor.*`, `truth_odom.*`, `super_lidar.*` |
-| [`src/simulation/config/visualization.yaml`](../src/simulation/config/visualization.yaml) | TF, birdview, path, point-cloud, and RViz settings | `frames.*`, `visual_tf.*`, `birdview.*`, `rviz.*` |
-| [`src/simulation/config/birdview.yaml`](../src/simulation/config/birdview.yaml) | Aerial birdview overlay | `extent_*`, `offset_*`, `yaw`, `max_points` |
-| [`src/navigation/config/offboard/topics.yaml`](../src/navigation/config/offboard/topics.yaml) | Shared navigation ROS endpoints | `offboard_fsm.*`, `super.*`, and visualization endpoints |
-| [`src/navigation/config/offboard/offboard_fsm.yaml`](../src/navigation/config/offboard/offboard_fsm.yaml) | Offboard state machine and planner integration | `update_rate`, arming/takeoff/landing settings, queue settings, `goal_height`, planner configuration |
-| [`src/navigation/config/offboard/super_planner/`](../src/navigation/config/offboard/super_planner/) | SUPER A*, ROG-Map, and trajectory optimization | `fsm.*`, `traj_opt.*`, `astar.*`, `rog_map.*` |
+| [`src/simulation/config/visualization.yaml`](../src/simulation/config/visualization.yaml) | TF, path, point-cloud, and RViz settings | `frames.*`, `visual_tf.*`, `rviz.*` |
+| [`src/navigation/config/offboard/topics.yaml`](../src/navigation/config/offboard/topics.yaml) | Shared EGO/PX4 navigation endpoints | `offboard_fsm.*` and `ego_planner.*` |
+| [`src/navigation/config/offboard/offboard_fsm.yaml`](../src/navigation/config/offboard/offboard_fsm.yaml) | Offboard state machine and EGO local-grid settings | takeoff, timeout, local-grid, and EGO motion limits |
 | [`src/search/config/`](../src/search/config/) | Coverage planner JSON and reusable map geometry | `*_planner.json`, `*_map.json` |
-
-Set `offboard.visualization: false` in the offboard configuration for a fully
-headless navigation run.
 
 ### Per-run simulation overrides
 
@@ -41,8 +36,8 @@ ros2 launch visualization visualization.launch.py rviz:=false
 
 ## Offboard state machine
 
-`offboard_node` owns vehicle flight-state transitions. It waits for healthy
-odometry and planner readiness before accepting a takeoff command.
+`offboard_node` owns PX4 flight-state transitions and forwards EGO's ENU
+trajectory commands only while executing an accepted queue goal.
 
 ![Offboard FSM state machine](assets/offboard_fsm_state_machine.png)
 
@@ -50,12 +45,11 @@ The diagram source is [`assets/offboard_fsm_state_machine.dot`](assets/offboard_
 
 | State | Behavior |
 |---|---|
-| `INIT` | Verifies inputs, selects PX4 OFFBOARD mode, then waits for takeoff. If restarted airborne in OFFBOARD with a healthy planner, it resumes in `IDLE`. |
-| `ARMING` | Arms after a stable OFFBOARD stream. A takeoff request remains latched across configured arm-retry cycles until PX4 confirms arming or it is cancelled. |
-| `TAKEOFF` | Climbs directly with PX4 control to `default_height`, then enters `IDLE`. |
-| `IDLE` | Holds position, maintains SUPER readiness, processes terminal goal status, and hands the next queued waypoint to SUPER when ready. |
-| `MOVE` | Forwards SUPER `PositionCommand` output to PX4. Planner terminal status, failure recovery, or waypoint completion returns to `IDLE`. |
-| `LAND` | Requests PX4 native `AUTO_LAND` and stops streaming offboard setpoints. After PX4 reports touchdown, it retries disarm until confirmation before returning to `INIT`. |
+| `INIT` | Streams a PX4 setpoint and waits for a takeoff request plus valid local position. |
+| `TAKEOFF` | Repeatedly requests PX4 OFFBOARD and arm, then climbs directly to the configured height before entering `IDLE`. |
+| `IDLE` | Holds the captured PX4 pose and dispatches one queued ENU goal to EGO-Planner. |
+| `MOVE` | Forwards fresh EGO `PositionCommand` messages to PX4. It returns to `IDLE` after EGO executes the dispatched goal and reports `WAIT_TARGET`. |
+| `LAND` | Requests PX4 native LAND, then waits for PX4 touchdown/disarm before returning to `INIT`. |
 
 ```bash
 ros2 service call /offboard/takeoff std_srvs/srv/Trigger "{}"
@@ -68,8 +62,7 @@ Landing interrupts `ARMING`, `TAKEOFF`, `IDLE`, and `MOVE`.
 
 Use `/waypoint_buffer` for algorithmic routes. It accepts the entire ordered
 batch before the offboard FSM executes it. `/waypoint_buffer/clear` is an abort
-action: it removes the active and every queued target, holds the vehicle, and
-resets SUPER.
+action: it removes the active and every queued target, then holds the vehicle.
 
 | Endpoint | Type | Description |
 |---|---|---|
@@ -78,65 +71,32 @@ resets SUPER.
 | `/waypoint_buffer/status` | `nav_msgs/msg/Path` | Reliable transient-local snapshot: active waypoint first, followed by pending waypoints. |
 | `/offboard/takeoff` | `std_srvs/srv/Trigger` | Accept a latched normal takeoff request only from `INIT`; arming remains asynchronous. |
 | `/offboard/land` | `std_srvs/srv/Trigger` | Accept native PX4 landing; touchdown/disarm remain asynchronous. |
-| `/waypoint_pose` | `geometry_msgs/msg/PoseStamped` | Manual/RViz single-goal input, bridged into the queue service. |
-| `/goal_pose` | `geometry_msgs/msg/PoseStamped` | Internal current-goal handoff from offboard FSM to SUPER. |
-| `/waypoint_markers` | `visualization_msgs/msg/MarkerArray` | Queue feedback: green queued, yellow active, cyan route. |
+| `/move_base_simple/goal` | `geometry_msgs/msg/PoseStamped` | Internal handoff from offboard FSM to EGO-Planner. |
+| `/ego_planner/state` | `std_msgs/msg/String` | Reliable EGO lifecycle state used to detect goal completion or errors. |
+| `/ego_planner/position_cmd` | `quadrotor_msgs/msg/PositionCommand` | EGO ENU trajectory forwarded to PX4 after ENU-to-NED conversion. |
 
 ### Frame convention
 
-Navigation waypoints and SUPER goals use the `world` ENU frame: x east, y
+Navigation waypoints and EGO goals use the `world` ENU frame: x east, y
 north, z up; ROS yaw zero faces east and positive rotation is
 counter-clockwise. `offboard_fsm` converts ENU position and yaw to PX4 NED at
 its output boundary.
 
-Queued `PoseStamped` messages retain their supplied altitude. The configured
-manual-goal height only applies to RViz/`/waypoint_pose` goals created by the
-goal-marker bridge.
-
-### Direct manual goal example
-
-`/waypoint_pose` is convenient for one-off RViz or shell tests, but algorithms
-should use the queue service or `NavigateSkill`.
-
-```python
-import rclpy
-from geometry_msgs.msg import PoseStamped
-from rclpy.node import Node
-
-
-class GoalPublisher(Node):
-    def __init__(self):
-        super().__init__("manual_goal_publisher")
-        self.publisher = self.create_publisher(PoseStamped, "/waypoint_pose", 10)
-        self.timer = self.create_timer(1.0, self.publish_goal)
-
-    def publish_goal(self):
-        goal = PoseStamped()
-        goal.header.frame_id = "world"
-        goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = 10.0, 5.0, 5.0
-        goal.pose.orientation.w = 1.0
-        self.publisher.publish(goal)
-        self.timer.cancel()
-
-
-rclpy.init()
-node = GoalPublisher()
-rclpy.spin(node)
-node.destroy_node()
-rclpy.shutdown()
-```
+Queued `PoseStamped` messages retain their supplied altitude. EGO manual goals
+also retain the requested z coordinate.
 
 For batch navigation and ENU/NED conversion, use [`NavigateSkill`](../skills/README.md).
-For coverage planning plus explicit queueing, use `SearchSkill`.
+For coverage planning plus explicit queueing, use `SearchSkill`. Direct use of
+EGO's manual-goal topic bypasses queue and flight-state safety checks.
 
 ## Planning and feedback
 
 | Topic | Type | Description |
 |---|---|---|
-| `/gz/odom_super` | `nav_msgs/msg/Odometry` | PX4 local odometry converted from NED to ENU for SUPER. |
-| `/gz/point_cloud_super` | `sensor_msgs/msg/PointCloud2` | World-frame LiDAR cloud used by ROG-Map. |
-| `/planning/pos_cmd` | `mars_quadrotor_msgs/msg/PositionCommand` | SUPER position, velocity, acceleration, yaw, and yaw-rate command. |
-| `fsm/planner_state` | `super_planner/msg/PlannerState` | SUPER high-level state. |
+| `/gz/odom_super` | `nav_msgs/msg/Odometry` | PX4 local odometry converted from NED to ENU for EGO-Planner. |
+| `/gz/point_cloud_super` | `sensor_msgs/msg/PointCloud2` | World-frame LiDAR cloud used by EGO's direct point-cloud grid. |
+| `/ego_planner/position_cmd` | `quadrotor_msgs/msg/PositionCommand` | EGO position, velocity, acceleration, yaw, and yaw-rate command. |
+| `/ego_planner/state` | `std_msgs/msg/String` | EGO high-level state. |
 | `/fmu/out/vehicle_local_position_v1` | `px4_msgs/msg/VehicleLocalPosition` | Raw PX4 NED local position. |
 | `/fmu/out/vehicle_status_v4` | `px4_msgs/msg/VehicleStatus` | PX4 arming and navigation state. |
 
@@ -156,10 +116,10 @@ The recorder starts on the first goal and writes `cmd_log/goal_<NNN>_<timestamp>
 The diagram source is [`assets/module_dependency_graph.dot`](assets/module_dependency_graph.dot).
 
 - `gz_sensor_interface` provides Gazebo LiDAR and odometry transformations.
-- `offboard_fsm` provides state management, queue services, manual-goal bridge,
+- `offboard_fsm` provides state management, queue services, EGO-goal bridge,
   and the ENU-to-PX4-NED control boundary.
-- SUPER plans local trajectories using the sensor interface's world cloud and
-  odometry.
+- EGO-Planner plans local trajectories using the sensor interface's world cloud
+  and odometry.
 - `coverage_planner` is independent of flight execution and returns sparse ENU
   routes through its service.
 - `visualization`, `flight_monitor`, and `benchmark` are optional tools.

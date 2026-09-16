@@ -1,7 +1,7 @@
 # visualization — visualization layer config.
 #
 # Centralizes the TF tree, topic names, spawn offset and RViz switches used by
-# the visualization package (visual_tf, gt_path, birdview_publisher). Read by
+# the visualization package (visual_tf, gt_path). Read by
 # visualization/launch/visualization.launch.py.
 #
 # The visualization world frame is anchored at the drone launch position
@@ -34,26 +34,8 @@ gt_path:
   spawn_offset_y:   0.0
   spawn_offset_z:   0.0
 
-# --- birdview overlay (birdview_publisher) -----------------------------------
-# Optional top-down aerial map reference. If you don't use it, set
-# birdview.enabled: false (the publisher just won't start).
-birdview:
-  enabled:         true
-  topic:           /birdview_cloud
-  frame_id:        world
-  image:           resources/yungu_birdview.png
-  extent_x:        500.0
-  extent_y:        300.0
-  z:               0.0
-  offset_x:        0.0
-  offset_y:        0.0
-  yaw:             0.0
-  max_points:      1500000
-  republish_period: 10.0
-
 # --- RViz windows ------------------------------------------------------------
 rviz:
   enabled:        true
   freelook:       true
   freelook_config: freelook.rviz
-  birdview_config: birdview.rviz

@@ -15,13 +15,13 @@ PLANNER_CONFIG = WORKSPACE_ROOT / "src" / "search" / "config" / "yungu_planner.j
 
 def test_runtime_config_loads_workspace_defaults() -> None:
     config = SkillRuntimeConfig.load(OFFBOARD_CONFIG, PLANNER_CONFIG)
-    assert config.offboard.frame_id == "map"
+    assert config.offboard.frame_id == "world"
     assert config.offboard.queue_service == "/waypoint_buffer"
     assert config.offboard.clear_service == "/waypoint_buffer/clear"
     assert config.offboard.takeoff_service == "/offboard/takeoff"
     assert config.offboard.land_service == "/offboard/land"
     assert config.offboard.queue_status_topic == "/waypoint_buffer/status"
-    assert config.coverage_planner.frame_id == "map"
+    assert config.coverage_planner.frame_id == "world"
     assert config.coverage_planner.plan_service == "/coverage_planner/plan_coverage"
     assert config.coverage_planner.planner_config_file == PLANNER_CONFIG.resolve()
 
@@ -45,7 +45,7 @@ def test_runtime_config_rejects_missing_topic_keys_and_frame_mismatch(tmp_path: 
     with pytest.raises(SkillConfigError, match="waypoint_queue_status is required"):
         SkillRuntimeConfig.load(tmp_path, PLANNER_CONFIG)
 
-    _write_offboard_configs(tmp_path, frame_id="world")
+    _write_offboard_configs(tmp_path, frame_id="map")
     with pytest.raises(SkillConfigError, match="does not match coverage planner frame_id"):
         SkillRuntimeConfig.load(tmp_path, PLANNER_CONFIG)
 

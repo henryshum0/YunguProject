@@ -50,7 +50,7 @@ ANIM_MS = 100         # redraw period [ms]
 N_PER_SEC = 20        # expected points per second per source (for time windows)
 
 COLORS = {"gt": "green", "px4": "red"}
-LABELS = {"gt": "GT", "px4": "PX4 / SUPER odometry"}
+LABELS = {"gt": "GT", "px4": "PX4 / EGO odometry"}
 
 # ------------------------------------------------------------------ process
 # htop-like process tracking: name substrings to watch, sample interval.

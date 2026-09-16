@@ -1,10 +1,7 @@
-"""Start the coverage planner together with the offboard FSM stack.
+"""Start coverage planning together with the EGO/PX4 navigation stack.
 
-This is a workspace-level launch file and is intended to be run directly after
-sourcing the YunguProject overlay. The included offboard launch continues to
-load its controller and topic settings from ``src/navigation/config/offboard/`` and
-simulation settings from ``src/simulation/config/``. Coverage planner mission/map settings are supplied through
-``config_file``.
+PX4/Gazebo, the GZ bridge, and ``gz_sensor_interface`` must already be
+running. Coverage planning remains on-demand through its action interface.
 """
 
 from pathlib import Path
@@ -18,12 +15,12 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description() -> LaunchDescription:
-    """Create the combined planner and offboard-FSM launch description."""
+    """Create the combined coverage planner and EGO/PX4 launch description."""
     coverage_share = Path(get_package_share_directory("coverage_planner"))
-    offboard_share = Path(get_package_share_directory("offboard_fsm"))
-
     default_config_file = coverage_share / "config" / "yungu_planner.json"
-    offboard_launch = offboard_share / "launch" / "offboard.launch.py"
+    workspace = Path(__file__).resolve().parents[2]
+    navigation_launch = workspace / "src" / "launch" / "ego_single_drone.launch.py"
+    default_navigation_config = workspace / "src" / "navigation" / "config" / "offboard"
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -34,8 +31,16 @@ def generate_launch_description() -> LaunchDescription:
                 "Its map_file is resolved relative to that JSON."
             ),
         ),
+        DeclareLaunchArgument(
+            "navigation_config_dir",
+            default_value=str(default_navigation_config),
+            description="Directory containing EGO/PX4 topics.yaml and offboard_fsm.yaml.",
+        ),
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(str(offboard_launch)),
+            PythonLaunchDescriptionSource(str(navigation_launch)),
+            launch_arguments={
+                "navigation_config_dir": LaunchConfiguration("navigation_config_dir"),
+            }.items(),
         ),
         Node(
             package="coverage_planner",

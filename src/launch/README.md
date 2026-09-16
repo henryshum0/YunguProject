@@ -1,14 +1,17 @@
-# Coverage planner and offboard FSM launcher
+# EGO/PX4 navigation launches
 
-This directory contains a workspace-level launch file that starts the
-`coverage_planner_node` directly and includes the existing `offboard_fsm`
-launch.
+This directory contains a navigation-only launch for the single-drone
+EGO-Planner/PX4 adapter and a combined launch that also starts coverage
+planning. PX4/Gazebo, the bridge, and `gz_sensor_interface` remain separate.
 
 After building and sourcing the workspace overlay, run:
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /home/windshape/YunguProject/install/setup.bash
+ros2 launch /home/windshape/YunguProject/src/launch/ego_single_drone.launch.py
+
+# Or include on-demand coverage planning as well.
 ros2 launch /home/windshape/YunguProject/src/launch/coverage_and_offboard.launch.py
 ```
 
@@ -21,15 +24,15 @@ ros2 launch /home/windshape/YunguProject/src/launch/coverage_and_offboard.launch
   config_file:=/absolute/path/to/planner.json
 ```
 
-The included `offboard_fsm` launcher retains its existing workspace
-configuration files:
+Both launch files read the workspace configuration files:
 
 - `src/simulation/config/simulation.yaml`
 - `src/navigation/config/offboard/offboard_fsm.yaml`
 - `src/navigation/config/offboard/topics.yaml`
 
-In particular, its `use_sim_time` value is read from
-`src/navigation/config/offboard/offboard_fsm.yaml`; the combined launcher does not override it.
+The EGO launch uses `/gz/odom_super` and `/gz/point_cloud_super`, and creates a
+60 × 60 m local occupancy grid. Goals outside that configured local region are
+not supported by this initial setup.
 
 The combined launch starts the coverage planning action server and waypoint
 queue services; planning a route does not automatically enqueue it to the

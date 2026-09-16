@@ -1,7 +1,7 @@
 # benchmark
 
 Randomly generates a **flat Gazebo map with gate/pillar obstacles** as a world
-`.sdf` for benchmarking the SUPER planner under obstacle-dense environments.
+`.sdf` for benchmarking the local EGO-Planner configuration under obstacle-dense environments.
 
 ## What it does
 
@@ -54,7 +54,7 @@ and launch as usual:
 
 ```bash
 ./src/utils/start_sim.sh        # Terminal 1
-ros2 launch offboard offboard.launch.py
+ros2 launch /home/windshape/YunguProject/src/launch/ego_single_drone.launch.py
 ```
 
 ## Populating the offboard waypoint buffer (`waypoint_populator`)
@@ -77,7 +77,7 @@ ros2 run benchmark waypoint_populator \
 
 By default the route is submitted atomically to the offboard waypoint-buffer service
 (`/waypoint_buffer`). Override it with `--queue-service NAME`. RViz's `2D Goal Pose`
-tool still sends individual manual goals through `/waypoint_pose`.
+tool queues generated routes through `/waypoint_buffer`.
 Map size is read from `config/benchmark.yaml`; override with `--map-x/--map-y`.
 
 ## Config keys (`config/benchmark.yaml`)

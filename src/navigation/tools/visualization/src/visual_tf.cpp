@@ -8,7 +8,7 @@
 //   - body  -> base_link   : identity (base_link == IMU origin)
 //   - base_link -> lidar_link : static, the 0.16 m lidar mounting height
 //
-// This lets RViz (fixed frame = world) display SUPER /gz/point_cloud_super
+// This lets RViz (fixed frame = world) display EGO /gz/point_cloud_super
 // aligned at the drone.
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>

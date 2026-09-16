@@ -6,10 +6,10 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('goal_topic', default_value='/goal_pose',
-                              description='Goal click topic (geometry_msgs/PoseStamped)'),
-        DeclareLaunchArgument('cmd_topic', default_value='/planning/pos_cmd',
-                              description='SUPER command trajectory topic'),
+        DeclareLaunchArgument('goal_topic', default_value='/move_base_simple/goal',
+                              description='EGO manual-goal topic (geometry_msgs/PoseStamped)'),
+        DeclareLaunchArgument('cmd_topic', default_value='/ego_planner/position_cmd',
+                              description='EGO command trajectory topic'),
         DeclareLaunchArgument('odom_topic', default_value='/gz/odom_super',
                               description='Real drone odometry topic (nav_msgs/Odometry)'),
         DeclareLaunchArgument('log_dir', default_value='',

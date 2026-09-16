@@ -3,11 +3,10 @@
 Launches (topics/params read from src/simulation/config/visualization.yaml):
   - visual_tf         : TF tree anchored at the drone launch-origin world frame
   - gt_path           : Gazebo truth -> /gt_path in the launch-origin world
-  - birdview_publisher: aerial top-down map overlay (optional)
-  - rviz2 (optional)  : birdview (top-down) and freelook (3D) windows
+  - rviz2 (optional)  : freelook 3D window
 
 The visualization world frame is anchored at the drone launch position. Gazebo
-truth odom is shifted by the spawn offset so it aligns with SUPER in RViz.
+truth odom is shifted by the spawn offset so it aligns with EGO in RViz.
 """
 import os
 from pathlib import Path
@@ -82,13 +81,6 @@ def generate_launch_description():
 
     world_frame = _cfg(config_path, 'frames.world', 'world')
 
-    # Birdview overlay (src/simulation/config/visualization.yaml; disabled by default).
-    bv_enabled = str(_cfg(config_path, 'birdview.enabled', True)).lower() == 'true'
-    bv_image = _cfg(config_path, 'birdview.image', 'resources/yungu_birdview.png')
-    if not os.path.isabs(bv_image):
-        cand = os.path.join(project_root, bv_image)
-        bv_image = cand if os.path.isfile(cand) else bv_image
-
     return LaunchDescription([
         DeclareLaunchArgument('rviz', default_value=str(
             _cfg(config_path, 'rviz.enabled', True)).lower(),
@@ -100,24 +92,6 @@ def generate_launch_description():
         DeclareLaunchArgument('spawn_offset_z', default_value=str(sp_z),
                               description='Drone spawn Z (PX4 ENU origin in gz)'),
 
-        Node(
-            package='visualization', executable='birdview_publisher.py',
-            name='birdview_publisher', output='screen',
-            condition=IfCondition(str(bv_enabled).lower()),
-            parameters=[{
-                'image_path': bv_image,
-                'topic': _cfg(config_path, 'birdview.topic', '/birdview_cloud'),
-                'frame_id': _cfg(config_path, 'birdview.frame_id', world_frame),
-                'extent_x': float(_cfg(config_path, 'birdview.extent_x', 500.0)),
-                'extent_y': float(_cfg(config_path, 'birdview.extent_y', 300.0)),
-                'z': float(_cfg(config_path, 'birdview.z', 0.0)),
-                'offset_x': float(_cfg(config_path, 'birdview.offset_x', 0.0)),
-                'offset_y': float(_cfg(config_path, 'birdview.offset_y', 0.0)),
-                'yaw': float(_cfg(config_path, 'birdview.yaw', 0.0)),
-                'max_points': int(_cfg(config_path, 'birdview.max_points', 1500000)),
-                'republish_period': float(_cfg(config_path, 'birdview.republish_period', 10.0)),
-            }],
-        ),
         Node(
             package='visualization', executable='visual_tf', name='visual_tf',
             output='screen',
@@ -141,13 +115,6 @@ def generate_launch_description():
                 'spawn_offset_y': LaunchConfiguration('spawn_offset_y'),
                 'spawn_offset_z': LaunchConfiguration('spawn_offset_z'),
             }],
-        ),
-        Node(
-            package='rviz2', executable='rviz2', name='rviz2', output='screen',
-            arguments=['-d', PathJoinSubstitution([
-                FindPackageShare('visualization'), 'rviz',
-                _cfg(config_path, 'rviz.birdview_config', 'birdview.rviz')])],
-            condition=IfCondition(LaunchConfiguration('rviz')),
         ),
         Node(
             package='rviz2', executable='rviz2', name='rviz2_freelook', output='screen',

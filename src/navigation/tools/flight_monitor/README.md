@@ -2,11 +2,11 @@
 
 Flight observability tools (merged from `monitor/` and `cmd_record`):
 
-- **monitor** — realtime navigation monitor: Gazebo ground truth vs PX4/SUPER
+- **monitor** — realtime navigation monitor: Gazebo ground truth vs PX4/EGO
   odometry (XY, z, horizontal/vertical error panels) plus a CPU/mem panel.
-- **cmd_record** — goal-triggered recorder for SUPER's command trajectory plus
+- **cmd_record** — goal-triggered recorder for EGO's command trajectory plus
   the real drone odometry. Each time you click a goal, it starts recording the
-  commanded trajectory (`/planning/pos_cmd`) together with the real odometry
+  commanded trajectory (`/ego_planner/position_cmd`) together with the real odometry
   (`/lidar_slam/odom`); when a new goal arrives it saves the previous segment
   and starts a new one. Each segment is written to its own CSV under
   `<project>/cmd_log/`.
@@ -23,12 +23,12 @@ ros2 run flight_monitor monitor
 
 One window, four 2D panels: XY top-down (follows the drone), z vs time,
 horizontal/vertical error vs GT, and a process CPU/mem panel. Topics:
-`/odom` (GT) and `/gz/odom_super` (PX4/SUPER ENU odometry) — both best-effort.
+`/odom` (GT) and `/gz/odom_super` (PX4/EGO ENU odometry) — both best-effort.
 
 ## Features
 
 - **Goal-triggered**: nothing is recorded until a goal is published on
-  `/goal_pose` (`geometry_msgs/PoseStamped`).
+  `/move_base_simple/goal` (`geometry_msgs/PoseStamped`).
 - **Per-goal segments**: a new goal while recording stops + saves the current
   CSV and starts a fresh segment for the new goal.
 - **Automatic stop**: a watchdog stops and saves a segment when the commanded
@@ -43,11 +43,11 @@ horizontal/vertical error vs GT, and a process CPU/mem panel. Topics:
   **yaw command**, the **yaw-rate command** and the **real drone yaw** (from
   odometry), so the yaw tracking response is visible live.
 - **Body-rate tracking**: every row records the commanded body rate
-  (`/planning/pos_cmd.angular_velocity`) and the **real body rate** (`owx owy
+  (not provided by EGO's `PositionCommand`) and the **real body rate** (`owx owy
   owz`, from the odometry twist), so the body-rate tracking response is visible
   in the CSV and overlaid in the Body-rate plot cells.
 - **Yaw-command tracking**: every row records the commanded yaw
-  (`/planning/pos_cmd.yaw`, **wrapped into [-π, π]** so it is directly
+  (`/ego_planner/position_cmd.yaw`, **wrapped into [-π, π]** so it is directly
   comparable with the real drone yaw), commanded yaw rate (`yaw_dot`) and the
   **real drone yaw** (`oyaw`, extracted from the odometry quaternion).
 - **Post-hoc plot**: `plot_csv` replays any saved CSV.
@@ -90,7 +90,8 @@ ros2 run flight_monitor cmd_record_node
 ros2 launch flight_monitor record.launch.py
 ```
 
-Then click a goal (RViz 2D Nav Goal → `/goal_pose`). The node starts recording;
+Then queue a goal through the GUI/skills. The FSM forwards it to EGO on
+`/move_base_simple/goal`, and the node starts recording.
 each new goal switches to a new CSV. When the planner stops (cmd rate < 10 Hz)
 the segment is saved automatically. `Ctrl-C` saves the active segment and exits.
 
@@ -98,8 +99,8 @@ the segment is saved automatically. `Ctrl-C` saves the active segment and exits.
 
 | param | default | description |
 |-------|---------|-------------|
-| `goal_topic` | `/goal_pose` | goal click topic (`geometry_msgs/PoseStamped`) |
-| `cmd_topic` | `/planning/pos_cmd` | SUPER command trajectory topic |
+| `goal_topic` | `/move_base_simple/goal` | EGO manual-goal topic (`geometry_msgs/PoseStamped`) |
+| `cmd_topic` | `/ego_planner/position_cmd` | EGO command trajectory topic |
 | `odom_topic` | `/lidar_slam/odom` | real drone odometry (`nav_msgs/Odometry`) |
 | `log_dir` | *(empty)* | CSV directory; empty = `<project>/cmd_log` |
 | `min_cmd_rate` | `10.0` | stop recording when cmd rate drops below this [Hz] |
@@ -145,8 +146,8 @@ pandas, or Matlab for custom analysis.
 
 ## Troubleshooting
 
-- **Goal segment created but 0 rows (cmd not recorded)**: SUPER publishes
-  `/planning/pos_cmd` with **best-effort** QoS (`QoS(1).best_effort()` in
+- **Goal segment created but 0 rows (cmd not recorded)**: EGO publishes
+  `/ego_planner/position_cmd` with **best-effort** QoS.
   `fsm_ros2.hpp`). The recorder subscribes with best-effort QoS to match — a
   default *reliable* subscription is incompatible with a best-effort publisher,
   so DDS never connects and no command is received. If you ever repoint
@@ -154,7 +155,7 @@ pandas, or Matlab for custom analysis.
   subscriber best-effort (compatible with both best-effort and reliable
   publishers).
 - **No rows while a goal is active**: `fsm_node` only publishes
-  `/planning/pos_cmd` while it is following a trajectory (FOLLOW_TRAJ/EMER_STOP).
+  `/ego_planner/position_cmd` while it is following a trajectory.
   When idle/hovering there is no traffic, so nothing is recorded — this is
   expected.
 - **Segment not stopped after reaching the goal**: the watchdog stops a segment

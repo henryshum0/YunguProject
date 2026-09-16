@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # Copyright 2026
 #
-# cmd_record: goal-triggered recorder for SUPER's command trajectory plus the
+# cmd_record: goal-triggered recorder for EGO-Planner's command trajectory plus the
 # real drone odometry.
 #
 # Behaviour
-#   - Nothing is recorded until a goal is clicked on /goal_pose.
+#   - Nothing is recorded until EGO receives a goal on /move_base_simple/goal.
 #   - On each goal message:
 #       1. if not recording      -> start a new recording segment
 #       2. if already recording  -> stop the previous segment (save its CSV)
@@ -38,7 +38,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 
 from geometry_msgs.msg import PoseStamped
-from mars_quadrotor_msgs.msg import PositionCommand
+from quadrotor_msgs.msg import PositionCommand
 from nav_msgs.msg import Odometry
 
 # --- Optional matplotlib live plotting ------------------------------------
@@ -104,9 +104,9 @@ class CmdRecordNode(Node):
         # ------------------------------------------------------------------
         # Parameters
         # ------------------------------------------------------------------
-        self.declare_parameter("goal_topic", "/goal_pose")
-        self.declare_parameter("cmd_topic", "/planning/pos_cmd")
-        self.declare_parameter("odom_topic", "/lidar_slam/odom")
+        self.declare_parameter("goal_topic", "/move_base_simple/goal")
+        self.declare_parameter("cmd_topic", "/ego_planner/position_cmd")
+        self.declare_parameter("odom_topic", "/gz/odom_super")
         self.declare_parameter("log_dir", "")          # empty -> <project>/cmd_log
         self.declare_parameter("min_cmd_rate", 10.0)   # Hz; stop below this rate
         self.declare_parameter("viz_en", True)
@@ -159,10 +159,10 @@ class CmdRecordNode(Node):
         # ------------------------------------------------------------------
         # Subscriptions
         # ------------------------------------------------------------------
-        # SUPER publishes /planning/pos_cmd with best_effort QoS; a reliable
+        # EGO publishes its PositionCommand stream with best-effort QoS; a reliable
         # subscription is INCOMPATIBLE with a best_effort publisher, so DDS
         # never connects and no cmd arrives. best_effort is compatible with
-        # both best_effort (SUPER cmd) and reliable (RViz goal, odom) publishers.
+        # both best_effort EGO commands and reliable goal/odometry publishers.
         qos = QoSProfile(
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -236,9 +236,10 @@ class CmdRecordNode(Node):
                 "px": msg.position.x, "py": msg.position.y, "pz": msg.position.z,
                 "vx": msg.velocity.x, "vy": msg.velocity.y, "vz": msg.velocity.z,
                 "ax": msg.acceleration.x, "ay": msg.acceleration.y, "az": msg.acceleration.z,
-                "roll": msg.attitude.x, "pitch": msg.attitude.y, "yaw": msg.attitude.z,
-                "wx": msg.angular_velocity.x, "wy": msg.angular_velocity.y,
-                "wz": msg.angular_velocity.z,
+                # EGO PositionCommand carries translational feed-forward plus
+                # yaw/yaw-rate, but not attitude or body-rate commands.
+                "roll": float("nan"), "pitch": float("nan"), "yaw": msg.yaw,
+                "wx": float("nan"), "wy": float("nan"), "wz": float("nan"),
                 # real (odom) body rate from the latest /lidar_slam/odom twist
                 "owx": self._last_odom_ang[0] if self._last_odom_ang is not None
                        else float("nan"),
@@ -246,7 +247,7 @@ class CmdRecordNode(Node):
                        else float("nan"),
                 "owz": self._last_odom_ang[2] if self._last_odom_ang is not None
                        else float("nan"),
-                # SUPER's yaw command is an unwrapped (continuous) angle that
+                # EGO's yaw command is an unwrapped (continuous) angle that
                 # can exceed [-pi, pi]; wrap it into [-pi, pi] so it is directly
                 # comparable with the real drone yaw (oyaw).
                 "yaw_cmd": math.remainder(msg.yaw, 2.0 * math.pi),
