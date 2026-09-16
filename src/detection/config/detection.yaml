@@ -1,0 +1,86 @@
+# ============================================================================
+# src/detection/config/detection.yaml — detection subsystem contract.
+# ============================================================================
+# Shared by every part of the detection skill: the simulation-only mock
+# detector, the target localizer, and the Python skills layer. It holds only
+# what the mock and a real detector must agree on (frames, topics, the camera
+# model, and the ground plane). Mock-specific behaviour lives in
+# mock_detector.yaml; ground-truth targets live in targets.yaml.
+#
+# Read by src/detection/detection/launch/detection.launch.py and by
+# skills/detect.py. Changes apply on the next launch without rebuilding.
+# ----------------------------------------------------------------------------
+
+# --- world -------------------------------------------------------------------
+world:
+  # ENU frame of every world-frame detection. Must match offboard_fsm.frame_id
+  # and the coverage planner frame_id (both 'map'); it is the same launch-origin
+  # ENU frame the visualization layer calls 'world'.
+  frame_id: map
+
+  # Ground plane height in that frame [m]. The Gazebo yungu ground sits at
+  # gz z = -0.50 and the airframe spawns at gz z = +1.15392 (PX4_GZ_MODEL_POSE
+  # in ROMFS/px4fmu_common/init.d-posix/airframes/4007_gz_swan_gamma_v2), and
+  # the ENU origin is that spawn point, so ground = -0.50 - 1.15392.
+  ground_z_m: -1.654
+
+# --- camera ------------------------------------------------------------------
+# Must match the front_camera sensor in
+# VisionFlow-PX4/Tools/simulation/gz/models/swan_gamma_v2/model.sdf. On the real
+# vehicle these become the calibrated intrinsics/extrinsics of the same camera.
+camera:
+  frame_id: front_camera_link
+  width: 640
+  height: 480
+  # Gazebo cameras use one focal length for both axes, so the vertical FoV
+  # follows from the image aspect ratio (100 deg horizontal -> 83.6 deg vertical).
+  horizontal_fov_deg: 100.0
+  # Beyond the SDF <clip><far> the simulated image renders nothing, so the mock
+  # detector must not report targets past it either.
+  max_range_m: 50.0
+  # front_camera_link relative to base_link (SDF <pose>): 0.30 m ahead, 0.13 m
+  # below, optical axis (+X) pitched 60 deg down.
+  translation: [0.30, 0.0, -0.13]
+  rotation_rpy_deg: [0.0, 60.0, 0.0]
+
+# --- topics ------------------------------------------------------------------
+topics:
+  # Detector output, identical for the mock and a real detector.
+  detections:       /detection/detections          # vision_msgs/msg/Detection2DArray
+  # Ground-plane world positions produced by target_localizer.
+  detections_world: /detection/detections_world    # vision_msgs/msg/Detection3DArray
+  markers:          /detection/markers             # visualization_msgs/msg/MarkerArray
+  # Vehicle pose source. /gz/odom_super is the PX4 ENU odometry republished by
+  # gz_sensor_interface/super_lidar: already in the launch-origin ENU frame and
+  # already stamped with the wall clock the navigation stack runs on.
+  vehicle_odom:     /gz/odom_super
+  # Debug overlay: the front-camera stream with detection boxes drawn on it.
+  image_in:         /swan_gamma_v2/front_camera/image
+  image_overlay:    /detection/image_overlay
+
+# --- target_localizer ---------------------------------------------------------
+# Turns image-plane boxes into world ENU ground positions. Runs unchanged with a
+# real detector.
+localizer:
+  # Which point of the box touches the ground. 'bottom_center' is the contact
+  # point of an upright ground target; 'center' back-projects the box centre.
+  anchor: bottom_center
+  # Vehicle poses kept for stamp lookup [s], and how stale a matched pose may be.
+  odom_buffer_sec: 4.0
+  max_pose_age_sec: 0.30
+  # Reject back-projections further than this from the camera [m].
+  max_range_m: 80.0
+
+# --- detection_overlay --------------------------------------------------------
+# Debug view only: republishes the camera stream with the detection boxes drawn
+# on it. It runs in its own node so that decoding the camera stream cannot slow
+# the detector down, and it works with any detector publishing topics.detections.
+#
+# One caveat while reading it: the bridged Gazebo image carries the simulation
+# clock while detections carry the wall clock the navigation stack runs on, so
+# boxes are drawn on the most recent frame rather than on their own frame.
+overlay:
+  enabled: true
+  # A debug view does not need the full camera rate, and each published overlay
+  # costs a full-frame copy.
+  max_rate_hz: 5.0

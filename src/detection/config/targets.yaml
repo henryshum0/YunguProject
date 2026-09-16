@@ -1,0 +1,79 @@
+# ============================================================================
+# src/detection/config/targets.yaml — simulated ground-truth search targets.
+# ============================================================================
+# One source of truth for both halves of the simulated detection loop:
+#   - scripts/spawn_targets puts these models into the running Gazebo world;
+#   - mock_detector_node projects these same poses through the camera model.
+# Because both read this file, what the camera sees and what the mock reports
+# are the same objects by construction.
+#
+# Positions are ENU metres in the navigation frame (detection.yaml
+# world.frame_id, 'map'): x east, y north, anchored at the drone launch point —
+# the same frame as coverage search areas and navigation waypoints. The spawner
+# converts to Gazebo world coordinates with world_origin_in_gz below.
+#
+# There is nothing simulation-specific about the target *classes*: they are the
+# VisDrone class names the real RemDet detector predicts.
+# ----------------------------------------------------------------------------
+
+# ENU origin (the airframe spawn point) expressed in Gazebo world coordinates.
+# From PX4_GZ_MODEL_POSE in
+# VisionFlow-PX4/ROMFS/px4fmu_common/init.d-posix/airframes/4007_gz_swan_gamma_v2.
+world_origin_in_gz: [0.0, 0.0, 1.15392]
+
+# Gazebo model directory name used to spawn each class (under
+# src/detection/detection/models/).
+models:
+  car: yungu_car
+  pedestrian: yungu_pedestrian
+
+# The shipped targets sit inside the demo search area (20, -20) to (60, 20), which
+# is free of buildings and is what run_search_detection_demo.py searches. Moving
+# a target is enough to change what the mock detector sees; nothing else needs to
+# be touched, because the Gazebo spawner reads the same list.
+#
+# They are also all more than 50 m from the launch point, which is further than
+# the camera can see from the takeoff hover in any heading (it reaches about 35 m
+# ahead and 48 m at the image corners at 10 m altitude). A search therefore has
+# to actually fly to find them, instead of confirming a target before the vehicle
+# has moved. `test_shipped_targets_are_not_visible_from_the_takeoff_hover` in the
+# detection package checks this, so keep new targets outside that radius.
+#
+# Every target: id, VisDrone class, ENU position, heading, and physical size.
+#   position: [x, y] on the ground, or [x, y, z] to override the ground height
+#             from detection.yaml (world.ground_z_m).
+#   yaw_deg:  ENU heading of the model's +X axis, 0 = east, counter-clockwise.
+#   size:     [length (along +X), width, height] in metres. The mock detector
+#             projects this box, so it is what sets the target's pixel size.
+targets:
+  - id: car_01
+    class: car
+    position: [58.0, -14.0]
+    yaw_deg: 90.0
+    size: [4.40, 1.80, 1.50]
+
+  - id: car_02
+    class: car
+    position: [47.0, 19.0]
+    yaw_deg: 0.0
+    size: [4.40, 1.80, 1.50]
+
+  - id: car_03
+    class: car
+    position: [52.0, -2.0]
+    yaw_deg: 200.0
+    size: [4.40, 1.80, 1.50]
+
+  # Pedestrians are a much harder target: about 8 px on the short side at 15 m,
+  # so they are found by accumulating frames rather than on a single frame.
+  - id: ped_01
+    class: pedestrian
+    position: [57.0, 11.0]
+    yaw_deg: 0.0
+    size: [0.50, 0.40, 1.75]
+
+  - id: ped_02
+    class: pedestrian
+    position: [48.0, -17.0]
+    yaw_deg: 135.0
+    size: [0.50, 0.40, 1.75]

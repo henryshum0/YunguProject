@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Entry point for the Gazebo ground-truth target spawner."""
+
+import sys
+
+from detection.ros.spawn import main
+
+
+if __name__ == "__main__":
+    sys.exit(main())

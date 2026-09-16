@@ -1,0 +1,96 @@
+# ============================================================================
+# src/detection/config/mock_detector.yaml — simulation-only mock detector.
+# ============================================================================
+# The mock detector renders no image. It projects the known ground-truth targets
+# in targets.yaml through the camera model in detection.yaml using the live
+# vehicle pose, then applies the error model below. Its output is the same
+# vision_msgs/Detection2DArray a real detector publishes, so entering the real
+# vehicle only swaps the executable.
+#
+# Every error-model number here is PROVISIONAL. They are placeholders with a
+# plausible shape, not measurements. They are replaced by the values measured
+# from the real detector on real Yungu data (recall vs target size, per-frame
+# false-positive rate, localization variance, score distribution, latency);
+# see the detection roadmap. Replacing them requires no code change.
+# ----------------------------------------------------------------------------
+
+mock_detector:
+  # Detector output rate [Hz]. The real onboard pipeline is camera-rate limited;
+  # 10 Hz is a realistic embedded RemDet rate.
+  rate_hz: 10.0
+
+  # RNG seed for the whole error model. Fixed seed = byte-identical replay of a
+  # run; set to null for a different draw on every launch.
+  seed: 20260911
+
+  # --- geometric visibility (before the error model) -------------------------
+  visibility:
+    # A projected box smaller than this on its short side is treated as
+    # unresolvable and never reported, whatever the error model says [px].
+    min_pixel_size: 4.0
+    # Fraction of the projected box that must stay inside the image to count as
+    # visible. 1.0 requires the whole box, 0.5 allows half-cut targets.
+    min_visible_fraction: 0.6
+    # Occlusion by buildings and terrain, ray-cast against the world collision
+    # mesh. Disable to project targets through walls.
+    occlusion:
+      enabled: true
+      # Path to the world collision mesh (binary STL, Gazebo world coordinates).
+      # Relative paths resolve against the workspace root. The launch file
+      # passes an absolute path; occlusion self-disables with a warning if the
+      # mesh is missing.
+      collision_mesh: VisionFlow-PX4/Tools/simulation/gz/worlds/yungu_collider.stl
+      # The mesh is expressed in Gazebo world coordinates; this is the ENU
+      # origin (drone spawn) inside them, same value as targets.yaml.
+      world_origin_in_gz: [0.0, 0.0, 1.15392]
+
+  # --- error model -----------------------------------------------------------
+  error_model:
+    # Missed detections: P(detect) as a logistic in the projected box short side.
+    # Calibrate from the real detector's recall-vs-target-size curve.
+    miss:
+      half_probability_px: 12.0   # short side at which recall is half of the ceiling
+      slope_px: 4.0               # logistic width; smaller = sharper cut-off
+      max_probability: 0.95       # recall ceiling for large, close targets
+
+    # False positives: Poisson-distributed spurious boxes per published frame.
+    # Calibrate from the real detector's measured per-frame false-positive rate.
+    false_positives:
+      per_frame_rate: 0.02        # mean count per frame (0.2 /s at 10 Hz)
+      classes: [pedestrian, people, car, van]
+      score_range: [0.30, 0.55]
+      size_px_range: [8.0, 40.0]
+
+    # Localization noise on the reported box. Sigma scales with box size, with a
+    # floor so large boxes are not unrealistically exact.
+    localization:
+      center_sigma_ratio: 0.03
+      center_sigma_floor_px: 0.5
+      size_sigma_ratio: 0.05
+      size_sigma_floor_px: 0.5
+
+    # Confidence: mean score interpolates with the projected box short side
+    # between score_min_px and score_max_px, then gets Gaussian jitter.
+    score:
+      min_score: 0.45
+      max_score: 0.92
+      score_min_px: 8.0
+      score_max_px: 60.0
+      sigma: 0.06
+      # Detections below this never reach the output, like a real score threshold.
+      publish_threshold: 0.30
+
+    # Class confusion: per-frame probability of reporting a neighbouring class.
+    # Keys are true classes; values are {reported class: probability}.
+    confusion:
+      pedestrian: {people: 0.05}
+      people: {pedestrian: 0.05}
+      car: {van: 0.08, truck: 0.02}
+      van: {car: 0.10}
+      truck: {van: 0.05}
+
+    # Inference latency: detections keep the capture stamp but are published
+    # this much later, reproducing the lag of a real inference pipeline.
+    latency:
+      mean_sec: 0.045
+      jitter_sec: 0.010
