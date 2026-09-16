@@ -67,7 +67,8 @@ class SearchMissionSkillInterface(SkillInterface):
 
     @property
     def map_instruction(self) -> str:
-        return "Search mission uses the corners from the Coverage Search tab; no map click needed."
+        return ("Search mission: two clicks select the ENU search rectangle "
+                "(shared with the Coverage Search tab).")
 
     def build(self, frame: ttk.Frame) -> None:
         frame.columnconfigure(0, weight=1)
@@ -121,9 +122,14 @@ class SearchMissionSkillInterface(SkillInterface):
 
     # -- map interaction ----------------------------------------------------
     def on_map_click(self, point: Point) -> None:
-        # The mission reuses the Coverage Search corners; a click here does nothing.
-        self.host.map_status.set(
-            "Search mission uses the Coverage Search corners. Set them on the Coverage Search tab.")
+        # The mission reuses the Coverage Search corners, so a click here drives
+        # the same two-click rectangle selection as the Coverage Search tab.
+        coverage = self._coverage_interface()
+        if coverage is None:
+            self.host.map_status.set(
+                "Coverage Search tab unavailable; cannot select a search rectangle.")
+            return
+        coverage.on_map_click(point)
 
     def map_bounds_points(self) -> tuple[Point, ...]:
         points = [(x, y) for _class, x, y in self._targets]
@@ -143,12 +149,17 @@ class SearchMissionSkillInterface(SkillInterface):
             canvas.create_text(cx + 8, cy - 8, anchor="sw", text=class_id, fill="#aa00c7")
 
     # -- mission control ----------------------------------------------------
-    def _mission_corners(self) -> tuple[Point, ...]:
-        """The four corners entered on the Coverage Search tab."""
+    def _coverage_interface(self) -> CoverageSearchSkillInterface | None:
+        """The sibling Coverage Search interface whose corners this mission reuses."""
         for interface in self.host._skill_interfaces:
             if isinstance(interface, CoverageSearchSkillInterface):
-                return interface.current_corners()
-        return ()
+                return interface
+        return None
+
+    def _mission_corners(self) -> tuple[Point, ...]:
+        """The four corners entered on the Coverage Search tab."""
+        coverage = self._coverage_interface()
+        return coverage.current_corners() if coverage is not None else ()
 
     def _run_mission(self) -> None:
         if self._running:
