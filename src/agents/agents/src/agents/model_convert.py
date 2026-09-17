@@ -58,6 +58,7 @@ def convert(
     animated_joints: Sequence[str],
     description: str = "",
     camera=None,
+    rest_angle=None,
 ) -> Path:
     """Write ``output_dir`` as a self-contained kinematic agent model.
 
@@ -79,7 +80,8 @@ def convert(
     _check_joints(model, animated_joints, urdf_file)
     if camera is not None:
         _add_camera(model, camera, model_name)
-    _add_control_plugins(model, model_name, animated_joints)
+    _add_control_plugins(model, model_name, animated_joints,
+                         rest_angle or (lambda _joint: 0.0))
 
     meshes_out = output_dir / "meshes"
     if meshes_out.exists():
@@ -331,23 +333,40 @@ def _add_control_plugins(
     model: ElementTree.Element,
     model_name: str,
     animated_joints: Sequence[str],
+    rest_angle,
 ) -> None:
-    """Add the base velocity control and one position controller per joint."""
+    """Add the base velocity control and a position controller for every joint.
+
+    *Every* joint, not just the animated ones. With gravity and collisions gone,
+    a joint nobody holds is free: the reaction torques of the driven joints fling
+    it about and nothing ever damps it out, which is what had the humanoid waving
+    its arms and the quadruped splaying its legs. Joints the gait does not drive
+    are pinned at their rest angle through ``initial_position`` and given no
+    command topic, so holding them costs no messages at all.
+    """
     velocity = ElementTree.SubElement(model, "plugin", {
         "filename": "gz-sim-velocity-control-system",
         "name": "gz::sim::systems::VelocityControl",
     })
     ElementTree.SubElement(velocity, "topic").text = base_command_topic(model_name)
 
-    for joint in animated_joints:
+    animated = set(animated_joints)
+    for joint in model.iter("joint"):
+        name = joint.get("name")
+        if not name or joint.get("type") not in ("revolute", "prismatic"):
+            continue
         plugin = ElementTree.SubElement(model, "plugin", {
             "filename": "gz-sim-joint-position-controller-system",
             "name": "gz::sim::systems::JointPositionController",
         })
-        ElementTree.SubElement(plugin, "joint_name").text = joint
-        ElementTree.SubElement(plugin, "topic").text = joint_command_topic(model_name, joint)
-        # With gravity and collisions gone the joints carry only their own
-        # inertia, so a stiff proportional term tracks the gait without tuning.
+        ElementTree.SubElement(plugin, "joint_name").text = name
+        if name in animated:
+            ElementTree.SubElement(plugin, "topic").text = joint_command_topic(model_name, name)
+        # Start where the agent stands, so it does not snap out of the pose it
+        # was spawned in on the first simulation step.
+        ElementTree.SubElement(plugin, "initial_position").text = f"{rest_angle(name):.6f}"
+        # The joints carry only their own inertia here, so a stiff proportional
+        # term tracks the gait closely and the derivative term settles it.
         ElementTree.SubElement(plugin, "p_gain").text = "200.0"
         ElementTree.SubElement(plugin, "d_gain").text = "10.0"
 
@@ -382,6 +401,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         animated_joints=spec.gait.joint_names,
         description=arguments.description,
         camera=spec.camera,
+        rest_angle=spec.rest_angle,
     )
     camera_note = f", camera on {spec.camera.topic}" if spec.camera else ", no camera"
     print(f"wrote {written} ({len(spec.gait.joint_names)} animated joint(s){camera_note})")

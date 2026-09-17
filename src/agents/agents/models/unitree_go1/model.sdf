@@ -1139,50 +1139,82 @@
       <topic>/model/unitree_go1/cmd_vel</topic>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
-      <joint_name>FR_thigh_joint</joint_name>
-      <topic>/model/unitree_go1/joint/FR_thigh_joint/cmd_pos</topic>
-      <p_gain>200.0</p_gain>
-      <d_gain>10.0</d_gain>
-    </plugin>
-    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
-      <joint_name>FR_calf_joint</joint_name>
-      <topic>/model/unitree_go1/joint/FR_calf_joint/cmd_pos</topic>
-      <p_gain>200.0</p_gain>
-      <d_gain>10.0</d_gain>
-    </plugin>
-    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
-      <joint_name>RL_thigh_joint</joint_name>
-      <topic>/model/unitree_go1/joint/RL_thigh_joint/cmd_pos</topic>
-      <p_gain>200.0</p_gain>
-      <d_gain>10.0</d_gain>
-    </plugin>
-    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
-      <joint_name>RL_calf_joint</joint_name>
-      <topic>/model/unitree_go1/joint/RL_calf_joint/cmd_pos</topic>
+      <joint_name>FL_hip_joint</joint_name>
+      <initial_position>0.000000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>FL_thigh_joint</joint_name>
       <topic>/model/unitree_go1/joint/FL_thigh_joint/cmd_pos</topic>
+      <initial_position>0.800000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>FL_calf_joint</joint_name>
       <topic>/model/unitree_go1/joint/FL_calf_joint/cmd_pos</topic>
+      <initial_position>-1.500000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>FR_hip_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>FR_thigh_joint</joint_name>
+      <topic>/model/unitree_go1/joint/FR_thigh_joint/cmd_pos</topic>
+      <initial_position>0.800000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>FR_calf_joint</joint_name>
+      <topic>/model/unitree_go1/joint/FR_calf_joint/cmd_pos</topic>
+      <initial_position>-1.500000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>RL_hip_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>RL_thigh_joint</joint_name>
+      <topic>/model/unitree_go1/joint/RL_thigh_joint/cmd_pos</topic>
+      <initial_position>0.800000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>RL_calf_joint</joint_name>
+      <topic>/model/unitree_go1/joint/RL_calf_joint/cmd_pos</topic>
+      <initial_position>-1.500000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>RR_hip_joint</joint_name>
+      <initial_position>0.000000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RR_thigh_joint</joint_name>
       <topic>/model/unitree_go1/joint/RR_thigh_joint/cmd_pos</topic>
+      <initial_position>0.800000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>RR_calf_joint</joint_name>
       <topic>/model/unitree_go1/joint/RR_calf_joint/cmd_pos</topic>
+      <initial_position>-1.500000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>

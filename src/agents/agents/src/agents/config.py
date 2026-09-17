@@ -15,7 +15,7 @@ exactly as the detection target spawner does.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import radians
 from pathlib import Path
 
@@ -66,11 +66,24 @@ class AgentSpec:
     name: str
     model: str
     spawn: Pose2D
-    #: Height of the model origin above the ENU ground plane, in metres.
-    ground_z_m: float
+    #: Height of the model's origin link above the ground when standing, in
+    #: metres — the quadruped's trunk, the humanoid's pelvis.
+    base_height_m: float
     limits: AgentLimits
     gait: Gait
     camera: AgentCamera | None = None
+    #: Angles for joints the gait does not drive. Every joint an agent has must
+    #: be held at something: with no gravity and no contacts, a free joint is
+    #: flung around by the reaction torques of the driven ones and never settles,
+    #: which is what makes an animated robot flail its arms and splay its legs.
+    hold: Mapping[str, float] = field(default_factory=dict)
+
+    def rest_angle(self, joint: str) -> float:
+        """The angle a joint is held at when the agent is standing still."""
+        animated = self.gait.joints.get(joint)
+        if animated is not None:
+            return animated.bias
+        return float(self.hold.get(joint, 0.0))
 
     @property
     def goal_topic(self) -> str:
@@ -89,6 +102,10 @@ class AgentsConfig:
 
     #: ENU origin expressed in Gazebo world coordinates, for spawning.
     world_origin_in_gz: tuple[float, float, float]
+    #: ENU height of the ground. The ENU origin is the drone's launch point,
+    #: which is above the ground, so this is negative. It must match the
+    #: detection contract's world.ground_z_m — both describe the same floor.
+    ground_z_m: float
     agents: tuple[AgentSpec, ...]
     config_file: Path
 
@@ -100,9 +117,18 @@ class AgentsConfig:
             f"no agent named '{name}'; configured: {', '.join(spec.name for spec in self.agents)}")
 
     def gz_spawn_pose(self, spec: AgentSpec) -> tuple[float, float, float]:
-        """``spec``'s spawn position converted to Gazebo world coordinates."""
+        """``spec``'s spawn position converted to Gazebo world coordinates.
+
+        The height is built up from the floor rather than from the ENU origin:
+        the origin is the launch point, well above the ground, so placing an
+        agent at its own base height alone would leave it hovering.
+        """
         origin = self.world_origin_in_gz
-        return (spec.spawn.x + origin[0], spec.spawn.y + origin[1], spec.ground_z_m + origin[2])
+        return (
+            spec.spawn.x + origin[0],
+            spec.spawn.y + origin[1],
+            self.ground_z_m + spec.base_height_m + origin[2],
+        )
 
     @classmethod
     def load(cls, path: str | Path) -> "AgentsConfig":
@@ -123,6 +149,9 @@ class AgentsConfig:
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object], *, config_file: Path) -> "AgentsConfig":
         origin = _origin(payload.get("world_origin_in_gz"))
+        ground = payload.get("ground_z_m")
+        if not isinstance(ground, (int, float)):
+            raise AgentConfigError("ground_z_m is required and must be a number")
         entries = payload.get("agents")
         if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)) or not entries:
             raise AgentConfigError("agents must be a non-empty list")
@@ -135,7 +164,8 @@ class AgentsConfig:
                 raise AgentConfigError(f"duplicate agent name '{spec.name}'")
             seen.add(spec.name)
             specs.append(spec)
-        return cls(world_origin_in_gz=origin, agents=tuple(specs), config_file=config_file)
+        return cls(world_origin_in_gz=origin, ground_z_m=float(ground),
+                   agents=tuple(specs), config_file=config_file)
 
 
 def _origin(value: object) -> tuple[float, float, float]:
@@ -183,13 +213,26 @@ def _agent(entry: object, index: int) -> AgentSpec:
             name=name,
             model=model,
             spawn=spawn,
-            ground_z_m=float(entry.get("ground_z_m", 0.0)),
+            base_height_m=float(entry.get("base_height_m", 0.0)),
             limits=_limits(entry.get("limits"), where),
             gait=gait,
             camera=_camera(entry.get("camera"), where, name),
+            hold=_hold(entry.get("hold"), where),
         )
     except ValueError as exc:
         raise AgentConfigError(f"{where} is invalid: {exc}") from exc
+
+
+def _hold(value: object, where: str) -> dict[str, float]:
+    """Parse the fixed angles for joints the gait does not drive."""
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise AgentConfigError(f"{where}.hold must be a mapping of joint name to angle")
+    try:
+        return {str(joint): float(angle) for joint, angle in value.items()}
+    except (TypeError, ValueError) as exc:
+        raise AgentConfigError(f"{where}.hold angles must be numbers: {exc}") from exc
 
 
 def _camera(value: object, where: str, agent_name: str) -> AgentCamera | None:

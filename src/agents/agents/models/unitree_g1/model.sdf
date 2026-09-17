@@ -1282,48 +1282,146 @@
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>left_hip_pitch_joint</joint_name>
       <topic>/model/unitree_g1/joint/left_hip_pitch_joint/cmd_pos</topic>
+      <initial_position>-0.050000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>left_hip_roll_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>left_hip_yaw_joint</joint_name>
+      <initial_position>0.000000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>left_knee_joint</joint_name>
       <topic>/model/unitree_g1/joint/left_knee_joint/cmd_pos</topic>
+      <initial_position>0.100000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>left_ankle_pitch_joint</joint_name>
       <topic>/model/unitree_g1/joint/left_ankle_pitch_joint/cmd_pos</topic>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>left_ankle_roll_joint</joint_name>
+      <initial_position>0.000000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>right_hip_pitch_joint</joint_name>
       <topic>/model/unitree_g1/joint/right_hip_pitch_joint/cmd_pos</topic>
+      <initial_position>-0.050000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>right_hip_roll_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>right_hip_yaw_joint</joint_name>
+      <initial_position>0.000000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>right_knee_joint</joint_name>
       <topic>/model/unitree_g1/joint/right_knee_joint/cmd_pos</topic>
+      <initial_position>0.100000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>right_ankle_pitch_joint</joint_name>
       <topic>/model/unitree_g1/joint/right_ankle_pitch_joint/cmd_pos</topic>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>right_ankle_roll_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>waist_yaw_joint</joint_name>
+      <initial_position>0.000000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>left_shoulder_pitch_joint</joint_name>
       <topic>/model/unitree_g1/joint/left_shoulder_pitch_joint/cmd_pos</topic>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>left_shoulder_roll_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>left_shoulder_yaw_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>left_elbow_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>left_wrist_roll_joint</joint_name>
+      <initial_position>0.000000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>right_shoulder_pitch_joint</joint_name>
       <topic>/model/unitree_g1/joint/right_shoulder_pitch_joint/cmd_pos</topic>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>right_shoulder_roll_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>right_shoulder_yaw_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>right_elbow_joint</joint_name>
+      <initial_position>0.000000</initial_position>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>right_wrist_roll_joint</joint_name>
+      <initial_position>0.000000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>

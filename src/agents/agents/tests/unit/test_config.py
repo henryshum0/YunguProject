@@ -16,6 +16,7 @@ SHIPPED_CONFIG = Path(__file__).resolve().parents[3] / "config" / "agents.yaml"
 def _payload(**overrides: object) -> dict:
     payload = {
         "world_origin_in_gz": [0.0, 0.0, 1.0],
+        "ground_z_m": 0.0,
         "agents": [{
             "name": "go1",
             "model": "unitree_go1",
@@ -86,11 +87,57 @@ class TestSpawnConversion:
         spec = config.agent("go1")
         assert config.gz_spawn_pose(spec) == pytest.approx((11.0, 22.0, 1.5))
 
-    def test_ground_height_offsets_the_spawn(self) -> None:
-        payload = _payload()
-        payload["agents"][0]["ground_z_m"] = 0.32
+    def test_an_agent_is_placed_on_the_ground_not_at_the_enu_origin(self) -> None:
+        """The ENU origin is the launch point, well above the floor.
+
+        Building the height from the origin instead of the floor is what left
+        the robots hovering in mid-air.
+        """
+        payload = _payload(ground_z_m=-1.654)
+        payload["agents"][0]["base_height_m"] = 0.32
         config = AgentsConfig.from_mapping(payload, config_file=Path("/tmp/a.yaml"))
-        assert config.gz_spawn_pose(config.agent("go1"))[2] == pytest.approx(1.32)
+        # origin z 1.0 + ground -1.654 + base height 0.32
+        assert config.gz_spawn_pose(config.agent("go1"))[2] == pytest.approx(-0.334)
+
+    def test_the_shipped_agents_stand_on_the_detection_ground_plane(self) -> None:
+        """Agents and detection targets must agree on where the floor is."""
+        config = AgentsConfig.load(SHIPPED_CONFIG)
+        assert config.ground_z_m == pytest.approx(-1.654)
+        for spec in config.agents:
+            above_ground = config.gz_spawn_pose(spec)[2] - (
+                config.ground_z_m + config.world_origin_in_gz[2])
+            assert above_ground == pytest.approx(spec.base_height_m)
+
+    def test_ground_height_is_required(self) -> None:
+        payload = _payload()
+        del payload["ground_z_m"]
+        with pytest.raises(AgentConfigError, match="ground_z_m"):
+            AgentsConfig.from_mapping(payload, config_file=Path("/tmp/a.yaml"))
+
+
+class TestRestAngles:
+    """Every joint needs a resting angle, or it flails when nothing holds it."""
+
+    def test_an_animated_joint_rests_at_its_gait_bias(self) -> None:
+        payload = _payload()
+        payload["agents"][0]["gait"]["joints"]["FR_thigh_joint"]["bias"] = 0.8
+        config = AgentsConfig.from_mapping(payload, config_file=Path("/tmp/a.yaml"))
+        assert config.agent("go1").rest_angle("FR_thigh_joint") == pytest.approx(0.8)
+
+    def test_an_unlisted_joint_rests_at_zero(self) -> None:
+        assert _config().agent("go1").rest_angle("FR_hip_joint") == pytest.approx(0.0)
+
+    def test_a_held_joint_rests_where_it_is_told(self) -> None:
+        payload = _payload()
+        payload["agents"][0]["hold"] = {"FR_hip_joint": 0.25}
+        config = AgentsConfig.from_mapping(payload, config_file=Path("/tmp/a.yaml"))
+        assert config.agent("go1").rest_angle("FR_hip_joint") == pytest.approx(0.25)
+
+    def test_a_non_numeric_hold_is_rejected(self) -> None:
+        payload = _payload()
+        payload["agents"][0]["hold"] = {"FR_hip_joint": "upright"}
+        with pytest.raises(AgentConfigError, match="hold"):
+            AgentsConfig.from_mapping(payload, config_file=Path("/tmp/a.yaml"))
 
 
 class TestCamera:

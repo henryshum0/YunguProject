@@ -22,6 +22,12 @@
 # Must match src/detection/config/targets.yaml.
 world_origin_in_gz: [0.0, 0.0, 1.15392]
 
+# ENU height of the ground. The ENU origin is the drone's launch point, which
+# sits well above the floor, so this is negative — an agent placed at its own
+# base height alone would hover in mid-air. Must match the detection contract's
+# world.ground_z_m in src/detection/config/detection.yaml: same floor.
+ground_z_m: -1.654
+
 agents:
   # --------------------------------------------------------------------------
   # Unitree Go1 — quadruped, trotting.
@@ -42,8 +48,8 @@ agents:
     # Just east of the UAV launch point, so both robots are in frame from the
     # takeoff hover and can be driven somewhere without first flying to them.
     spawn: {x: 5.0, y: 3.0, yaw_deg: 0.0}
-    # Trunk height above ground with the legs in their standing stance.
-    ground_z_m: 0.32
+    # Trunk height above the ground with the legs in their standing stance.
+    base_height_m: 0.32
     # Mounted on the trunk, not a leg, so the view is not swung by the gait.
     # Rendered at exactly the GUI preview size and at the rate the GUI polls:
     # anything larger or faster is decoded and then thrown away, and with a feed
@@ -85,8 +91,8 @@ agents:
   - name: g1
     model: unitree_g1
     spawn: {x: 5.0, y: -3.0, yaw_deg: 0.0}
-    # Pelvis height above ground when standing.
-    ground_z_m: 0.79
+    # Pelvis height above the ground when standing.
+    base_height_m: 0.79
     # Head height above the pelvis, so the humanoid looks out from its head.
     camera:
       topic: /agents/g1/front_camera/image
@@ -112,3 +118,11 @@ agents:
         # Arms counter-swing their own-side leg.
         left_shoulder_pitch_joint: {bias: 0.0, amplitude: 0.30, offset: 0.5}
         right_shoulder_pitch_joint: {bias: 0.0, amplitude: 0.30, offset: 0.0}
+    # Joints the gait does not drive are held at zero unless listed here. Every
+    # joint has to be held at something: a free one is flung about by the driven
+    # joints' reaction torques, with no gravity or contact to ever damp it. Add
+    # an entry to adjust a resting limb, for example to stop an arm from
+    # intersecting the torso:
+    #   hold:
+    #     left_shoulder_roll_joint: 0.2
+    #     right_shoulder_roll_joint: -0.2
