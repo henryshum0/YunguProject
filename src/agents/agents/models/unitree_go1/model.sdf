@@ -22,10 +22,8 @@
           </box>
         </geometry>
         <material>
-          <script>
-            <name>Gazebo/Green</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
+          <ambient>0 1 0 1</ambient>
+          <diffuse>0 1 0 1</diffuse>
         </material>
       </visual>
       <visual name="base_fixed_joint_lump__trunk_visual_1">
@@ -142,10 +140,8 @@
           </box>
         </geometry>
         <material>
-          <script>
-            <name>Gazebo/Red</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
+          <ambient>1 0 0 1</ambient>
+          <diffuse>1 0 0 1</diffuse>
         </material>
       </visual>
       <visual name="base_fixed_joint_lump__ultraSound_face_visual_12">
@@ -232,12 +228,6 @@
             <uri>model://unitree_go1/meshes/hip.dae</uri>
           </mesh>
         </geometry>
-        <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
-        </material>
       </visual>
       <visual name="FL_hip_fixed_joint_lump__FL_thigh_rotor_visual_1">
         <pose>0 -0.00014999999999999999 0 1.5707963267948959 0 0</pose>
@@ -296,12 +286,6 @@
             <uri>model://unitree_go1/meshes/thigh.dae</uri>
           </mesh>
         </geometry>
-        <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
-        </material>
       </visual>
       <visual name="FL_thigh_fixed_joint_lump__FL_calf_rotor_visual_1">
         <pose>0 -0.032349999999999997 0 1.5707963267948959 0 0</pose>
@@ -370,10 +354,8 @@
           </sphere>
         </geometry>
         <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
+          <ambient>0.3 0.3 0.3 1</ambient>
+          <diffuse>0.3 0.3 0.3 1</diffuse>
         </material>
       </visual>
       <self_collide>true</self_collide>
@@ -422,12 +404,6 @@
             <uri>model://unitree_go1/meshes/hip.dae</uri>
           </mesh>
         </geometry>
-        <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
-        </material>
       </visual>
       <visual name="FR_hip_fixed_joint_lump__FR_thigh_rotor_visual_1">
         <pose>0 0.00014999999999999999 0 1.5707963267948959 0 0</pose>
@@ -486,12 +462,6 @@
             <uri>model://unitree_go1/meshes/thigh_mirror.dae</uri>
           </mesh>
         </geometry>
-        <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
-        </material>
       </visual>
       <visual name="FR_thigh_fixed_joint_lump__FR_calf_rotor_visual_1">
         <pose>0 0.032349999999999997 0 1.5707963267948959 0 0</pose>
@@ -560,10 +530,8 @@
           </sphere>
         </geometry>
         <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
+          <ambient>0.3 0.3 0.3 1</ambient>
+          <diffuse>0.3 0.3 0.3 1</diffuse>
         </material>
       </visual>
       <self_collide>true</self_collide>
@@ -612,12 +580,6 @@
             <uri>model://unitree_go1/meshes/hip.dae</uri>
           </mesh>
         </geometry>
-        <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
-        </material>
       </visual>
       <visual name="RL_hip_fixed_joint_lump__RL_thigh_rotor_visual_1">
         <pose>0 -0.00014999999999999999 0 1.5707963267948959 0 0</pose>
@@ -676,12 +638,6 @@
             <uri>model://unitree_go1/meshes/thigh.dae</uri>
           </mesh>
         </geometry>
-        <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
-        </material>
       </visual>
       <visual name="RL_thigh_fixed_joint_lump__RL_calf_rotor_visual_1">
         <pose>0 -0.032349999999999997 0 1.5707963267948959 0 0</pose>
@@ -750,10 +706,8 @@
           </sphere>
         </geometry>
         <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
+          <ambient>0.3 0.3 0.3 1</ambient>
+          <diffuse>0.3 0.3 0.3 1</diffuse>
         </material>
       </visual>
       <self_collide>true</self_collide>
@@ -802,12 +756,6 @@
             <uri>model://unitree_go1/meshes/hip.dae</uri>
           </mesh>
         </geometry>
-        <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
-        </material>
       </visual>
       <visual name="RR_hip_fixed_joint_lump__RR_thigh_rotor_visual_1">
         <pose>0 0.00014999999999999999 0 1.5707963267948959 0 0</pose>
@@ -866,12 +814,6 @@
             <uri>model://unitree_go1/meshes/thigh_mirror.dae</uri>
           </mesh>
         </geometry>
-        <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
-        </material>
       </visual>
       <visual name="RR_thigh_fixed_joint_lump__RR_calf_rotor_visual_1">
         <pose>0 0.032349999999999997 0 1.5707963267948959 0 0</pose>
@@ -940,10 +882,8 @@
           </sphere>
         </geometry>
         <material>
-          <script>
-            <name>Gazebo/DarkGrey</name>
-            <uri>file://media/materials/scripts/gazebo.material</uri>
-          </script>
+          <ambient>0.3 0.3 0.3 1</ambient>
+          <diffuse>0.3 0.3 0.3 1</diffuse>
         </material>
       </visual>
       <self_collide>true</self_collide>

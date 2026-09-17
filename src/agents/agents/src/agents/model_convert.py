@@ -73,6 +73,7 @@ def convert(
 
     model.set("name", model_name)
     _strip_unwanted(model)
+    _fix_classic_materials(model)
     _rewrite_mesh_uris(model, model_name)
     _disable_gravity(model)
     _check_joints(model, animated_joints, urdf_file)
@@ -161,6 +162,58 @@ def _rewrite_mesh_uris(model: ElementTree.Element, model_name: str) -> None:
         if not text or "meshes/" not in text:
             continue
         uri.text = f"model://{model_name}/meshes/{text.rsplit('meshes/', 1)[1]}"
+
+
+#: Gazebo-classic script material names, as approximate RGB. Only used for
+#: primitive geometry; meshes carry their own materials and are left alone.
+_CLASSIC_COLOURS = {
+    "Gazebo/Grey": "0.7 0.7 0.7 1",
+    "Gazebo/DarkGrey": "0.3 0.3 0.3 1",
+    "Gazebo/Black": "0.1 0.1 0.1 1",
+    "Gazebo/White": "1 1 1 1",
+    "Gazebo/Red": "1 0 0 1",
+    "Gazebo/Green": "0 1 0 1",
+    "Gazebo/Blue": "0 0 1 1",
+    "Gazebo/Yellow": "1 1 0 1",
+    "Gazebo/Orange": "1 0.5 0 1",
+}
+
+
+def _fix_classic_materials(model: ElementTree.Element) -> None:
+    """Replace Gazebo-classic script materials, which Harmonic cannot load.
+
+    A ``<material><script>`` names a material from ``gazebo.material``, a file
+    that only exists in Gazebo-classic. Harmonic's ogre2 cannot resolve it, and
+    the script still overrides whatever the geometry would otherwise use — so a
+    mesh that ships perfectly good materials of its own ends up rendering wrong.
+    The Go1 description does this for all twelve leg visuals, which is why the
+    robot appeared incomplete.
+
+    Meshes get the material dropped entirely, so their embedded material applies
+    again. Primitives have nothing to fall back on, so the script name is
+    translated to an explicit colour and they keep the shade they were given.
+    """
+    for visual in model.iter("visual"):
+        material = visual.find("material")
+        if material is None:
+            continue
+        script = material.find("script")
+        if script is None:
+            continue
+        material.remove(script)
+        geometry = visual.find("geometry")
+        is_mesh = geometry is not None and geometry.find("mesh") is not None
+        name_element = script.find("name")
+        colour = _CLASSIC_COLOURS.get((name_element.text or "").strip() if name_element is not None
+                                      else "")
+        if is_mesh or colour is None:
+            # Nothing useful to say about the colour: let the mesh's own
+            # material show, rather than flattening it to a guess.
+            if not list(material):
+                visual.remove(material)
+            continue
+        ElementTree.SubElement(material, "ambient").text = colour
+        ElementTree.SubElement(material, "diffuse").text = colour
 
 
 def _copy_referenced_meshes(
