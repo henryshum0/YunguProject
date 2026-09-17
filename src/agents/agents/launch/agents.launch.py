@@ -15,11 +15,12 @@ topics, and a hand-maintained list would silently lose a leg the first time a
 gait gained a joint.
 """
 
+import os
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -37,6 +38,18 @@ def _agent_actions(context, *_args, **_kwargs):
     config = AgentsConfig.load(config_file)
 
     actions: list = []
+    # The agent models are built from meshes referenced as `model://`, which
+    # Gazebo resolves through its resource path and *not* relative to the file
+    # they are spawned from. When that path is missing the meshes silently fail
+    # to load — the robot spawns and walks, but renders as only the primitive
+    # shapes it contains — so say so loudly rather than leaving it to be noticed
+    # as a half-drawn robot. utils/start_sim.sh sets this before Gazebo starts.
+    resource_path = os.environ.get("GZ_SIM_RESOURCE_PATH", "")
+    if str(models_dir) not in resource_path.split(os.pathsep):
+        actions.append(LogInfo(msg=(
+            f"WARNING: '{models_dir}' is not on GZ_SIM_RESOURCE_PATH. Agent meshes will not "
+            "render; the robots will appear as a few loose primitive shapes. Start the "
+            "simulator with utils/start_sim.sh, or export that path before launching Gazebo.")))
     bridge_arguments: list[str] = []
     camera_topics: list[str] = []
 

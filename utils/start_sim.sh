@@ -71,6 +71,18 @@ export HEADLESS
 PX4_GZ_NO_FOLLOW="${PX4_GZ_NO_FOLLOW-1}"
 export PX4_GZ_NO_FOLLOW
 
+# Models spawned from outside PX4's own model directory still resolve their
+# meshes through Gazebo's resource path: a `model://<name>/meshes/x.dae` inside
+# such a model is looked up there, not relative to the file it was spawned from.
+# The ground agents are the only models here built from meshes, so without this
+# their mesh visuals silently fail to load and the robot renders as just the
+# primitive shapes it happens to contain. PX4's gz_env.sh appends its own
+# directories to whatever this already holds, so setting it here survives.
+AGENT_MODELS="${WORKSPACE}/install/agents/share/agents/models"
+if [[ -d "${AGENT_MODELS}" ]]; then
+  export GZ_SIM_RESOURCE_PATH="${GZ_SIM_RESOURCE_PATH:+${GZ_SIM_RESOURCE_PATH}:}${AGENT_MODELS}"
+fi
+
 LOG_DIR="/tmp/yungu_sim"
 mkdir -p "${LOG_DIR}"
 
