@@ -48,6 +48,12 @@ class ModelConvertError(RuntimeError):
 #: Element tags removed outright; see the module docstring for the reasoning.
 _STRIPPED_TAGS = ("plugin", "sensor", "collision")
 
+#: Rotational inertia, in kg m^2, given to the root link. See ``_anchor_base``.
+#: Large enough that the limbs cannot measurably move the base, small enough to
+#: stay far from the point where the ratio to a leg link would ill-condition the
+#: constraint solver.
+BASE_INERTIA = 100.0
+
 
 def convert(
     urdf_file: Path,
@@ -77,6 +83,7 @@ def convert(
     _fix_classic_materials(model)
     _rewrite_mesh_uris(model, model_name)
     _disable_gravity(model)
+    _anchor_base(model, urdf_file)
     _check_joints(model, animated_joints, urdf_file)
     if camera is not None:
         _add_camera(model, camera, model_name)
@@ -250,11 +257,64 @@ def _copy_referenced_meshes(
 
 
 def _disable_gravity(model: ElementTree.Element) -> None:
+    """Turn gravity off on every link, leaving exactly one tag behind.
+
+    A link can arrive carrying more than one <gravity>: the Go1's trunk declares
+    its own in a <gazebo> block on top of the one the URDF conversion emits, and
+    sdformat honours the last one it reads. Setting only the first left a stray
+    <gravity>true</gravity> after it, so the trunk fell while its twelve
+    gravity-free leg links did not -- and the joints turned that imbalance into a
+    slow roll about the length of the body.
+    """
     for link in model.iter("link"):
-        existing = link.find("gravity")
-        if existing is None:
-            existing = ElementTree.SubElement(link, "gravity")
-        existing.text = "false"
+        for existing in link.findall("gravity"):
+            link.remove(existing)
+        ElementTree.SubElement(link, "gravity").text = "false"
+
+
+def _root_link(model: ElementTree.Element, urdf_file: Path) -> ElementTree.Element:
+    """The one link that is no joint's child."""
+    children = {joint.findtext("child", "").strip() for joint in model.iter("joint")}
+    roots = [link for link in model.iter("link") if link.get("name") not in children]
+    if len(roots) != 1:
+        names = ", ".join(sorted(link.get("name") or "?" for link in roots)) or "none"
+        raise ModelConvertError(
+            f"'{urdf_file}' converts to {len(roots)} root links ({names}); "
+            "an agent needs exactly one link to drive as its base")
+    return roots[0]
+
+
+def _anchor_base(model: ElementTree.Element, urdf_file: Path) -> None:
+    """Make the base too heavy for its own limbs to turn.
+
+    The base's motion is prescribed by VelocityControl, so its inertia carries no
+    physical meaning here — all it decides is how far the animated limbs can
+    throw the body they hang off.
+
+    That matters because VelocityControl forces the base velocity once per
+    physics step and DART then integrates the joints' reaction torques inside the
+    step. The leftover is tiny, but with gravity and contacts both gone there is
+    nothing to damp it, so it accumulates. The Go1 shipped with ixx = 0.018,
+    a quarter of its pitch and yaw inertia, and a quarter of nothing is still the
+    softest axis: it wound up about 0.004 rad/s of roll and just kept turning
+    along the length of its own body. Overriding the inertia pins it dead still.
+
+    Mass is left alone: the base is only pushed sideways by its limbs, never
+    lifted, and velocity control already holds that to a few tens of microns.
+    """
+    link = _root_link(model, urdf_file)
+    inertial = link.find("inertial")
+    if inertial is None:
+        inertial = ElementTree.SubElement(link, "inertial")
+    inertia = inertial.find("inertia")
+    if inertia is None:
+        inertia = ElementTree.SubElement(inertial, "inertia")
+    for tag, value in (("ixx", BASE_INERTIA), ("ixy", 0.0), ("ixz", 0.0),
+                       ("iyy", BASE_INERTIA), ("iyz", 0.0), ("izz", BASE_INERTIA)):
+        element = inertia.find(tag)
+        if element is None:
+            element = ElementTree.SubElement(inertia, tag)
+        element.text = repr(value)
 
 
 def _check_joints(

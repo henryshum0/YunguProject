@@ -6,12 +6,12 @@
         <pose>0 0 -0.076030060304142652 0 0 0</pose>
         <mass>3.8140000000000001</mass>
         <inertia>
-          <ixx>0.010554882086086121</ixx>
+          <ixx>100.0</ixx>
           <ixy>0</ixy>
-          <ixz>2.0999999999999998e-06</ixz>
-          <iyy>0.0093147820860861284</iyy>
+          <ixz>0</ixz>
+          <iyy>100.0</iyy>
           <iyz>0</iyz>
-          <izz>0.0079185000000000002</izz>
+          <izz>100.0</izz>
         </inertia>
       </inertial>
       <visual name="pelvis_visual">
@@ -1384,7 +1384,7 @@
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>left_elbow_joint</joint_name>
-      <initial_position>0.000000</initial_position>
+      <initial_position>1.500000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>
@@ -1415,7 +1415,7 @@
     </plugin>
     <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
       <joint_name>right_elbow_joint</joint_name>
-      <initial_position>0.000000</initial_position>
+      <initial_position>1.500000</initial_position>
       <p_gain>200.0</p_gain>
       <d_gain>10.0</d_gain>
     </plugin>

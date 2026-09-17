@@ -6,7 +6,17 @@ import xml.etree.ElementTree as ElementTree
 
 import pytest
 
-from agents.model_convert import _fix_classic_materials, _sanitise_vendor_tags
+from agents.model_convert import (
+    BASE_INERTIA,
+    ModelConvertError,
+    _anchor_base,
+    _disable_gravity,
+    _fix_classic_materials,
+    _sanitise_vendor_tags,
+)
+from pathlib import Path
+
+URDF = Path("/tmp/robot.urdf")
 
 
 def _model(*visuals: str) -> ElementTree.Element:
@@ -89,3 +99,65 @@ def test_common_classic_greys_are_all_translated(name: str) -> None:
     model = _model(_visual(BOX, _script(name)))
     _fix_classic_materials(model)
     assert model.find(".//visual/material/diffuse") is not None
+
+
+def _linked(*links: str) -> ElementTree.Element:
+    return ElementTree.fromstring(f"<model name='r'>{''.join(links)}</model>")
+
+
+class TestGravity:
+    """Every link must end up with one gravity tag, and it must be off."""
+
+    def test_a_link_without_a_tag_gets_one(self) -> None:
+        model = _linked("<link name='a'/>")
+        _disable_gravity(model)
+        assert [tag.text for tag in model.find("link").findall("gravity")] == ["false"]
+
+    def test_a_second_tag_is_removed_rather_than_left_behind(self) -> None:
+        """sdformat honours the last tag, so a stray 'true' after ours wins.
+
+        This is what left the Go1's trunk falling while its legs did not.
+        """
+        model = _linked("<link name='a'><gravity>false</gravity><gravity>true</gravity></link>")
+        _disable_gravity(model)
+        assert [tag.text for tag in model.find("link").findall("gravity")] == ["false"]
+
+
+class TestBaseAnchor:
+    """The base is driven, not simulated; its limbs must not be able to turn it."""
+
+    LEGGED = ("<link name='base'><inertial><mass>5</mass>"
+              "<inertia><ixx>0.018</ixx><ixy>0.1</ixy><ixz>0.1</ixz>"
+              "<iyy>0.068</iyy><iyz>0.1</iyz><izz>0.077</izz></inertia></inertial></link>"
+              "<link name='thigh'><inertial><inertia><ixx>0.001</ixx></inertia></inertial></link>"
+              "<joint name='hip' type='revolute'><parent>base</parent><child>thigh</child></joint>")
+
+    def test_the_root_link_is_given_a_large_isotropic_inertia(self) -> None:
+        model = _linked(self.LEGGED)
+        _anchor_base(model, URDF)
+        inertia = model.find("link[@name='base']/inertial/inertia")
+        for axis in ("ixx", "iyy", "izz"):
+            assert float(inertia.findtext(axis)) == pytest.approx(BASE_INERTIA)
+        for product in ("ixy", "ixz", "iyz"):
+            assert float(inertia.findtext(product)) == 0.0
+
+    def test_the_limbs_are_left_alone(self) -> None:
+        """Only the driven base is fictional; the legs keep their real inertia."""
+        model = _linked(self.LEGGED)
+        _anchor_base(model, URDF)
+        thigh = model.find("link[@name='thigh']/inertial/inertia")
+        assert float(thigh.findtext("ixx")) == pytest.approx(0.001)
+
+    def test_the_root_is_the_link_no_joint_is_a_child_of(self) -> None:
+        """Not simply the first link: SDF does not promise that order."""
+        model = _linked(
+            "<link name='thigh'/><link name='base'/>"
+            "<joint name='hip' type='revolute'><parent>base</parent><child>thigh</child></joint>")
+        _anchor_base(model, URDF)
+        assert model.find("link[@name='base']/inertial") is not None
+        assert model.find("link[@name='thigh']/inertial") is None
+
+    def test_a_model_with_two_roots_is_rejected(self) -> None:
+        """Two roots means there is no single body to drive; say so loudly."""
+        with pytest.raises(ModelConvertError, match="2 root links"):
+            _anchor_base(_linked("<link name='a'/><link name='b'/>"), URDF)

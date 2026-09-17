@@ -6,12 +6,12 @@
         <pose>0.020866157113366479 0.001859672042121315 -0.00046917899041193448 0 0 0</pose>
         <mass>5.5610799999999987</mass>
         <inertia>
-          <ixx>0.018152741714880381</ixx>
-          <ixy>-0.00024707762715734343</ixy>
-          <ixz>-0.00029100362356646758</ixz>
-          <iyy>0.068003178569477754</iyy>
-          <iyz>-4.1923289795357292e-05</iyz>
-          <izz>0.077432530599337079</izz>
+          <ixx>100.0</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>100.0</iyy>
+          <iyz>0</iyz>
+          <izz>100.0</izz>
         </inertia>
       </inertial>
       <visual name="base_visual">
@@ -184,7 +184,6 @@
         </material>
       </visual>
       <gravity>false</gravity>
-      <gravity>true</gravity>
     </link>
     <joint name="FL_hip_joint" type="revolute">
       <pose relative_to="base">0.18809999999999999 0.04675 0 0 0 0</pose>

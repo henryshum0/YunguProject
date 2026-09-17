@@ -118,11 +118,16 @@ agents:
         # Arms counter-swing their own-side leg.
         left_shoulder_pitch_joint: {bias: 0.0, amplitude: 0.30, offset: 0.5}
         right_shoulder_pitch_joint: {bias: 0.0, amplitude: 0.30, offset: 0.0}
-    # Joints the gait does not drive are held at zero unless listed here. Every
-    # joint has to be held at something: a free one is flung about by the driven
-    # joints' reaction torques, with no gravity or contact to ever damp it. Add
-    # an entry to adjust a resting limb, for example to stop an arm from
-    # intersecting the torso:
-    #   hold:
-    #     left_shoulder_roll_joint: 0.2
-    #     right_shoulder_roll_joint: -0.2
+    # Joints the gait does not drive are held at the angle named here, or at
+    # zero if they are not named. Every joint has to be held at something: a
+    # free one is flung about by the driven joints' reaction torques, with no
+    # gravity or contact to ever damp it.
+    #
+    # Zero is not a neutral pose for every joint, though. This robot's elbow at
+    # zero puts the forearm horizontal and pointing forwards, so it stands with
+    # both arms folded up across its belly. 1.5 rad is where the forearm hangs
+    # vertically alongside the hip, which is what an idle humanoid looks like.
+    # Limit is [-1.047, 2.094]; larger folds the arm back up, the other way.
+    hold:
+      left_elbow_joint: 1.5
+      right_elbow_joint: 1.5
