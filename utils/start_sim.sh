@@ -61,6 +61,16 @@ GZ_VERSION="${GZ_VERSION:-$(config_get gz_version)}"
 HEADLESS="${HEADLESS:-}"
 export HEADLESS
 
+# PX4's gz-sim init script locks the Gazebo camera onto the vehicle with a
+# follow p-gain of 1.0, which re-seats the camera every frame: the view tracks
+# the UAV, but dragging and zooming appear dead because each mouse movement is
+# immediately overridden. Default to leaving the camera free, so the Gazebo
+# window behaves normally and the operator picks a target themselves by
+# right-clicking a model and choosing Follow (any robot, switchable at runtime).
+# Set PX4_GZ_NO_FOLLOW= (empty) to restore PX4's automatic UAV follow.
+PX4_GZ_NO_FOLLOW="${PX4_GZ_NO_FOLLOW-1}"
+export PX4_GZ_NO_FOLLOW
+
 LOG_DIR="/tmp/yungu_sim"
 mkdir -p "${LOG_DIR}"
 
@@ -229,7 +239,7 @@ fi
 : >"${LOG_DIR}/px4_sitl.log"
 
 if [[ -n "${TERMINAL}" ]]; then
-  export PX4_DIR PX4_TARGET LOG_DIR HEADLESS
+  export PX4_DIR PX4_TARGET LOG_DIR HEADLESS PX4_GZ_NO_FOLLOW
   # Use an Xft/fontconfig font. The legacy xterm "fixed" bitmap font is not
   # installed by default in WSLg and makes xterm exit before PX4 is launched.
   setsid xterm -fa Monospace -fs 10 -T "PX4 SITL (${PX4_TARGET})" -hold \
