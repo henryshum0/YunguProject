@@ -1,0 +1,1203 @@
+<?xml version="1.0" ?>
+<sdf version="1.11">
+  <model name="unitree_go1">
+    <link name="base">
+      <inertial>
+        <pose>0.020866157113366479 0.001859672042121315 -0.00046917899041193448 0 0 0</pose>
+        <mass>5.5610799999999987</mass>
+        <inertia>
+          <ixx>0.018152741714880381</ixx>
+          <ixy>-0.00024707762715734343</ixy>
+          <ixz>-0.00029100362356646758</ixz>
+          <iyy>0.068003178569477754</iyy>
+          <iyz>-4.1923289795357292e-05</iyz>
+          <izz>0.077432530599337079</izz>
+        </inertia>
+      </inertial>
+      <visual name="base_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.001 0.001 0.001</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/Green</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="base_fixed_joint_lump__trunk_visual_1">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/trunk.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="base_fixed_joint_lump__FL_hip_rotor_visual_2">
+        <pose>0.11215 0.04675 0 0 1.5707963267948966 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <visual name="base_fixed_joint_lump__FR_hip_rotor_visual_3">
+        <pose>0.11215 -0.04675 0 0 1.5707963267948966 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <visual name="base_fixed_joint_lump__RL_hip_rotor_visual_4">
+        <pose>-0.11215 0.04675 0 0 1.5707963267948966 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <visual name="base_fixed_joint_lump__RR_hip_rotor_visual_5">
+        <pose>-0.11215 -0.04675 0 0 1.5707963267948966 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <visual name="base_fixed_joint_lump__camera_chin_visual_6">
+        <pose>0.25219999999999998 0.012500000000000001 -0.0436 3.1415926535897931 1.5707963267948966 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/depthCamera.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="base_fixed_joint_lump__camera_face_visual_7">
+        <pose>0.27850000000000003 0.012500000000000001 0.0167 3.1415926535897931 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/depthCamera.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="base_fixed_joint_lump__camera_left_visual_8">
+        <pose>-0.066000000000000003 0.082000000000000003 -0.017600000000000001 3.1415926535897931 0.26179999999999998 1.5707963267948957</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/depthCamera.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="base_fixed_joint_lump__camera_rearDown_visual_9">
+        <pose>-0.082500000000000004 0.012500000000000001 -0.043650000000000001 3.1415926535897931 1.5707963267948966 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/depthCamera.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="base_fixed_joint_lump__camera_right_visual_10">
+        <pose>-0.041000000000000002 -0.082000000000000003 -0.017600000000000001 3.1415926535897931 0.26179999999999998 -1.570796326794897</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/depthCamera.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="base_fixed_joint_lump__imu_link_visual_11">
+        <pose>-0.01592 -0.066589999999999996 -0.0061700000000000001 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.001 0.001 0.001</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/Red</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="base_fixed_joint_lump__ultraSound_face_visual_12">
+        <pose>0.2747 0 -0.0088000000000000005 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/ultraSound.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0 0 0 1</diffuse>
+          <ambient>0 0 0 1</ambient>
+        </material>
+      </visual>
+      <visual name="base_fixed_joint_lump__ultraSound_left_visual_13">
+        <pose>-0.053499999999999999 0.082600000000000007 0.0086800000000000002 0 0.26179999999999998 1.570796326794897</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/ultraSound.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0 0 0 1</diffuse>
+          <ambient>0 0 0 1</ambient>
+        </material>
+      </visual>
+      <visual name="base_fixed_joint_lump__ultraSound_right_visual_14">
+        <pose>-0.053499999999999999 -0.082600000000000007 0.0086800000000000002 0 0.26179999999999998 -1.570796326794897</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/ultraSound.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>0 0 0 1</diffuse>
+          <ambient>0 0 0 1</ambient>
+        </material>
+      </visual>
+      <gravity>false</gravity>
+      <gravity>true</gravity>
+    </link>
+    <joint name="FL_hip_joint" type="revolute">
+      <pose relative_to="base">0.18809999999999999 0.04675 0 0 0 0</pose>
+      <parent>base</parent>
+      <child>FL_hip</child>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <limit>
+          <lower>-0.86299999999999999</lower>
+          <upper>0.86299999999999999</upper>
+          <effort>23.699999999999999</effort>
+          <velocity>30.100000000000001</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="FL_hip">
+      <pose relative_to="FL_hip_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>-0.0049165985294117639 -0.0076261499999999991 -8.865e-05 0 0 0</pose>
+        <mass>0.67999999999999994</mass>
+        <inertia>
+          <ixx>0.0003993797857294</ixx>
+          <ixy>-1.4590105668949999e-05</ixy>
+          <ixz>1.2460991185500001e-06</ixz>
+          <iyy>0.00073341939237609854</iyy>
+          <iyz>1.5753255103e-06</iyz>
+          <izz>0.00046842209057609862</izz>
+        </inertia>
+      </inertial>
+      <visual name="FL_hip_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/hip.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="FL_hip_fixed_joint_lump__FL_thigh_rotor_visual_1">
+        <pose>0 -0.00014999999999999999 0 1.5707963267948959 0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <gravity>false</gravity>
+    </link>
+    <joint name="FL_thigh_joint" type="revolute">
+      <pose relative_to="FL_hip">0 0.080000000000000002 0 0 0 0</pose>
+      <parent>FL_hip</parent>
+      <child>FL_thigh</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-0.68600000000000005</lower>
+          <upper>4.5010000000000003</upper>
+          <effort>23.699999999999999</effort>
+          <velocity>30.100000000000001</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="FL_thigh">
+      <pose relative_to="FL_thigh_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>-0.0030472150644202181 -0.019314995044598611 -0.03050041625371655 0 0 0</pose>
+        <mass>1.0089999999999999</mass>
+        <inertia>
+          <ixx>0.0045987964610901466</ixx>
+          <ixy>6.1373912803924688e-05</ixy>
+          <ixz>-0.00022752911680967291</ixz>
+          <iyy>0.0046892240622995037</iyy>
+          <iyz>0.00061080828661791886</iyz>
+          <izz>0.00081744785689930629</izz>
+        </inertia>
+      </inertial>
+      <visual name="FL_thigh_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/thigh.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="FL_thigh_fixed_joint_lump__FL_calf_rotor_visual_1">
+        <pose>0 -0.032349999999999997 0 1.5707963267948959 0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <self_collide>true</self_collide>
+      <gravity>false</gravity>
+    </link>
+    <joint name="FL_calf_joint" type="revolute">
+      <pose relative_to="FL_thigh">0 0 -0.21299999999999999 0 0 0</pose>
+      <parent>FL_thigh</parent>
+      <child>FL_calf</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-2.8180000000000001</lower>
+          <upper>-0.88800000000000001</upper>
+          <effort>35.549999999999997</effort>
+          <velocity>20.059999999999999</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="FL_calf">
+      <pose relative_to="FL_calf_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>0.0042986225709938644 0.00097667590446334665 -0.14619689419080781 0 0 0</pose>
+        <mass>0.19586200000000001</mass>
+        <inertia>
+          <ixx>0.0014844839548776639</ixx>
+          <ixy>-6.1882663479756163e-07</ixy>
+          <ixz>-1.7720916801973839e-05</ixz>
+          <iyy>0.0014976354481416019</iyy>
+          <iyz>-3.5662623787605599e-06</iyz>
+          <izz>3.6068269424755998e-05</izz>
+        </inertia>
+      </inertial>
+      <visual name="FL_calf_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/calf.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="FL_calf_fixed_joint_lump__FL_foot_visual_1">
+        <pose>0 0 -0.21299999999999999 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.01</radius>
+          </sphere>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <self_collide>true</self_collide>
+      <self_collide>true</self_collide>
+      <gravity>false</gravity>
+    </link>
+    <joint name="FR_hip_joint" type="revolute">
+      <pose relative_to="base">0.18809999999999999 -0.04675 0 0 0 0</pose>
+      <parent>base</parent>
+      <child>FR_hip</child>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <limit>
+          <lower>-0.86299999999999999</lower>
+          <upper>0.86299999999999999</upper>
+          <effort>23.699999999999999</effort>
+          <velocity>30.100000000000001</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="FR_hip">
+      <pose relative_to="FR_hip_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>-0.0049165985294117639 0.0076261499999999991 -8.865e-05 0 0 0</pose>
+        <mass>0.67999999999999994</mass>
+        <inertia>
+          <ixx>0.0003993797857294</ixx>
+          <ixy>1.4590105668949999e-05</ixy>
+          <ixz>1.2460991185500001e-06</ixz>
+          <iyy>0.00073341939237609854</iyy>
+          <iyz>-1.5753255103e-06</iyz>
+          <izz>0.00046842209057609862</izz>
+        </inertia>
+      </inertial>
+      <visual name="FR_hip_visual">
+        <pose>0 0 0 3.1415926535897931 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/hip.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="FR_hip_fixed_joint_lump__FR_thigh_rotor_visual_1">
+        <pose>0 0.00014999999999999999 0 1.5707963267948959 0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <gravity>false</gravity>
+    </link>
+    <joint name="FR_thigh_joint" type="revolute">
+      <pose relative_to="FR_hip">0 -0.080000000000000002 0 0 0 0</pose>
+      <parent>FR_hip</parent>
+      <child>FR_thigh</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-0.68600000000000005</lower>
+          <upper>4.5010000000000003</upper>
+          <effort>23.699999999999999</effort>
+          <velocity>30.100000000000001</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="FR_thigh">
+      <pose relative_to="FR_thigh_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>-0.0030472150644202181 0.019314995044598611 -0.03050041625371655 0 0 0</pose>
+        <mass>1.0089999999999999</mass>
+        <inertia>
+          <ixx>0.0045987964610901466</ixx>
+          <ixy>-6.1373912803924688e-05</ixy>
+          <ixz>-0.00022752911680967291</ixz>
+          <iyy>0.0046892240622995037</iyy>
+          <iyz>-0.00061080828661791886</iyz>
+          <izz>0.00081744785689930629</izz>
+        </inertia>
+      </inertial>
+      <visual name="FR_thigh_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/thigh_mirror.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="FR_thigh_fixed_joint_lump__FR_calf_rotor_visual_1">
+        <pose>0 0.032349999999999997 0 1.5707963267948959 0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <self_collide>true</self_collide>
+      <gravity>false</gravity>
+    </link>
+    <joint name="FR_calf_joint" type="revolute">
+      <pose relative_to="FR_thigh">0 0 -0.21299999999999999 0 0 0</pose>
+      <parent>FR_thigh</parent>
+      <child>FR_calf</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-2.8180000000000001</lower>
+          <upper>-0.88800000000000001</upper>
+          <effort>35.549999999999997</effort>
+          <velocity>20.059999999999999</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="FR_calf">
+      <pose relative_to="FR_calf_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>0.0042986225709938644 0.00097667590446334665 -0.14619689419080781 0 0 0</pose>
+        <mass>0.19586200000000001</mass>
+        <inertia>
+          <ixx>0.0014844839548776639</ixx>
+          <ixy>-6.1882663479756163e-07</ixy>
+          <ixz>-1.7720916801973839e-05</ixz>
+          <iyy>0.0014976354481416019</iyy>
+          <iyz>-3.5662623787605599e-06</iyz>
+          <izz>3.6068269424755998e-05</izz>
+        </inertia>
+      </inertial>
+      <visual name="FR_calf_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/calf.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="FR_calf_fixed_joint_lump__FR_foot_visual_1">
+        <pose>0 0 -0.21299999999999999 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.01</radius>
+          </sphere>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <self_collide>true</self_collide>
+      <self_collide>true</self_collide>
+      <gravity>false</gravity>
+    </link>
+    <joint name="RL_hip_joint" type="revolute">
+      <pose relative_to="base">-0.18809999999999999 0.04675 0 0 0 0</pose>
+      <parent>base</parent>
+      <child>RL_hip</child>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <limit>
+          <lower>-0.86299999999999999</lower>
+          <upper>0.86299999999999999</upper>
+          <effort>23.699999999999999</effort>
+          <velocity>30.100000000000001</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="RL_hip">
+      <pose relative_to="RL_hip_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>0.0049165985294117639 -0.0076261499999999991 -8.865e-05 0 0 0</pose>
+        <mass>0.67999999999999994</mass>
+        <inertia>
+          <ixx>0.0003993797857294</ixx>
+          <ixy>1.4590105668949999e-05</ixy>
+          <ixz>-1.2460991185500001e-06</ixz>
+          <iyy>0.00073341939237609854</iyy>
+          <iyz>1.5753255103e-06</iyz>
+          <izz>0.00046842209057609862</izz>
+        </inertia>
+      </inertial>
+      <visual name="RL_hip_visual">
+        <pose>0 0 0 3.1415926535897931 1.224646799147353e-16 3.1415926535897931</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/hip.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="RL_hip_fixed_joint_lump__RL_thigh_rotor_visual_1">
+        <pose>0 -0.00014999999999999999 0 1.5707963267948959 0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <gravity>false</gravity>
+    </link>
+    <joint name="RL_thigh_joint" type="revolute">
+      <pose relative_to="RL_hip">0 0.080000000000000002 0 0 0 0</pose>
+      <parent>RL_hip</parent>
+      <child>RL_thigh</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-0.68600000000000005</lower>
+          <upper>4.5010000000000003</upper>
+          <effort>23.699999999999999</effort>
+          <velocity>30.100000000000001</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="RL_thigh">
+      <pose relative_to="RL_thigh_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>-0.0030472150644202181 -0.019314995044598611 -0.03050041625371655 0 0 0</pose>
+        <mass>1.0089999999999999</mass>
+        <inertia>
+          <ixx>0.0045987964610901466</ixx>
+          <ixy>6.1373912803924688e-05</ixy>
+          <ixz>-0.00022752911680967291</ixz>
+          <iyy>0.0046892240622995037</iyy>
+          <iyz>0.00061080828661791886</iyz>
+          <izz>0.00081744785689930629</izz>
+        </inertia>
+      </inertial>
+      <visual name="RL_thigh_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/thigh.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="RL_thigh_fixed_joint_lump__RL_calf_rotor_visual_1">
+        <pose>0 -0.032349999999999997 0 1.5707963267948959 0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <self_collide>true</self_collide>
+      <gravity>false</gravity>
+    </link>
+    <joint name="RL_calf_joint" type="revolute">
+      <pose relative_to="RL_thigh">0 0 -0.21299999999999999 0 0 0</pose>
+      <parent>RL_thigh</parent>
+      <child>RL_calf</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-2.8180000000000001</lower>
+          <upper>-0.88800000000000001</upper>
+          <effort>35.549999999999997</effort>
+          <velocity>20.059999999999999</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="RL_calf">
+      <pose relative_to="RL_calf_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>0.0042986225709938644 0.00097667590446334665 -0.14619689419080781 0 0 0</pose>
+        <mass>0.19586200000000001</mass>
+        <inertia>
+          <ixx>0.0014844839548776639</ixx>
+          <ixy>-6.1882663479756163e-07</ixy>
+          <ixz>-1.7720916801973839e-05</ixz>
+          <iyy>0.0014976354481416019</iyy>
+          <iyz>-3.5662623787605599e-06</iyz>
+          <izz>3.6068269424755998e-05</izz>
+        </inertia>
+      </inertial>
+      <visual name="RL_calf_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/calf.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="RL_calf_fixed_joint_lump__RL_foot_visual_1">
+        <pose>0 0 -0.21299999999999999 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.01</radius>
+          </sphere>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <self_collide>true</self_collide>
+      <self_collide>true</self_collide>
+      <gravity>false</gravity>
+    </link>
+    <joint name="RR_hip_joint" type="revolute">
+      <pose relative_to="base">-0.18809999999999999 -0.04675 0 0 0 0</pose>
+      <parent>base</parent>
+      <child>RR_hip</child>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <limit>
+          <lower>-0.86299999999999999</lower>
+          <upper>0.86299999999999999</upper>
+          <effort>23.699999999999999</effort>
+          <velocity>30.100000000000001</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="RR_hip">
+      <pose relative_to="RR_hip_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>0.0049165985294117639 0.0076261499999999991 -8.865e-05 0 0 0</pose>
+        <mass>0.67999999999999994</mass>
+        <inertia>
+          <ixx>0.0003993797857294</ixx>
+          <ixy>-1.4590105668949999e-05</ixy>
+          <ixz>-1.2460991185500001e-06</ixz>
+          <iyy>0.00073341939237609854</iyy>
+          <iyz>-1.5753255103e-06</iyz>
+          <izz>0.00046842209057609862</izz>
+        </inertia>
+      </inertial>
+      <visual name="RR_hip_visual">
+        <pose>0 0 0 -1.224646799147353e-16 1.224646799147353e-16 3.1415926535897931</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/hip.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="RR_hip_fixed_joint_lump__RR_thigh_rotor_visual_1">
+        <pose>0 0.00014999999999999999 0 1.5707963267948959 0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <gravity>false</gravity>
+    </link>
+    <joint name="RR_thigh_joint" type="revolute">
+      <pose relative_to="RR_hip">0 -0.080000000000000002 0 0 0 0</pose>
+      <parent>RR_hip</parent>
+      <child>RR_thigh</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-0.68600000000000005</lower>
+          <upper>4.5010000000000003</upper>
+          <effort>23.699999999999999</effort>
+          <velocity>30.100000000000001</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="RR_thigh">
+      <pose relative_to="RR_thigh_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>-0.0030472150644202181 0.019314995044598611 -0.03050041625371655 0 0 0</pose>
+        <mass>1.0089999999999999</mass>
+        <inertia>
+          <ixx>0.0045987964610901466</ixx>
+          <ixy>-6.1373912803924688e-05</ixy>
+          <ixz>-0.00022752911680967291</ixz>
+          <iyy>0.0046892240622995037</iyy>
+          <iyz>-0.00061080828661791886</iyz>
+          <izz>0.00081744785689930629</izz>
+        </inertia>
+      </inertial>
+      <visual name="RR_thigh_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/thigh_mirror.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <visual name="RR_thigh_fixed_joint_lump__RR_calf_rotor_visual_1">
+        <pose>0 0.032349999999999997 0 1.5707963267948959 0 0</pose>
+        <geometry>
+          <cylinder>
+            <length>0.02</length>
+            <radius>0.035000000000000003</radius>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0 1 0 1</diffuse>
+          <ambient>0 1 0 1</ambient>
+        </material>
+      </visual>
+      <self_collide>true</self_collide>
+      <gravity>false</gravity>
+    </link>
+    <joint name="RR_calf_joint" type="revolute">
+      <pose relative_to="RR_thigh">0 0 -0.21299999999999999 0 0 0</pose>
+      <parent>RR_thigh</parent>
+      <child>RR_calf</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit>
+          <lower>-2.8180000000000001</lower>
+          <upper>-0.88800000000000001</upper>
+          <effort>35.549999999999997</effort>
+          <velocity>20.059999999999999</velocity>
+        </limit>
+        <dynamics>
+          <damping>0</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="RR_calf">
+      <pose relative_to="RR_calf_joint">0 0 0 0 0 0</pose>
+      <inertial>
+        <pose>0.0042986225709938644 0.00097667590446334665 -0.14619689419080781 0 0 0</pose>
+        <mass>0.19586200000000001</mass>
+        <inertia>
+          <ixx>0.0014844839548776639</ixx>
+          <ixy>-6.1882663479756163e-07</ixy>
+          <ixz>-1.7720916801973839e-05</ixz>
+          <iyy>0.0014976354481416019</iyy>
+          <iyz>-3.5662623787605599e-06</iyz>
+          <izz>3.6068269424755998e-05</izz>
+        </inertia>
+      </inertial>
+      <visual name="RR_calf_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://unitree_go1/meshes/calf.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+      <visual name="RR_calf_fixed_joint_lump__RR_foot_visual_1">
+        <pose>0 0 -0.21299999999999999 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.01</radius>
+          </sphere>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/DarkGrey</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <self_collide>true</self_collide>
+      <self_collide>true</self_collide>
+      <gravity>false</gravity>
+    </link>
+    <frame name="FL_hip_rotor_joint" attached_to="trunk">
+      <pose>0.11215 0.04675 0 0 0 0</pose>
+    </frame>
+    <frame name="FL_hip_rotor" attached_to="FL_hip_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="FR_hip_rotor_joint" attached_to="trunk">
+      <pose>0.11215 -0.04675 0 0 0 0</pose>
+    </frame>
+    <frame name="FR_hip_rotor" attached_to="FR_hip_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="RL_hip_rotor_joint" attached_to="trunk">
+      <pose>-0.11215 0.04675 0 0 0 0</pose>
+    </frame>
+    <frame name="RL_hip_rotor" attached_to="RL_hip_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="RR_hip_rotor_joint" attached_to="trunk">
+      <pose>-0.11215 -0.04675 0 0 0 0</pose>
+    </frame>
+    <frame name="RR_hip_rotor" attached_to="RR_hip_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_optical_joint_chin" attached_to="camera_chin">
+      <pose>0 0 0 -1.5707963267948959 -5.5511151231257827e-17 -1.5707963267948959</pose>
+    </frame>
+    <frame name="camera_optical_chin" attached_to="camera_optical_joint_chin">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_joint_chin" attached_to="trunk">
+      <pose>0.25219999999999998 0.012500000000000001 -0.0436 3.1415926535897931 1.5707963267948966 0</pose>
+    </frame>
+    <frame name="camera_chin" attached_to="camera_joint_chin">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_optical_joint_face" attached_to="camera_face">
+      <pose>0 0 0 -1.5707963267948959 -5.5511151231257827e-17 -1.5707963267948959</pose>
+    </frame>
+    <frame name="camera_optical_face" attached_to="camera_optical_joint_face">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_joint_face" attached_to="trunk">
+      <pose>0.27850000000000003 0.012500000000000001 0.0167 3.1415926535897931 0 0</pose>
+    </frame>
+    <frame name="camera_face" attached_to="camera_joint_face">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_laserscan_joint_left" attached_to="camera_left">
+      <pose>0 0 0 0 0.26180000000000031 0</pose>
+    </frame>
+    <frame name="camera_laserscan_link_left" attached_to="camera_laserscan_joint_left">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_optical_joint_left" attached_to="camera_left">
+      <pose>0 0 0 -1.5707963267948959 -5.5511151231257827e-17 -1.5707963267948959</pose>
+    </frame>
+    <frame name="camera_optical_left" attached_to="camera_optical_joint_left">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_joint_left" attached_to="trunk">
+      <pose>-0.066000000000000003 0.082000000000000003 -0.017600000000000001 3.1415926535897931 0.26179999999999998 1.5707963267948957</pose>
+    </frame>
+    <frame name="camera_left" attached_to="camera_joint_left">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_optical_joint_rearDown" attached_to="camera_rearDown">
+      <pose>0 0 0 -1.5707963267948959 -5.5511151231257827e-17 -1.5707963267948959</pose>
+    </frame>
+    <frame name="camera_optical_rearDown" attached_to="camera_optical_joint_rearDown">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_joint_rearDown" attached_to="trunk">
+      <pose>-0.082500000000000004 0.012500000000000001 -0.043650000000000001 3.1415926535897931 1.5707963267948966 0</pose>
+    </frame>
+    <frame name="camera_rearDown" attached_to="camera_joint_rearDown">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_laserscan_joint_right" attached_to="camera_right">
+      <pose>0 0 0 0 0.26180000000000031 0</pose>
+    </frame>
+    <frame name="camera_laserscan_link_right" attached_to="camera_laserscan_joint_right">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_optical_joint_right" attached_to="camera_right">
+      <pose>0 0 0 -1.5707963267948959 -5.5511151231257827e-17 -1.5707963267948959</pose>
+    </frame>
+    <frame name="camera_optical_right" attached_to="camera_optical_joint_right">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="camera_joint_right" attached_to="trunk">
+      <pose>-0.041000000000000002 -0.082000000000000003 -0.017600000000000001 3.1415926535897931 0.26179999999999998 -1.570796326794897</pose>
+    </frame>
+    <frame name="camera_right" attached_to="camera_joint_right">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="imu_joint" attached_to="trunk">
+      <pose>-0.01592 -0.066589999999999996 -0.0061700000000000001 0 0 0</pose>
+    </frame>
+    <frame name="imu_link" attached_to="imu_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="ultraSound_joint_face" attached_to="trunk">
+      <pose>0.2747 0 -0.0088000000000000005 0 0 0</pose>
+    </frame>
+    <frame name="ultraSound_face" attached_to="ultraSound_joint_face">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="ultraSound_joint_left" attached_to="trunk">
+      <pose>-0.053499999999999999 0.082600000000000007 0.0086800000000000002 0 0.26179999999999998 1.570796326794897</pose>
+    </frame>
+    <frame name="ultraSound_left" attached_to="ultraSound_joint_left">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="ultraSound_joint_right" attached_to="trunk">
+      <pose>-0.053499999999999999 -0.082600000000000007 0.0086800000000000002 0 0.26179999999999998 -1.570796326794897</pose>
+    </frame>
+    <frame name="ultraSound_right" attached_to="ultraSound_joint_right">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="floating_base" attached_to="base">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="trunk" attached_to="floating_base">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="FL_thigh_rotor_joint" attached_to="FL_hip">
+      <pose>0 -0.00014999999999999999 0 0 0 0</pose>
+    </frame>
+    <frame name="FL_thigh_rotor" attached_to="FL_thigh_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="FL_calf_rotor_joint" attached_to="FL_thigh">
+      <pose>0 -0.032349999999999997 0 0 0 0</pose>
+    </frame>
+    <frame name="FL_calf_rotor" attached_to="FL_calf_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="FL_foot_fixed" attached_to="FL_calf">
+      <pose>0 0 -0.21299999999999999 0 0 0</pose>
+    </frame>
+    <frame name="FL_foot" attached_to="FL_foot_fixed">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="FR_thigh_rotor_joint" attached_to="FR_hip">
+      <pose>0 0.00014999999999999999 0 0 0 0</pose>
+    </frame>
+    <frame name="FR_thigh_rotor" attached_to="FR_thigh_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="FR_calf_rotor_joint" attached_to="FR_thigh">
+      <pose>0 0.032349999999999997 0 0 0 0</pose>
+    </frame>
+    <frame name="FR_calf_rotor" attached_to="FR_calf_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="FR_foot_fixed" attached_to="FR_calf">
+      <pose>0 0 -0.21299999999999999 0 0 0</pose>
+    </frame>
+    <frame name="FR_foot" attached_to="FR_foot_fixed">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="RL_thigh_rotor_joint" attached_to="RL_hip">
+      <pose>0 -0.00014999999999999999 0 0 0 0</pose>
+    </frame>
+    <frame name="RL_thigh_rotor" attached_to="RL_thigh_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="RL_calf_rotor_joint" attached_to="RL_thigh">
+      <pose>0 -0.032349999999999997 0 0 0 0</pose>
+    </frame>
+    <frame name="RL_calf_rotor" attached_to="RL_calf_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="RL_foot_fixed" attached_to="RL_calf">
+      <pose>0 0 -0.21299999999999999 0 0 0</pose>
+    </frame>
+    <frame name="RL_foot" attached_to="RL_foot_fixed">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="RR_thigh_rotor_joint" attached_to="RR_hip">
+      <pose>0 0.00014999999999999999 0 0 0 0</pose>
+    </frame>
+    <frame name="RR_thigh_rotor" attached_to="RR_thigh_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="RR_calf_rotor_joint" attached_to="RR_thigh">
+      <pose>0 0.032349999999999997 0 0 0 0</pose>
+    </frame>
+    <frame name="RR_calf_rotor" attached_to="RR_calf_rotor_joint">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <frame name="RR_foot_fixed" attached_to="RR_calf">
+      <pose>0 0 -0.21299999999999999 0 0 0</pose>
+    </frame>
+    <frame name="RR_foot" attached_to="RR_foot_fixed">
+      <pose>0 0 0 0 0 0</pose>
+    </frame>
+    <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+      <topic>/model/unitree_go1/cmd_vel</topic>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>FR_thigh_joint</joint_name>
+      <topic>/model/unitree_go1/joint/FR_thigh_joint/cmd_pos</topic>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>FR_calf_joint</joint_name>
+      <topic>/model/unitree_go1/joint/FR_calf_joint/cmd_pos</topic>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>RL_thigh_joint</joint_name>
+      <topic>/model/unitree_go1/joint/RL_thigh_joint/cmd_pos</topic>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>RL_calf_joint</joint_name>
+      <topic>/model/unitree_go1/joint/RL_calf_joint/cmd_pos</topic>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>FL_thigh_joint</joint_name>
+      <topic>/model/unitree_go1/joint/FL_thigh_joint/cmd_pos</topic>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>FL_calf_joint</joint_name>
+      <topic>/model/unitree_go1/joint/FL_calf_joint/cmd_pos</topic>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>RR_thigh_joint</joint_name>
+      <topic>/model/unitree_go1/joint/RR_thigh_joint/cmd_pos</topic>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>RR_calf_joint</joint_name>
+      <topic>/model/unitree_go1/joint/RR_calf_joint/cmd_pos</topic>
+      <p_gain>200.0</p_gain>
+      <d_gain>10.0</d_gain>
+    </plugin>
+  </model>
+</sdf>

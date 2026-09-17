@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Entry point for the upstream-URDF to agent-model converter."""
+
+import sys
+
+from agents.model_convert import main
+
+
+if __name__ == "__main__":
+    sys.exit(main())

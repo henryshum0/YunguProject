@@ -42,6 +42,8 @@ def generate_launch_description() -> LaunchDescription:
     navigation_launch = here / "coverage_and_offboard.launch.py"
     detection_launch = Path(get_package_share_directory("detection")) / "launch" \
         / "detection.launch.py"
+    agents_launch = Path(get_package_share_directory("agents")) / "launch" \
+        / "agents.launch.py"
     visualization_launch = Path(get_package_share_directory("visualization")) / "launch" \
         / "visualization.launch.py"
     default_planner_config = Path(get_package_share_directory("coverage_planner")) / "config" \
@@ -57,6 +59,9 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument(
             "detection", default_value="true",
             description="Start the detection layer and spawn the simulated search targets."),
+        DeclareLaunchArgument(
+            "agents", default_value="true",
+            description="Spawn the scripted ground robots and the node that walks them."),
         DeclareLaunchArgument(
             "visualization", default_value="false",
             description="Also start RViz and the birdview tools."),
@@ -91,6 +96,10 @@ def generate_launch_description() -> LaunchDescription:
                 "mock": LaunchConfiguration("mock_detector"),
                 "spawn": LaunchConfiguration("spawn_targets"),
             }.items(),
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(str(agents_launch)),
+            condition=IfCondition(LaunchConfiguration("agents")),
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(str(visualization_launch)),

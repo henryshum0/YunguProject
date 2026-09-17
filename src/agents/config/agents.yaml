@@ -1,0 +1,93 @@
+# ============================================================================
+# src/agents/config/agents.yaml — scripted ground agents.
+# ============================================================================
+# One source of truth for the ground robots in the scene: the launch file spawns
+# them from this, and agent_node drives them from it. Adding a robot is a change
+# here, not in code.
+#
+# Positions are ENU metres in the navigation frame ('map'): x east, y north,
+# anchored at the drone launch point — the same frame as coverage search areas,
+# navigation waypoints and detection targets. Goals published to an agent use
+# that frame too, so a point read off the operations map can be sent straight to
+# a robot. `world_origin_in_gz` converts to Gazebo world coordinates at spawn,
+# exactly as src/detection/config/targets.yaml does.
+#
+# These agents are kinematic: no gravity, no collisions, no locomotion control.
+# The base is driven to the goal and the legs are animated to match the distance
+# covered. See src/agents/README.md for why, and for what that does and does not
+# buy you.
+# ----------------------------------------------------------------------------
+
+# ENU origin (the airframe spawn point) expressed in Gazebo world coordinates.
+# Must match src/detection/config/targets.yaml.
+world_origin_in_gz: [0.0, 0.0, 1.15392]
+
+agents:
+  # --------------------------------------------------------------------------
+  # Unitree Go1 — quadruped, trotting.
+  #
+  # A trot moves the diagonal pairs together: FR+RL step while FL+RR are in
+  # stance, so the two groups sit half a cycle apart (offset 0.0 / 0.5). Each
+  # calf is offset a further quarter cycle from its own thigh, so the knee folds
+  # as the leg swings through rather than staying locked.
+  #
+  # Joint sign conventions come from the Unitree URDF limits:
+  #   thigh  [-0.686, 4.501], standing ~0.8
+  #   calf   [-2.818, -0.888], always negative, so flexion is a *negative*
+  #          amplitude and the 'flex' shape bends it only on the swing half.
+  #   hip    abduction, left flat at 0: a straight-line walk does not need it.
+  # --------------------------------------------------------------------------
+  - name: go1
+    model: unitree_go1
+    spawn: {x: 8.0, y: 6.0, yaw_deg: 0.0}
+    # Trunk height above ground with the legs in their standing stance.
+    ground_z_m: 0.32
+    limits:
+      speed_mps: 1.0
+      yaw_rate_dps: 90.0
+      arrive_radius_m: 0.4
+      turn_in_place_deg: 35.0
+    gait:
+      # A Go1 covers roughly this much ground per full trot cycle. Lower it and
+      # the legs cycle faster for the same speed.
+      stride_m: 0.40
+      joints:
+        FR_thigh_joint: {bias: 0.8, amplitude: 0.35, offset: 0.0}
+        FR_calf_joint: {bias: -1.5, amplitude: -0.5, offset: 0.25, shape: flex}
+        RL_thigh_joint: {bias: 0.8, amplitude: 0.35, offset: 0.0}
+        RL_calf_joint: {bias: -1.5, amplitude: -0.5, offset: 0.25, shape: flex}
+        FL_thigh_joint: {bias: 0.8, amplitude: 0.35, offset: 0.5}
+        FL_calf_joint: {bias: -1.5, amplitude: -0.5, offset: 0.75, shape: flex}
+        RR_thigh_joint: {bias: 0.8, amplitude: 0.35, offset: 0.5}
+        RR_calf_joint: {bias: -1.5, amplitude: -0.5, offset: 0.75, shape: flex}
+
+  # --------------------------------------------------------------------------
+  # Unitree G1 — humanoid, walking.
+  #
+  # The two legs are half a cycle apart. Knee limits are [-0.087, 2.880], so
+  # flexion is *positive* here (the opposite of the Go1 calf) and 'flex' bends it
+  # only while that leg swings. Shoulders swing opposite their own-side leg,
+  # which is what reads as a walk rather than a shuffle.
+  # --------------------------------------------------------------------------
+  - name: g1
+    model: unitree_g1
+    spawn: {x: 8.0, y: -6.0, yaw_deg: 0.0}
+    # Pelvis height above ground when standing.
+    ground_z_m: 0.79
+    limits:
+      speed_mps: 0.7
+      yaw_rate_dps: 70.0
+      arrive_radius_m: 0.4
+      turn_in_place_deg: 30.0
+    gait:
+      stride_m: 0.60
+      joints:
+        left_hip_pitch_joint: {bias: -0.05, amplitude: 0.35, offset: 0.0}
+        left_knee_joint: {bias: 0.10, amplitude: 0.60, offset: 0.25, shape: flex}
+        left_ankle_pitch_joint: {bias: 0.0, amplitude: -0.20, offset: 0.0}
+        right_hip_pitch_joint: {bias: -0.05, amplitude: 0.35, offset: 0.5}
+        right_knee_joint: {bias: 0.10, amplitude: 0.60, offset: 0.75, shape: flex}
+        right_ankle_pitch_joint: {bias: 0.0, amplitude: -0.20, offset: 0.5}
+        # Arms counter-swing their own-side leg.
+        left_shoulder_pitch_joint: {bias: 0.0, amplitude: 0.30, offset: 0.5}
+        right_shoulder_pitch_joint: {bias: 0.0, amplitude: 0.30, offset: 0.0}
