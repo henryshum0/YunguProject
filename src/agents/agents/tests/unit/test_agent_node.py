@@ -10,6 +10,9 @@ config: build the node, drive it, and require that it survives.
 
 from __future__ import annotations
 
+import signal
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -127,6 +130,98 @@ class TestTheClockItIntegratesOn:
         node._tick()   # first clocked tick: no interval
         node._tick()   # clock has not moved: paused
         assert published == []
+
+
+class TestParkingOnTheWayOut:
+    """Gazebo's velocity controller latches, so stopping the driver is not enough.
+
+    Whatever it heard last it keeps applying forever. A driver that dies mid-walk
+    therefore leaves its robot walking, and nothing in the simulation stops it
+    again -- a G1 ended up 50 m from its spawn that way, long after the driver
+    had gone.
+    """
+
+    @staticmethod
+    def _capture(runtime) -> tuple[list, dict[str, list]]:
+        twists: list = []
+        runtime.cmd_vel = type("Fake", (), {"publish": lambda _s, m: twists.append(m)})()
+        angles: dict[str, list] = {}
+        for joint in list(runtime.joint_publishers):
+            sink = angles.setdefault(joint, [])
+            runtime.joint_publishers[joint] = type(
+                "Fake", (), {"publish": lambda _s, m, sink=sink: sink.append(m.data)})()
+        return twists, angles
+
+    def test_every_agent_is_commanded_to_a_dead_stop(self, node) -> None:
+        captured = [self._capture(runtime) for runtime in node._runtimes]
+        for runtime in node._runtimes:
+            runtime.navigator.set_goal(runtime.spec.spawn.x + 20.0, runtime.spec.spawn.y)
+        node.park(settle_s=0.0)
+
+        for (twists, _), runtime in zip(captured, node._runtimes):
+            assert twists, f"{runtime.spec.name} was never told to stop"
+            assert twists[-1].linear.x == 0.0
+            assert twists[-1].angular.z == 0.0
+
+    def test_the_legs_are_parked_in_the_standing_stance(self, node) -> None:
+        """The joint controllers latch too, so the legs freeze mid-stride."""
+        captured = [self._capture(runtime) for runtime in node._runtimes]
+        node.park(settle_s=0.0)
+        for (_, angles), runtime in zip(captured, node._runtimes):
+            stance = runtime.gait.stance()
+            for joint, sent in angles.items():
+                assert sent, f"{joint} was left wherever it happened to be"
+                assert sent[-1] == pytest.approx(stance[joint])
+
+    def test_the_goal_is_dropped_so_nothing_resumes_it(self, node) -> None:
+        for runtime in node._runtimes:
+            runtime.navigator.set_goal(0.0, 0.0)
+        node.park(settle_s=0.0)
+        for runtime in node._runtimes:
+            assert runtime.navigator.goal is None
+
+    def test_the_control_timer_stops_first(self, node) -> None:
+        """Otherwise a tick after parking would command the agent onwards again."""
+        node.park(settle_s=0.0)
+        assert node._timer.is_canceled()
+
+
+def test_an_interrupted_driver_parks_before_it_exits(tmp_path) -> None:
+    """The wiring, not just the method: ``main`` must park on the way out.
+
+    Testing ``park`` alone does not catch the shutdown path forgetting to call
+    it, and that path is the whole point -- so this runs the driver as its own
+    process and interrupts it. No simulator is needed: the commands going
+    nowhere is fine, what matters is that they are sent at all, with the node
+    still alive enough to send them. rclpy's own signal handler tears the
+    context down before ``spin`` returns, which is exactly the trap here.
+    """
+    import subprocess
+
+    source_root = Path(__file__).resolve().parents[2] / "src"
+    script = (
+        "import sys;"
+        f"sys.path.insert(0, {str(source_root)!r});"
+        "from agents.ros.agent_node import main;"
+        f"sys.exit(main(['--config', {str(SHIPPED_CONFIG)!r}, '--settle-s', '0.05']))"
+    )
+    log = tmp_path / "driver.log"
+    with log.open("w") as sink:
+        driver = subprocess.Popen(
+            [sys.executable, "-c", script], stdout=sink, stderr=subprocess.STDOUT)
+    try:
+        deadline = time.monotonic() + 30.0
+        while "driving" not in log.read_text(errors="replace"):
+            assert driver.poll() is None, f"driver exited early:\n{log.read_text()}"
+            assert time.monotonic() < deadline, f"driver never started:\n{log.read_text()}"
+            time.sleep(0.2)
+        driver.send_signal(signal.SIGINT)
+        assert driver.wait(timeout=30) == 0
+    finally:
+        if driver.poll() is None:
+            driver.kill()
+    assert "stopping: commanded" in log.read_text(errors="replace"), (
+        f"the driver exited without stopping its agents:\n{log.read_text()}")
 
 
 def test_the_reported_pose_is_built_from_the_ground(node) -> None:

@@ -16,7 +16,9 @@ robot stands rather than freezing mid-stride.
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
+import time
 from dataclasses import dataclass
 from math import cos, sin
 
@@ -24,6 +26,7 @@ import rclpy
 from geometry_msgs.msg import PoseStamped, Twist
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.signals import SignalHandlerOptions
 from rosgraph_msgs.msg import Clock
 from std_msgs.msg import Float64
 
@@ -35,6 +38,10 @@ from agents.topics import SIM_CLOCK_TOPIC, base_command_topic, joint_command_top
 #: Control rate. Fast enough that the legs look continuous and the dead-reckoned
 #: pose stays close to what the simulator integrates from the same velocities.
 DEFAULT_RATE_HZ = 50.0
+
+#: How long to wait, on the way out, for the stop commands to actually be sent.
+#: Long enough to cover delivery, short enough not to hold up a shutdown.
+DEFAULT_SETTLE_S = 0.25
 
 
 @dataclass
@@ -186,6 +193,37 @@ class AgentDriverNode(Node):
 
             self._publish_pose(runtime, step.pose)
 
+    def park(self, *, settle_s: float = DEFAULT_SETTLE_S) -> None:
+        """Bring every agent to a halt, and wait for the commands to go out.
+
+        Gazebo's velocity controller latches: whatever it heard last it keeps
+        applying, forever. A driver that simply stops therefore leaves its robots
+        walking, and nothing in the simulation ever stops them again -- a G1 was
+        found 50 m from its spawn, still going, long after the driver that sent
+        it there had died. The joint controllers latch the same way, so the legs
+        freeze mid-stride; parking the stance pose too lands them standing.
+
+        Publishing is not enough on its own. These messages have to leave the
+        process before it dies, so this waits afterwards rather than returning
+        into a shutdown that would tear the publishers down underneath them.
+
+        This is best effort by construction: it cannot help if the driver is
+        killed outright, or if the bridge carrying these topics is already gone.
+        """
+        self._timer.cancel()
+        stop = Twist()
+        for runtime in self._runtimes:
+            runtime.navigator.cancel()
+            runtime.cmd_vel.publish(stop)
+            for joint, angle in runtime.gait.stance().items():
+                publisher = runtime.joint_publishers.get(joint)
+                if publisher is not None:
+                    publisher.publish(Float64(data=float(angle)))
+        self.get_logger().info(
+            f"stopping: commanded {len(self._runtimes)} agent(s) to halt and stand")
+        if settle_s > 0.0:
+            time.sleep(settle_s)
+
     def _publish_pose(self, runtime: _Runtime, pose) -> None:
         message = PoseStamped()
         message.header.stamp = self.get_clock().now().to_msg()
@@ -205,17 +243,46 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", required=True, help="path to the agents YAML")
     parser.add_argument("--rate-hz", type=float, default=DEFAULT_RATE_HZ,
                         help="control and animation rate")
+    parser.add_argument("--settle-s", type=float, default=DEFAULT_SETTLE_S,
+                        help="how long to wait on exit for the stop commands to be sent")
     arguments, ros_args = parser.parse_known_args(argv if argv is not None else sys.argv[1:])
 
     config = AgentsConfig.load(arguments.config)
-    rclpy.init(args=ros_args)
+    # Take the signals ourselves. rclpy's own handler shuts the context down, and
+    # it races the shutdown path below: an idle driver usually gets its stop
+    # commands out first, but one that was actually walking lost that race every
+    # time it was tried, failing with "publisher's context is invalid" and
+    # leaving the robot going. Ours only unwinds the stack, so the shutdown path
+    # is always left with a live node to publish through.
+    #
+    # Raising from a handler is safe here because the control timer wakes the
+    # executor every tick, so it is never left sitting behind a blocking wait.
+    rclpy.init(args=ros_args, signal_handler_options=SignalHandlerOptions.NO)
     node = AgentDriverNode(config, rate_hz=arguments.rate_hz)
+    # SIGTERM is what launch escalates to when a shutdown takes too long, and
+    # what a plain `kill` sends; without a handler it ends the process outright
+    # and the agents are left walking.
+    for caught in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(caught, _raise_on_signal)
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, _Terminated):
         pass
     finally:
+        # Before destroy_node: it tears down the very publishers this needs.
+        try:
+            node.park(settle_s=arguments.settle_s)
+        except Exception as error:                        # noqa: BLE001
+            node.get_logger().error(f"could not stop the agents on the way out: {error}")
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
     return 0
+
+
+class _Terminated(SystemExit):
+    """Raised in place of a bare signal so the shutdown path still runs."""
+
+
+def _raise_on_signal(_signum: int, _frame: object) -> None:
+    raise _Terminated(0)
