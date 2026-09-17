@@ -85,9 +85,9 @@ Visualization Manager:
       Name: EGO Inflated Occupancy Map (Red)
       Position Transformer: XYZ
       Selectable: true
-      Size (Pixels): 4
-      Size (m): 0.05
-      Style: Flat Squares
+      Size (Pixels): 3
+      Size (m): 0.03
+      Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile

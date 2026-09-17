@@ -56,6 +56,7 @@ def _nodes(context):
         "grid_map/local_update_range_y": ego["local_update_range_y_m"],
         "grid_map/local_update_range_z": ego["local_update_range_z_m"],
         "grid_map/obstacles_inflation": ego["obstacle_inflation_m"],
+        "grid_map/visualization_rate_hz": ego["map_visualization_rate_hz"],
         "grid_map/direct_cloud_mode": ego["direct_cloud_mode"],
         "grid_map/rolling_recenter_distance_m": ego["rolling_recenter_distance_m"],
         "grid_map/rolling_recenter_distance_z_m": ego["rolling_recenter_distance_z_m"],

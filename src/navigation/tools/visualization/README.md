@@ -21,7 +21,9 @@ The launch starts:
 The RViz profile displays the configured EGO input cloud, the inflated local
 map, the planned B-spline path, and the ground-truth path. EGO publishes the
 inflated cloud with volatile durability, so the RViz display intentionally uses
-volatile QoS; it will show map updates while EGO is running.
+volatile QoS; it will show map updates while EGO is running. Inflated voxels use
+the lightweight point rendering style, and the virtual-ceiling collision plane
+is intentionally not visualized.
 
 Topic names and trajectory sampling settings are configured in
 [`src/simulation/config/visualization.yaml`](../../../simulation/config/visualization.yaml).

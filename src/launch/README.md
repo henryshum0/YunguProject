@@ -37,6 +37,10 @@ expire after 30 seconds. The retained inflated cloud remains available on
 `/grid_map/occupancy_inflate` for RViz. Goals outside that local rolling region
 are not supported by this initial setup.
 
+Map visualization is published at the configured low rate from active obstacle
+voxels. The virtual ceiling still blocks planning but is not included in the
+inflated RViz point cloud.
+
 The direct-cloud map assumes odometry and cloud coordinates stay aligned in
 `world`. Restart the navigation launch after a localization-frame reset.
 
