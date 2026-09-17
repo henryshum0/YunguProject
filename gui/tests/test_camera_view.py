@@ -33,6 +33,25 @@ def test_camera_frame_resizes_to_fit_without_distorting_aspect_ratio() -> None:
     assert native is frame
 
 
+def test_subsample_factor_fits_the_frame_into_the_preview_box() -> None:
+    """The factor handed to Tk must always land inside the box, never over it."""
+    frame = CameraFrame(width=640, height=480, rgb=b"\x00" * (640 * 480 * 3))
+    assert frame.subsample_factor(320, 240) == 2
+    # A feed rendered at the preview size costs no reduction at all.
+    assert frame.subsample_factor(640, 480) == 1
+    assert frame.subsample_factor(1280, 960) == 1
+    # Non-integer ratios round up rather than overflowing the box.
+    factor = frame.subsample_factor(300, 240)
+    assert factor == 3
+    assert -(-640 // factor) <= 300 and -(-480 // factor) <= 240
+
+
+def test_subsample_factor_rejects_an_empty_preview_box() -> None:
+    frame = CameraFrame(width=4, height=2, rgb=bytes((0, 0, 0)) * 8)
+    with pytest.raises(ValueError, match="positive"):
+        frame.subsample_factor(0, 10)
+
+
 @pytest.mark.parametrize(
     ("encoding", "data", "expected"),
     [

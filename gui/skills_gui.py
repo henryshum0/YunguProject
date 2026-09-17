@@ -76,6 +76,9 @@ class SkillsTestGui(tk.Tk):
         self._camera_photos: dict[str, tk.PhotoImage] = {}
         self._camera_labels: dict[str, tk.Label] = {}
         self._camera_statuses: dict[str, tk.StringVar] = {}
+        # Per-feed switches. A feed that is off is not subscribed at all, which
+        # is the only way to stop paying for a stream you are not looking at.
+        self._camera_enabled: dict[str, tk.BooleanVar] = {}
         # Overlay toggle swaps the front feed to the detector's overlay topic and
         # remembers the raw topic so it can switch back.
         self._front_camera_raw_topic: str | None = None
@@ -251,8 +254,14 @@ class SkillsTestGui(tk.Tk):
             feed = ttk.LabelFrame(feeds, text=title, padding=4)
             feed.grid(row=row, column=column, padx=(0, 6), pady=(0, 6), sticky="nsew")
             status = tk.StringVar(value="Preview stopped.")
-            ttk.Label(feed, textvariable=status, wraplength=CAMERA_PREVIEW_WIDTH).grid(
-                row=0, column=0, pady=(0, 2), sticky="w")
+            header = ttk.Frame(feed)
+            header.grid(row=0, column=0, pady=(0, 2), sticky="ew")
+            enabled = tk.BooleanVar(value=True)
+            self._camera_enabled[key] = enabled
+            ttk.Checkbutton(header, text="Show", variable=enabled,
+                            command=self._start_camera_previews).grid(row=0, column=0, padx=(0, 6))
+            ttk.Label(header, textvariable=status, wraplength=CAMERA_PREVIEW_WIDTH - 70).grid(
+                row=0, column=1, sticky="w")
             preview_frame = tk.Frame(
                 feed,
                 width=CAMERA_PREVIEW_WIDTH,
@@ -367,6 +376,11 @@ class SkillsTestGui(tk.Tk):
                 # The pane was built before this feed existed; it appears after
                 # the next restart rather than being wired up half-built.
                 continue
+            switch = self._camera_enabled.get(key)
+            if switch is not None and not switch.get():
+                status.set("Off.")
+                label.configure(image="", text="Feed off.")
+                continue
             try:
                 self._camera_previews[key] = CameraPreview(
                     topic, node_name=f"skills_test_gui_{key}_camera")
@@ -428,9 +442,14 @@ class SkillsTestGui(tk.Tk):
             frame = preview.latest_frame()
             if frame is not None:
                 try:
-                    display_frame = frame.resized_to_fit(
+                    # Hand Tk the full frame and let it reduce: subsampling runs
+                    # in C, where the Python per-pixel resize was costing enough
+                    # per feed to stall the GUI once several were on screen.
+                    photo = tk.PhotoImage(data=frame.ppm_bytes(), format="PPM")
+                    factor = frame.subsample_factor(
                         CAMERA_PREVIEW_WIDTH, CAMERA_PREVIEW_HEIGHT)
-                    photo = tk.PhotoImage(data=display_frame.ppm_bytes(), format="PPM")
+                    if factor > 1:
+                        photo = photo.subsample(factor, factor)
                 except tk.TclError as image_error:
                     status.set(f"Preview display error: {image_error}")
                     continue

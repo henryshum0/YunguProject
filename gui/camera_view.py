@@ -29,6 +29,24 @@ class CameraFrame:
     def ppm_bytes(self) -> bytes:
         return f"P6\n{self.width} {self.height}\n255\n".encode("ascii") + self.rgb
 
+    def subsample_factor(self, maximum_width: int, maximum_height: int) -> int:
+        """Integer factor that shrinks this frame into the preview box.
+
+        Paired with ``tk.PhotoImage.subsample``, which does the same
+        nearest-neighbour reduction as :meth:`resized_to_fit` but inside Tk's C
+        code. That matters once several feeds are on screen: the Python version
+        walks every output pixel, so a 320x240 preview costs ~77k interpreted
+        iterations per frame, and a handful of feeds at 10 Hz is enough to make
+        the GUI stutter. This only computes the factor; Tk does the work.
+        """
+        if maximum_width <= 0 or maximum_height <= 0:
+            raise ValueError("preview dimensions must be positive")
+        return max(
+            1,
+            -(-self.width // maximum_width),
+            -(-self.height // maximum_height),
+        )
+
     def resized_to_fit(self, maximum_width: int, maximum_height: int) -> "CameraFrame":
         """Return an aspect-preserving nearest-neighbour preview frame."""
         if maximum_width <= 0 or maximum_height <= 0:

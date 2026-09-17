@@ -45,12 +45,16 @@ agents:
     # Trunk height above ground with the legs in their standing stance.
     ground_z_m: 0.32
     # Mounted on the trunk, not a leg, so the view is not swung by the gait.
+    # Rendered at exactly the GUI preview size and at the rate the GUI polls:
+    # anything larger or faster is decoded and then thrown away, and with a feed
+    # per robot on screen that waste is what makes the GUI stutter.
     camera:
       topic: /agents/go1/front_camera/image
       pose: [0.28, 0.0, 0.02]
       hfov_deg: 90.0
-      width: 640
-      height: 480
+      width: 320
+      height: 240
+      update_rate_hz: 10.0
     limits:
       speed_mps: 1.0
       yaw_rate_dps: 90.0
@@ -88,8 +92,9 @@ agents:
       topic: /agents/g1/front_camera/image
       pose: [0.08, 0.0, 0.55]
       hfov_deg: 90.0
-      width: 640
-      height: 480
+      width: 320
+      height: 240
+      update_rate_hz: 10.0
     limits:
       speed_mps: 0.7
       yaw_rate_dps: 70.0

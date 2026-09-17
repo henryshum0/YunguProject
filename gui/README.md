@@ -55,6 +55,10 @@ vehicle-odometry, queue-status, and timeout settings remain independently editab
   previews. Use **Start / reconnect feeds** after changing a UAV topic; preview work does not
   block planner or waypoint service actions. All simulated feeds require `ros-humble-ros-gz-image`
   and the normal bridge.
+  Each feed has its own **Show** switch. Turning one off closes its subscriber rather than just
+  hiding the picture, so a feed you are not watching costs nothing — which is what to reach for
+  if the GUI feels heavy. Reduction is done by Tk in C, and the agent cameras render at exactly
+  the preview size, so the cost per feed is small to begin with.
 - **Ground agents** are optional. If the agents config cannot be loaded — the package is not
   built, say — the GUI runs as a complete UAV client and the Navigate tab reports the reason
   instead of offering agent targets.
