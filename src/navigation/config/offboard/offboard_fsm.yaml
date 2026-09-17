@@ -11,9 +11,10 @@ offboard_fsm:
   goal_accept_timeout_sec: 8.0
 
 ego_planner:
-  # EGO uses a fixed local occupancy grid.  This is deliberately local: the
-  # complete Yungu collider map is much larger than a practical dense grid.
-  grid_resolution_m: 0.5
+  # EGO keeps this bounded dense grid world-aligned, then rolls it in x/y as
+  # the vehicle moves. It is intentionally local: the complete Yungu collider
+  # map is much larger than a practical dense grid.
+  grid_resolution_m: 0.2
   map_size_x_m: 60.0
   map_size_y_m: 60.0
   map_size_z_m: 16.0
@@ -23,6 +24,15 @@ ego_planner:
   ground_height_m: -2.0
   virtual_ceiling_height_m: 14.0
   obstacle_inflation_m: 0.5
+  direct_cloud_mode: true
+  rolling_recenter_distance_m: 10.0
+  rolling_recenter_distance_z_m: 5.0
+  obstacle_ttl_sec: 30.0
+  occupancy_hit_probability: 0.70
+  occupancy_miss_probability: 0.35
+  occupancy_min_probability: 0.12
+  occupancy_max_probability: 0.97
+  occupancy_probability_threshold: 0.80
   max_velocity_mps: 2.0
   max_acceleration_mps2: 3.0
   max_jerk_mps3: 4.0

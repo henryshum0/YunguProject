@@ -3,6 +3,7 @@
 Launches (topics/params read from src/simulation/config/visualization.yaml):
   - visual_tf         : TF tree anchored at the drone launch-origin world frame
   - gt_path           : Gazebo truth -> /gt_path in the launch-origin world
+  - ego_trajectory_path: EGO B-spline -> standard RViz Path
   - rviz2 (optional)  : freelook 3D window
 
 The visualization world frame is anchored at the drone launch position. Gazebo
@@ -117,10 +118,34 @@ def generate_launch_description():
             }],
         ),
         Node(
+            package='visualization', executable='ego_trajectory_path.py',
+            name='ego_trajectory_path', output='screen',
+            parameters=[{
+                'input_topic': _cfg(
+                    config_path, 'ego.trajectory_bspline_topic', '/ego_planner/bspline'),
+                'output_topic': _cfg(
+                    config_path, 'ego.trajectory_path_topic', '/ego_planner/trajectory'),
+                'frame_id': world_frame,
+                'sample_interval_sec': float(
+                    _cfg(config_path, 'ego.trajectory_sample_interval_sec', 0.05)),
+                'max_samples': int(_cfg(config_path, 'ego.trajectory_max_samples', 400)),
+                'min_path_length_m': float(
+                    _cfg(config_path, 'ego.trajectory_min_path_length_m', 0.05)),
+            }],
+        ),
+        Node(
             package='rviz2', executable='rviz2', name='rviz2_freelook', output='screen',
             arguments=['-d', PathJoinSubstitution([
                 FindPackageShare('visualization'), 'rviz',
                 _cfg(config_path, 'rviz.freelook_config', 'freelook.rviz')])],
+            remappings=[
+                ('/gz/point_cloud_super', _cfg(
+                    config_path, 'ego.input_cloud_topic', '/gz/point_cloud_super')),
+                ('/grid_map/occupancy_inflate', _cfg(
+                    config_path, 'ego.inflated_map_topic', '/grid_map/occupancy_inflate')),
+                ('/ego_planner/trajectory', _cfg(
+                    config_path, 'ego.trajectory_path_topic', '/ego_planner/trajectory')),
+            ],
             condition=IfCondition(LaunchConfiguration('rviz')),
         ),
     ])

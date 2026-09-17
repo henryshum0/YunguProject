@@ -100,6 +100,34 @@ EGO's manual-goal topic bypasses queue and flight-state safety checks.
 | `/fmu/out/vehicle_local_position_v1` | `px4_msgs/msg/VehicleLocalPosition` | Raw PX4 NED local position. |
 | `/fmu/out/vehicle_status_v4` | `px4_msgs/msg/VehicleStatus` | PX4 arming and navigation state. |
 
+### Persistent rolling EGO map
+
+The workspace EGO launch enables `grid_map/direct_cloud_mode`. It maintains a
+world-aligned, horizontally rolling log-odds grid from `/gz/point_cloud_super`
+and `/gz/odom_super`; it does not clear the map for every cloud frame. Hit
+endpoints increase occupancy evidence, ray traversals clear free space, and a
+raw obstacle is inflated only when its occupancy crosses the configured
+threshold. With the workspace profile, hit/miss probabilities are `0.70` and
+`0.35`, the clamp range is `[0.12, 0.97]`, the occupied threshold is `0.80`,
+the map recentres every 10 m, and untouched obstacle evidence expires after
+30 s.
+
+The raw and inflated retained windows publish in `world` on
+`/grid_map/occupancy` and `/grid_map/occupancy_inflate`. RViz uses the latter.
+The cloud and odometry must remain in the same stable `world` frame; reset or
+restart navigation after a localization-frame reset instead of retaining map
+evidence across that change.
+
+EGO's packaged depth-demo launch keeps depth fusion by default. Its direct
+profile is opt-in:
+
+```bash
+ros2 launch ego_planner advanced_param.launch.py \
+  direct_cloud_mode:=true \
+  cloud_topic:=/gz/point_cloud_super \
+  odometry_topic:=/gz/odom_super
+```
+
 Record and inspect a route with flight monitor:
 
 ```bash

@@ -30,9 +30,15 @@ Both launch files read the workspace configuration files:
 - `src/navigation/config/offboard/offboard_fsm.yaml`
 - `src/navigation/config/offboard/topics.yaml`
 
-The EGO launch uses `/gz/odom_super` and `/gz/point_cloud_super`, and creates a
-60 × 60 m local occupancy grid. Goals outside that configured local region are
-not supported by this initial setup.
+The EGO launch uses `/gz/odom_super` and `/gz/point_cloud_super` to maintain a
+persistent, horizontally rolling 60 × 60 × 16 m log-odds grid in `world`.
+LiDAR hits and free-space rays are fused incrementally; unobserved obstacles
+expire after 30 seconds. The retained inflated cloud remains available on
+`/grid_map/occupancy_inflate` for RViz. Goals outside that local rolling region
+are not supported by this initial setup.
+
+The direct-cloud map assumes odometry and cloud coordinates stay aligned in
+`world`. Restart the navigation launch after a localization-frame reset.
 
 The combined launch starts the coverage planning action server and waypoint
 queue services; planning a route does not automatically enqueue it to the

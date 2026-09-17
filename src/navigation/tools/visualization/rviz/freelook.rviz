@@ -55,7 +55,7 @@ Visualization Manager:
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
-      Name: SUPER World Cloud (from super_lidar)
+      Name: EGO Input Cloud
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
@@ -90,9 +90,9 @@ Visualization Manager:
       Style: Flat Squares
       Topic:
         Depth: 5
-        Durability Policy: Transient Local
+        Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Best Effort
+        Reliability Policy: Reliable
         Value: /grid_map/occupancy_inflate
       Use Fixed Frame: true
     - Alpha: 1
@@ -124,14 +124,14 @@ Visualization Manager:
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
-      Color: 255; 255; 80
+      Color: 255; 220; 60
       Enabled: true
       Head Diameter: 0.3
       Head Length: 0.2
       Length: 0.3
       Line Style: Lines
       Line Width: 0.03
-      Name: Actual Flight Path (Yellow)
+      Name: EGO Planned Trajectory (Yellow)
       Offset:
         X: 0
         Y: 0
@@ -143,77 +143,10 @@ Visualization Manager:
       Shaft Length: 0.1
       Topic:
         Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /fsm/path
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Frontend Guide Path (Pink)
-      Namespaces:
-        guide_path: true
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/frontend_path
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: S4 Optimized Trajectory (speed color)
-      Namespaces: {}
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/exp_traj
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Safe Corridors (transparent blue)
-      Namespaces: {}
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/exp_sfc
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Candidate Corridors (pre-overlap check)
-      Namespaces:
-        candidate_sfc: true
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/ciri_debug_mkr
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Goal and Debug (Yellow)
-      Namespaces: {}
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /visualization/goal
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Waypoint Buffer
-      Namespaces:
-        waypoint: true
-        active: true
-        route: true
-      Queue Size: 10
-      Topic:
-        Depth: 5
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /waypoint_markers
-      Value: true
+        Value: /ego_planner/trajectory
   Enabled: true
   Global Options:
     Background Color: 35; 35; 35
@@ -233,13 +166,6 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /initialpose
-    - Class: rviz_default_plugins/SetGoal
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /waypoint_pose
     - Class: rviz_default_plugins/PublishPoint
       Single click: true
       Topic:

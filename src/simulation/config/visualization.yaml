@@ -17,8 +17,8 @@ frames:
 
 # --- TF tree (visual_tf) -----------------------------------------------------
 visual_tf:
-  odom_topic: /gz/odom_super     # PX4 ENU odom (from super_lidar), already in
-                                 # the launch-origin world frame -> world->body
+  odom_topic: /gz/odom_super     # PX4 ENU odom, already in the launch-origin
+                                 # world frame -> world->body
   static:
     body_to_base_link:    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
     base_link_to_lidar:   [0.0, 0.0, 0.16, 0.0, 0.0, 0.0, 1.0]
@@ -33,6 +33,19 @@ gt_path:
   spawn_offset_x:   0.0
   spawn_offset_y:   0.0
   spawn_offset_z:   0.0
+
+# --- EGO trajectory and map -------------------------------------------------
+# EGO publishes a custom B-spline message, so visualization samples it into a
+# standard nav_msgs/Path for RViz. The source topic names are part of the
+# current EGO/PX4 integration even though the bridge names retain ``_super``.
+ego:
+  input_cloud_topic:                 /gz/point_cloud_super
+  inflated_map_topic:                /grid_map/occupancy_inflate
+  trajectory_bspline_topic:          /ego_planner/bspline
+  trajectory_path_topic:             /ego_planner/trajectory
+  trajectory_sample_interval_sec:    0.05
+  trajectory_max_samples:            400
+  trajectory_min_path_length_m:      0.05
 
 # --- RViz windows ------------------------------------------------------------
 rviz:

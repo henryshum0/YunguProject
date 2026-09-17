@@ -4,3 +4,6 @@
 [submodule "ego-planner-swarm"]
 	path = src/navigation/ego-planner-swarm
 	url = https://github.com/henryshum0/ego_planner_swarm.git
+[submodule "livox_ros_driver2"]
+	path = src/navigation/livox_ros_driver2
+	url = https://github.com/Ericsii/livox_ros_driver2.git

@@ -3,7 +3,7 @@
 <package format="3">
   <name>visualization</name>
   <version>0.1.0</version>
-  <description>Visualization layer: TF tree and coordinate conversions that align EGO and Gazebo truth data in a launch-origin world frame for RViz.</description>
+  <description>RViz visualization for the current EGO-Planner trajectory, inflated map, and Gazebo flight truth.</description>
   <maintainer email="dev@yungu.local">Yungu Dev</maintainer>
   <license>Apache-2.0</license>
 
@@ -13,6 +13,9 @@
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>tf2_ros</depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>traj_utils</exec_depend>
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

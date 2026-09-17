@@ -3,13 +3,13 @@
 //
 // The visualization world frame coincides with the drone launch position. The
 // tree is:
-//   - world -> body        : dynamic, from the PX4 ENU odom (/gz/odom_super,
+//   - world -> body        : dynamic, from the current PX4 ENU odom,
 //                            already in the launch-position frame)
 //   - body  -> base_link   : identity (base_link == IMU origin)
 //   - base_link -> lidar_link : static, the 0.16 m lidar mounting height
 //
-// This lets RViz (fixed frame = world) display EGO /gz/point_cloud_super
-// aligned at the drone.
+// This lets RViz (fixed frame = world) display the EGO input cloud, inflated
+// map, trajectory, and vehicle aligned at the drone.
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
@@ -30,7 +30,7 @@ class VisualTf : public rclcpp::Node
 public:
   VisualTf() : Node("visual_tf")
   {
-    declare_parameter("odom_topic", "/lidar_slam/odom");
+    declare_parameter("odom_topic", "/gz/odom_super");
     declare_parameter("world_frame", "world");
     declare_parameter("body_frame", "body");
     declare_parameter("base_frame", "base_link");
