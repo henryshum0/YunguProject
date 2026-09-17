@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import partial
 from math import atan2, degrees, isfinite
 from queue import Empty, Full, Queue
 from threading import Event, Thread
@@ -10,6 +12,7 @@ from time import monotonic
 from typing import Any
 
 import rclpy
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry, Path
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
@@ -36,6 +39,43 @@ class QueueState:
 
     points: tuple[Point, ...]
     received_at: float
+
+
+@dataclass(frozen=True, slots=True)
+class AgentState:
+    """Latest ENU pose reported by one ground agent.
+
+    Agents dead-reckon their own pose and publish it, so this is where they
+    believe they are rather than a measurement. For a kinematic agent those are
+    the same thing.
+    """
+
+    name: str
+    x: float
+    y: float
+    heading_deg: float
+    received_at: float
+
+
+def agent_state_from_pose(name: str, message: Any, *, received_at: float | None = None) -> AgentState:
+    """Validate a ground-agent pose and convert its orientation to ENU yaw."""
+    pose = message.pose
+    position = pose.position
+    orientation = pose.orientation
+    values = (position.x, position.y, orientation.x, orientation.y, orientation.z, orientation.w)
+    if not all(isfinite(float(value)) for value in values):
+        raise ValueError(f"agent '{name}' pose contains non-finite values")
+    yaw = atan2(
+        2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
+        1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z),
+    )
+    return AgentState(
+        name=name,
+        x=float(position.x),
+        y=float(position.y),
+        heading_deg=degrees(yaw) % 360.0,
+        received_at=monotonic() if received_at is None else received_at,
+    )
 
 
 def vehicle_state_from_odometry(message: Any, *, received_at: float | None = None) -> VehicleState:
@@ -74,11 +114,20 @@ def queue_state_from_path(message: Any, *, received_at: float | None = None) -> 
 class OperationsTelemetry:
     """Own subscriptions/executor so telemetry cannot interfere with ROS services."""
 
-    def __init__(self, odometry_topic: str, queue_status_topic: str) -> None:
+    def __init__(
+        self,
+        odometry_topic: str,
+        queue_status_topic: str,
+        agent_pose_topics: Mapping[str, str] | None = None,
+    ) -> None:
         self.odometry_topic = _topic(odometry_topic, "vehicle odometry")
         self.queue_status_topic = _topic(queue_status_topic, "waypoint queue status")
+        #: Ground agents share this subscriber's node and thread: they are part
+        #: of the same map picture, and one executor is cheaper than one each.
+        self.agent_pose_topics = dict(agent_pose_topics or {})
         self._vehicles: Queue[VehicleState] = Queue(maxsize=1)
         self._queues: Queue[QueueState] = Queue(maxsize=1)
+        self._agents: dict[str, Queue[AgentState]] = {}
         self._errors: Queue[str] = Queue(maxsize=1)
         self._stop = Event()
         self._node: Node = rclpy.create_node("skills_test_gui_telemetry")
@@ -90,6 +139,12 @@ class OperationsTelemetry:
                                durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self._queue_subscription = self._node.create_subscription(
             Path, self.queue_status_topic, self._on_queue, queue_qos)
+        self._agent_subscriptions = []
+        for name, topic in self.agent_pose_topics.items():
+            self._agents[name] = Queue(maxsize=1)
+            self._agent_subscriptions.append(self._node.create_subscription(
+                PoseStamped, _topic(topic, f"agent '{name}' pose"),
+                partial(self._on_agent_pose, name), qos_profile_sensor_data))
         self._thread = Thread(target=self._spin, name="skills-operations-telemetry", daemon=True)
         self._thread.start()
 
@@ -122,6 +177,12 @@ class OperationsTelemetry:
         except ValueError as error:
             self._put_latest(self._errors, str(error))
 
+    def _on_agent_pose(self, name: str, message: PoseStamped) -> None:
+        try:
+            self._put_latest(self._agents[name], agent_state_from_pose(name, message))
+        except ValueError as error:
+            self._put_latest(self._errors, str(error))
+
     @staticmethod
     def _latest(queue: Queue):
         value = None
@@ -133,6 +194,19 @@ class OperationsTelemetry:
 
     def latest_vehicle(self) -> VehicleState | None:
         return self._latest(self._vehicles)
+
+    def latest_agents(self) -> dict[str, AgentState]:
+        """Every ground agent that has reported since the last call.
+
+        Agents that have not published again are absent rather than stale, so
+        the caller keeps showing the pose it already has.
+        """
+        updates = {}
+        for name, queue in self._agents.items():
+            state = self._latest(queue)
+            if state is not None:
+                updates[name] = state
+        return updates
 
     def latest_queue(self) -> QueueState | None:
         return self._latest(self._queues)

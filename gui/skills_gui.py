@@ -91,6 +91,9 @@ class SkillsTestGui(tk.Tk):
         self._agent_specs: tuple = ()
         self._agents_error: str | None = None
         self._agent_goal_publishers: dict[str, object] = {}
+        #: Last reported pose per ground agent, kept so the map keeps drawing a
+        #: robot between its updates.
+        self._agent_states: dict = {}
         self._build_variables()
         self._load_agents()
         if not skill_interfaces:
@@ -564,6 +567,8 @@ class SkillsTestGui(tk.Tk):
             overlays.append(((self._vehicle_state.x, self._vehicle_state.y),))
         if self._queue_state is not None:
             overlays.append(self._queue_state.points)
+        if self._agent_states:
+            overlays.append(tuple((state.x, state.y) for state in self._agent_states.values()))
         width = max(float(canvas.winfo_width()), 100.0)
         height = max(float(canvas.winfo_height()), 100.0)
         self._map_viewport = make_viewport(bounds_for(self._map_data, *overlays), width, height)
@@ -594,13 +599,16 @@ class SkillsTestGui(tk.Tk):
             for point in queue_points[1:]:
                 x, y = self._map_viewport.to_canvas(point)
                 canvas.create_oval(x - 4, y - 4, x + 4, y + 4, fill="#7e57c2", outline="white")
+        for state in self._agent_states.values():
+            self._draw_agent(state)
         if self._vehicle_state is not None:
             self._draw_vehicle(self._vehicle_state)
-        canvas.create_text(
-            8, 8, anchor="nw", fill="#303030",
-            text=(f"{self._map_data.source.name} | red: occupied | green: search area | "
-                  "blue: planned route | orange: active queue | purple: pending queue | black: vehicle"),
-        )
+        legend = (f"{self._map_data.source.name} | red: occupied | green: search area | "
+                  "blue: planned route | orange: active queue | purple: pending queue | "
+                  "black: vehicle")
+        if self._agent_states:
+            legend += " | teal: ground agents"
+        canvas.create_text(8, 8, anchor="nw", fill="#303030", text=legend)
 
     def _draw_vehicle(self, vehicle: VehicleState) -> None:
         assert self._map_viewport is not None
@@ -617,6 +625,28 @@ class SkillsTestGui(tk.Tk):
         self.map_canvas.create_text(x + 8, y + 8, anchor="nw", fill="#202020",
                                     text=f"vehicle z={vehicle.z:.1f}, yaw={vehicle.heading_deg:.0f}°")
 
+    def _draw_agent(self, agent) -> None:
+        """Draw one ground agent: a heading arrow and its name.
+
+        Deliberately the same shape as the vehicle marker but in teal and a size
+        smaller, so the fleet reads as one picture while the UAV stays the one
+        that stands out.
+        """
+        assert self._map_viewport is not None
+        span = max(
+            self._map_viewport.bounds.max_x - self._map_viewport.bounds.min_x,
+            self._map_viewport.bounds.max_y - self._map_viewport.bounds.min_y,
+            1.0,
+        )
+        endpoint = heading_endpoint((agent.x, agent.y), agent.heading_deg, max(1.0, span * 0.03))
+        x, y = self._map_viewport.to_canvas((agent.x, agent.y))
+        end_x, end_y = self._map_viewport.to_canvas(endpoint)
+        self.map_canvas.create_line(x, y, end_x, end_y, fill="#00796b", width=2, arrow=tk.LAST)
+        self.map_canvas.create_oval(x - 5, y - 5, x + 5, y + 5, fill="#00796b", outline="white",
+                                    width=1.5)
+        self.map_canvas.create_text(x + 7, y + 7, anchor="nw", fill="#00695c",
+                                    text=f"{agent.name} yaw={agent.heading_deg:.0f}°")
+
     def _canvas_coordinates(self, points: tuple[tuple[float, float], ...]) -> tuple[float, ...]:
         assert self._map_viewport is not None
         return tuple(value for point in points for value in self._map_viewport.to_canvas(point))
@@ -625,13 +655,15 @@ class SkillsTestGui(tk.Tk):
         try:
             self._stop_operations_telemetry(update_status=False)
             self._operations_telemetry = OperationsTelemetry(
-                self.vehicle_odometry_topic.get(), self.waypoint_queue_status_topic.get())
+                self.vehicle_odometry_topic.get(), self.waypoint_queue_status_topic.get(),
+                {spec.name: spec.pose_topic for spec in self._agent_specs})
         except Exception as error:
             self.telemetry_status.set(f"Telemetry error: {error}")
             self._report_error(error)
             return
         self._vehicle_state = None
         self._queue_state = None
+        self._agent_states = {}
         self.telemetry_status.set(
             f"Waiting for vehicle pose on {self.vehicle_odometry_topic.get().strip()} and queue state on "
             f"{self.waypoint_queue_status_topic.get().strip()}...")
@@ -660,6 +692,10 @@ class SkillsTestGui(tk.Tk):
                 changed = True
             if queue_state is not None:
                 self._queue_state = queue_state
+                changed = True
+            agents = telemetry.latest_agents()
+            if agents:
+                self._agent_states.update(agents)
                 changed = True
             if changed:
                 self._schedule_map_redraw()
