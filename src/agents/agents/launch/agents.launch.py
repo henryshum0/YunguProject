@@ -31,7 +31,8 @@ def _agent_actions(context, *_args, **_kwargs):
     # PYTHONPATH once the workspace overlay is sourced, which is true when launch
     # runs this but not necessarily when it first imports the file.
     from agents.config import AgentsConfig
-    from agents.topics import base_command_topic, joint_command_topic
+    from agents.topics import (
+        GZ_CLOCK_TOPIC, SIM_CLOCK_TOPIC, base_command_topic, joint_command_topic)
 
     config_file = LaunchConfiguration("agents_config").perform(context)
     models_dir = Path(LaunchConfiguration("models_dir").perform(context))
@@ -78,12 +79,19 @@ def _agent_actions(context, *_args, **_kwargs):
         if spec.camera is not None:
             camera_topics.append(spec.camera.topic)
 
+    # Gazebo -> ROS, and the one thing the driver reads back. It integrates its
+    # dead reckoning on simulated time, because that is the clock Gazebo moves
+    # the robots on: whenever the real-time factor is not exactly 1 the wall
+    # clock runs faster, and an agent that dead-reckons on it believes it has
+    # walked further and turned further than it has.
+    bridge_arguments.append(f"{GZ_CLOCK_TOPIC}@rosgraph_msgs/msg/Clock[gz.msgs.Clock")
     actions.append(Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
         name="agents_bridge",
         output="screen",
         arguments=bridge_arguments,
+        remappings=[(GZ_CLOCK_TOPIC, SIM_CLOCK_TOPIC)],
     ))
     if camera_topics:
         # Images go through the dedicated image bridge rather than the parameter

@@ -24,12 +24,13 @@ import rclpy
 from geometry_msgs.msg import PoseStamped, Twist
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rosgraph_msgs.msg import Clock
 from std_msgs.msg import Float64
 
 from agents.config import AgentSpec, AgentsConfig
 from agents.gait import Gait
 from agents.navigator import Navigator
-from agents.topics import base_command_topic, joint_command_topic
+from agents.topics import SIM_CLOCK_TOPIC, base_command_topic, joint_command_topic
 
 #: Control rate. Fast enough that the legs look continuous and the dead-reckoned
 #: pose stays close to what the simulator integrates from the same velocities.
@@ -60,8 +61,17 @@ class AgentDriverNode(Node):
             raise ValueError("rate_hz must be positive")
         self._config = config
         self._runtimes: list[_Runtime] = [self._build(spec) for spec in config.agents]
+        self._nominal_dt = 1.0 / rate_hz
+        #: Latest simulated time, and the value it had on the previous tick.
+        self._sim_time: float | None = None
+        self._last_sim_time: float | None = None
+        self._warned_about_the_clock = False
+        # Depth 1, best effort: only the newest reading matters, and a late one
+        # is worse than none.
+        self.create_subscription(
+            Clock, SIM_CLOCK_TOPIC, self._on_clock,
+            QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
         self._timer = self.create_timer(1.0 / rate_hz, self._tick)
-        self._dt = 1.0 / rate_hz
         self.get_logger().info(
             f"driving {len(self._runtimes)} agent(s): "
             f"{', '.join(runtime.spec.name for runtime in self._runtimes)}")
@@ -107,9 +117,49 @@ class AgentDriverNode(Node):
                 return runtime
         return None
 
+    def _on_clock(self, message: Clock) -> None:
+        self._sim_time = message.clock.sec + message.clock.nanosec * 1e-9
+
+    def _elapsed(self) -> float | None:
+        """Simulated seconds since the last tick, or ``None`` to skip this one.
+
+        The agents must be dead-reckoned on the clock Gazebo moves them with, not
+        on the wall clock. Gazebo applies a commanded velocity over *simulated*
+        time, so whenever the real-time factor is below 1 -- which it is as soon
+        as the GUI, PX4 and the cameras are all running -- a tick of wall clock
+        buys less motion than a tick of sim time. Integrating 1/rate_hz per tick
+        therefore credits the agent with distance and rotation it never made. The
+        error is a fixed fraction of every movement and nothing ever corrects it,
+        so a goal behind the robot came out as a walk off at an angle.
+
+        Returning ``None`` leaves the previous command latched in Gazebo, which
+        is what we want: the next tick sees the whole interval and integrates it
+        in one go, so no motion is lost. The interval is deliberately not capped
+        -- if this node is starved for a moment, Gazebo really did keep moving
+        for all of it, and dead reckoning has to account for every bit.
+        """
+        if self._sim_time is None:
+            if not self._warned_about_the_clock:
+                self._warned_about_the_clock = True
+                self.get_logger().warn(
+                    f"no simulated clock on {SIM_CLOCK_TOPIC}: falling back to the wall "
+                    "clock. Agents will drift from where they are drawn whenever the "
+                    "simulation runs slower than real time. Is the agents bridge up?")
+            return self._nominal_dt
+        if self._last_sim_time is None:
+            self._last_sim_time = self._sim_time
+            return None
+        dt = self._sim_time - self._last_sim_time
+        self._last_sim_time = self._sim_time
+        # Zero while paused; negative if the simulation was reset under us.
+        return dt if dt > 0.0 else None
+
     def _tick(self) -> None:
+        dt = self._elapsed()
+        if dt is None:
+            return
         for runtime in self._runtimes:
-            step = runtime.navigator.update(self._dt)
+            step = runtime.navigator.update(dt)
 
             command = Twist()
             command.linear.x = step.command.linear_x

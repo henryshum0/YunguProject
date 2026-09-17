@@ -4,9 +4,15 @@ Given a goal, this produces the body-frame velocity that walks an agent to it,
 and integrates that velocity to keep its own idea of where the agent is. There
 is no state estimator and no pose feedback on purpose: the agent has no
 collisions and no gravity, so the simulator applies exactly the velocity it is
-given. Commanded motion *is* actual motion, and dead reckoning from the spawn
-pose stays correct. Closing a loop around a pose topic here would add latency and
-a failure mode to a system that cannot drift.
+given -- measured, it covers 1.0000 m in a simulated second when told 1.0 m/s.
+Commanded motion *is* actual motion, and dead reckoning from the spawn pose
+stays correct. Closing a loop around a pose topic here would add latency and a
+failure mode to a system that cannot drift.
+
+That rests on one condition, and it is the whole reason this works: ``dt`` must
+be *simulated* seconds. Gazebo applies a velocity over sim time, so passing
+wall-clock seconds credits the agent with motion it never made whenever the
+real-time factor is below 1. See ``AgentDriverNode._elapsed``.
 
 The control law is deliberately the simple one an operator can predict: turn on
 the spot until roughly facing the goal, then walk, steering out the remaining

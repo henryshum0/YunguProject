@@ -31,6 +31,28 @@ The relationship between motion and joints is the same one the UAV already has:
 its rotor joints spin because it is being commanded to fly, not on a clock of
 their own.
 
+### Why the driver watches the simulation clock
+
+An agent is dead-reckoned: it knows where it is by adding up what it commanded,
+never by asking. That is sound here — measured, Gazebo walks an agent exactly
+1.0000 m per simulated second when told 1.0 m/s — but only if the sums are done
+in **simulated** seconds.
+
+They are not the same as real ones. With the GUI, PX4 and four camera feeds all
+running, the simulation falls behind the wall clock, and a driver ticking on a
+50 Hz wall timer would credit each tick with a full 20 ms of motion that Gazebo
+only partly delivered. Nothing corrects it, so the belief and the robot drift
+apart in proportion to how far it walked: a goal placed behind the robot came
+out as a walk off at an angle, correct on the operations map and wrong in
+Gazebo.
+
+So the launch bridges Gazebo's clock and the driver measures its own tick
+against it. It is bridged to `/agents/sim_clock`, *not* to `/clock`: publishing
+the global clock would switch every node that asks for `use_sim_time` — the
+whole offboard stack does — from a frozen clock to a running one, which is not a
+change to make as a side effect. If the clock is missing the driver says so and
+falls back to the wall clock rather than standing still.
+
 ## Sending an agent somewhere
 
 Goals are ENU `PoseStamped` in the `map` frame — the same frame as coverage
