@@ -142,7 +142,9 @@ class AgentDriverNode(Node):
         message.header.frame_id = "map"
         message.pose.position.x = pose.x
         message.pose.position.y = pose.y
-        message.pose.position.z = runtime.spec.ground_z_m
+        # Built from the floor, like the spawn height: the ENU origin is the
+        # drone's launch point, not the ground.
+        message.pose.position.z = self._config.ground_z_m + runtime.spec.base_height_m
         message.pose.orientation.z = sin(pose.yaw / 2.0)
         message.pose.orientation.w = cos(pose.yaw / 2.0)
         runtime.pose_publisher.publish(message)
