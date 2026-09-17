@@ -39,9 +39,18 @@ agents:
   # --------------------------------------------------------------------------
   - name: go1
     model: unitree_go1
-    spawn: {x: 8.0, y: 6.0, yaw_deg: 0.0}
+    # Just east of the UAV launch point, so both robots are in frame from the
+    # takeoff hover and can be driven somewhere without first flying to them.
+    spawn: {x: 5.0, y: 3.0, yaw_deg: 0.0}
     # Trunk height above ground with the legs in their standing stance.
     ground_z_m: 0.32
+    # Mounted on the trunk, not a leg, so the view is not swung by the gait.
+    camera:
+      topic: /agents/go1/front_camera/image
+      pose: [0.28, 0.0, 0.02]
+      hfov_deg: 90.0
+      width: 640
+      height: 480
     limits:
       speed_mps: 1.0
       yaw_rate_dps: 90.0
@@ -71,9 +80,16 @@ agents:
   # --------------------------------------------------------------------------
   - name: g1
     model: unitree_g1
-    spawn: {x: 8.0, y: -6.0, yaw_deg: 0.0}
+    spawn: {x: 5.0, y: -3.0, yaw_deg: 0.0}
     # Pelvis height above ground when standing.
     ground_z_m: 0.79
+    # Head height above the pelvis, so the humanoid looks out from its head.
+    camera:
+      topic: /agents/g1/front_camera/image
+      pose: [0.08, 0.0, 0.55]
+      hfov_deg: 90.0
+      width: 640
+      height: 480
     limits:
       speed_mps: 0.7
       yaw_rate_dps: 70.0

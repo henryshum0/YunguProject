@@ -38,6 +38,7 @@ def _agent_actions(context, *_args, **_kwargs):
 
     actions: list = []
     bridge_arguments: list[str] = []
+    camera_topics: list[str] = []
 
     for spec in config.agents:
         model_file = models_dir / spec.model / "model.sdf"
@@ -61,6 +62,8 @@ def _agent_actions(context, *_args, **_kwargs):
         for joint in spec.gait.joint_names:
             bridge_arguments.append(
                 f"{joint_command_topic(spec.model, joint)}@std_msgs/msg/Float64]gz.msgs.Double")
+        if spec.camera is not None:
+            camera_topics.append(spec.camera.topic)
 
     actions.append(Node(
         package="ros_gz_bridge",
@@ -69,6 +72,16 @@ def _agent_actions(context, *_args, **_kwargs):
         output="screen",
         arguments=bridge_arguments,
     ))
+    if camera_topics:
+        # Images go through the dedicated image bridge rather than the parameter
+        # bridge: it is the one the workspace already uses for the UAV feeds.
+        actions.append(Node(
+            package="ros_gz_image",
+            executable="image_bridge",
+            name="agents_camera_bridge",
+            output="screen",
+            arguments=camera_topics,
+        ))
     actions.append(Node(
         package="agents",
         executable="agent_node",

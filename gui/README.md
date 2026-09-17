@@ -34,8 +34,11 @@ vehicle-odometry, queue-status, and timeout settings remain independently editab
 - **Navigate** accepts one `x, y, z, heading_deg` waypoint per line. Select ENU or NED; the
   existing `NavigateSkill` performs the conversion and queues the full route. Select the Navigate
   tab, then use the persistent operations map to click an ENU position; review the
-  editable altitude (default 5 m) and heading (default 0°), then use **Queue selected goal**.
+  editable altitude (default 5 m) and heading (default 0°), then use **Send selected goal**.
   The heading is ROS ENU yaw (0° east, counter-clockwise positive).
+  **Send goals to** chooses which robots that goal reaches — the UAV, any ground agent, or
+  several at once with **All**. One click can therefore dispatch the whole fleet: the UAV flies
+  to the point at the given altitude and heading, and each checked agent walks to the same x/y.
 - **Clear route** calls the clear service, aborting the current route and removing queued waypoints.
 - **Plan only** calls `PlanSearchPrimitive` using four ENU search corners and displays its path
   without publishing planner waypoint or marker topics.
@@ -45,11 +48,16 @@ vehicle-odometry, queue-status, and timeout settings remain independently editab
   confirmation dialog. A success response means the offboard FSM accepted the request; it does
   not mean that the vehicle has already taken off, landed, or disarmed.
 - **Camera feeds** are a persistent sidebar, so they remain visible while navigating or planning.
-  The front camera defaults to `/swan_gamma_v2/front_camera/image`; the follow camera defaults to
-  `/swan_gamma_v2/follow_camera/image`. Each has its own ROS subscriber/executor, while the GUI
-  stacks both in an aspect-preserving native-resolution 640×480 preview. Use **Start / reconnect feeds** after
-  changing either topic; preview work does not block planner or waypoint service actions. Both
-  simulated feeds require `ros-humble-ros-gz-image` and the normal `utils/start_sim.sh` bridge.
+  There is one feed per robot: the UAV's front camera (`/swan_gamma_v2/front_camera/image`) and
+  follow camera (`/swan_gamma_v2/follow_camera/image`), plus the front camera each ground agent
+  carries, taken from the agents config rather than typed in. Each has its own ROS
+  subscriber/executor, and the GUI lays them out two to a row in aspect-preserving 320×240
+  previews. Use **Start / reconnect feeds** after changing a UAV topic; preview work does not
+  block planner or waypoint service actions. All simulated feeds require `ros-humble-ros-gz-image`
+  and the normal bridge.
+- **Ground agents** are optional. If the agents config cannot be loaded — the package is not
+  built, say — the GUI runs as a complete UAV client and the Navigate tab reports the reason
+  instead of offering agent targets.
 
 ## Coverage map selection
 

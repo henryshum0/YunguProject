@@ -17,13 +17,17 @@ WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
-# The feeds are stacked, so each can use a wider 4:3 preview without taking
-# horizontal space away from the operations controls and map.
-CAMERA_PREVIEW_WIDTH = 640
-CAMERA_PREVIEW_HEIGHT = 480
+# The sidebar now carries a feed per robot — the UAV's two plus one for each
+# ground agent — so the previews are laid out two to a row at half width rather
+# than stacked full width, which keeps four of them on screen at once.
+CAMERA_PREVIEW_WIDTH = 320
+CAMERA_PREVIEW_HEIGHT = 240
+CAMERA_FEED_COLUMNS = 2
 
 import rclpy
+from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 from gui.skill_interfaces.controller import ConnectionSettings, SkillController
 from gui.camera_view import CameraPreview
@@ -78,7 +82,14 @@ class SkillsTestGui(tk.Tk):
         # Set when a detection config was named but could not be loaded, so the
         # search-mission tab can report the exact reason it cannot start.
         self._detection_config_error: str | None = None
+        # Ground agents are optional: the GUI is still a complete UAV client
+        # without them, so a missing or unbuilt agents package degrades to "no
+        # agents" rather than failing to start.
+        self._agent_specs: tuple = ()
+        self._agents_error: str | None = None
+        self._agent_goal_publishers: dict[str, object] = {}
         self._build_variables()
+        self._load_agents()
         if not skill_interfaces:
             raise ValueError("at least one skill interface is required")
         self._skill_interfaces = tuple(interface(self) for interface in skill_interfaces)
@@ -102,6 +113,8 @@ class SkillsTestGui(tk.Tk):
         # positions. Clear it on a real vehicle, where there is no such file.
         self.truth_targets_file = tk.StringVar(
             value=str(WORKSPACE_ROOT / "src" / "detection" / "config" / "targets.yaml"))
+        self.agents_config_file = tk.StringVar(
+            value=str(WORKSPACE_ROOT / "src" / "agents" / "config" / "agents.yaml"))
         self.front_camera_image_topic = tk.StringVar(value="/swan_gamma_v2/front_camera/image")
         self.follow_camera_image_topic = tk.StringVar(value="/swan_gamma_v2/follow_camera/image")
         self.vehicle_odometry_topic = tk.StringVar(value="/gz/ground_truth/odom")
@@ -132,6 +145,7 @@ class SkillsTestGui(tk.Tk):
             ("Planner config JSON", self.planner_config_file),
             ("Detection config YAML", self.detection_config_file),
             ("Ground truth YAML (sim)", self.truth_targets_file),
+            ("Agents config YAML", self.agents_config_file),
             ("Front camera image topic", self.front_camera_image_topic),
             ("Follow camera image topic", self.follow_camera_image_topic),
             ("Vehicle odometry topic", self.vehicle_odometry_topic),
@@ -209,12 +223,12 @@ class SkillsTestGui(tk.Tk):
         pane = ttk.LabelFrame(outer, text="Camera feeds", padding=4, width=680)
         pane.grid(row=0, column=1, rowspan=4, padx=(10, 0), sticky="nsew")
         pane.columnconfigure(0, weight=1)
-        pane.rowconfigure(3, weight=1)
-        pane.rowconfigure(4, weight=1)
+        pane.rowconfigure(2, weight=1)
         ttk.Label(
             pane,
-            text=("Front and chase-camera previews remain visible while changing skill tabs. "
-                  "Set their topics in Connection settings, then reconnect after changing either one."),
+            text=("One feed per robot: the UAV's front and chase cameras, plus the front camera "
+                  "each ground agent carries. They stay visible while changing skill tabs. Set "
+                  "the UAV topics in Connection settings, then reconnect."),
             wraplength=650,
         ).grid(row=0, column=0, sticky="w")
         controls = ttk.Frame(pane)
@@ -227,14 +241,18 @@ class SkillsTestGui(tk.Tk):
             controls, text="Show detection boxes", command=self._toggle_detection_overlay)
         self._overlay_button.grid(row=0, column=2)
 
-        for row, (key, title) in enumerate((
-            ("front", "Front camera"),
-            ("follow", "Follow camera"),
-        ), start=3):
-            feed = ttk.LabelFrame(pane, text=title, padding=5)
-            feed.grid(row=row, column=0, pady=(0, 8) if row == 3 else (0, 0), sticky="nsew")
+        feeds = ttk.Frame(pane)
+        feeds.grid(row=2, column=0, sticky="nsew")
+        for column in range(CAMERA_FEED_COLUMNS):
+            feeds.columnconfigure(column, weight=1)
+        for index, (key, title, _topic) in enumerate(self._camera_feeds()):
+            row, column = divmod(index, CAMERA_FEED_COLUMNS)
+            feeds.rowconfigure(row, weight=1)
+            feed = ttk.LabelFrame(feeds, text=title, padding=4)
+            feed.grid(row=row, column=column, padx=(0, 6), pady=(0, 6), sticky="nsew")
             status = tk.StringVar(value="Preview stopped.")
-            ttk.Label(feed, textvariable=status, wraplength=620).grid(row=0, column=0, pady=(0, 2), sticky="w")
+            ttk.Label(feed, textvariable=status, wraplength=CAMERA_PREVIEW_WIDTH).grid(
+                row=0, column=0, pady=(0, 2), sticky="w")
             preview_frame = tk.Frame(
                 feed,
                 width=CAMERA_PREVIEW_WIDTH,
@@ -279,18 +297,79 @@ class SkillsTestGui(tk.Tk):
             self._detection_config_error = None
         return ConnectionSettings(config=config, timeout_sec=timeout)
 
+    def _load_agents(self) -> None:
+        """Load the ground-agent roster, or record why there is none.
+
+        Agents are optional. The GUI is a complete UAV client without them, so a
+        missing file or an unbuilt agents package leaves the roster empty and the
+        reason on hand for the Navigate tab to show, rather than refusing to start.
+        """
+        path = self.agents_config_file.get().strip()
+        if not path:
+            self._agent_specs, self._agents_error = (), None
+            return
+        try:
+            from agents.config import AgentsConfig
+
+            config = AgentsConfig.load(path)
+        except Exception as error:  # noqa: BLE001 - any failure means "no agents"
+            self._agent_specs = ()
+            self._agents_error = str(error)
+            return
+        self._agent_specs = config.agents
+        self._agents_error = None
+        reliable = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        self._agent_goal_publishers = {
+            spec.name: self._node.create_publisher(PoseStamped, spec.goal_topic, reliable)
+            for spec in self._agent_specs
+        }
+
+    def send_agent_goal(self, name: str, x: float, y: float) -> None:
+        """Send one ground agent to an ENU position on the map plane.
+
+        Published straight from the Tk thread rather than through the service
+        worker: it is one non-blocking publish, and routing it through the worker
+        would make sending a goal wait behind whatever the UAV is doing.
+        """
+        publisher = self._agent_goal_publishers.get(name)
+        if publisher is None:
+            raise ValueError(f"no ground agent named '{name}'")
+        message = PoseStamped()
+        message.header.stamp = self._node.get_clock().now().to_msg()
+        message.header.frame_id = "map"
+        message.pose.position.x = float(x)
+        message.pose.position.y = float(y)
+        message.pose.orientation.w = 1.0
+        publisher.publish(message)
+
+    def _camera_feeds(self) -> tuple[tuple[str, str, str], ...]:
+        """Every camera the sidebar shows, as ``(key, title, topic)``.
+
+        The UAV topics stay editable in the connection settings; an agent's comes
+        from the agents config, because it is fixed by the model that carries it.
+        """
+        feeds = [
+            ("front", "UAV front camera", self.front_camera_image_topic.get().strip()),
+            ("follow", "UAV follow camera", self.follow_camera_image_topic.get().strip()),
+        ]
+        for spec in self._agent_specs:
+            if spec.camera is not None:
+                feeds.append((f"agent_{spec.name}", f"{spec.name} front camera", spec.camera.topic))
+        return tuple(feeds)
+
     def _start_camera_previews(self) -> None:
-        """Start independent ROS image subscribers for the two persistent feeds."""
+        """Start an independent ROS image subscriber for each configured feed."""
         self._stop_camera_previews(update_status=False)
-        feeds = (
-            ("front", self.front_camera_image_topic.get().strip(), "skills_test_gui_front_camera"),
-            ("follow", self.follow_camera_image_topic.get().strip(), "skills_test_gui_follow_camera"),
-        )
-        for key, topic, node_name in feeds:
-            status = self._camera_statuses[key]
-            label = self._camera_labels[key]
+        for key, _title, topic in self._camera_feeds():
+            status = self._camera_statuses.get(key)
+            label = self._camera_labels.get(key)
+            if status is None or label is None:
+                # The pane was built before this feed existed; it appears after
+                # the next restart rather than being wired up half-built.
+                continue
             try:
-                self._camera_previews[key] = CameraPreview(topic, node_name=node_name)
+                self._camera_previews[key] = CameraPreview(
+                    topic, node_name=f"skills_test_gui_{key}_camera")
             except Exception as error:
                 status.set(f"Preview error: {error}")
                 label.configure(image="", text="Camera preview unavailable.")

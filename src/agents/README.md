@@ -37,6 +37,13 @@ Goals are ENU `PoseStamped` in the `map` frame — the same frame as coverage
 search areas, navigation waypoints and detection targets — so a point read off
 the operations map can be sent straight to a robot.
 
+From the GUI, use the **Navigate** tab: click a point on the operations map,
+check the robots to send it to, and press **Send selected goal**. Any mix works,
+including all of them at once; the UAV takes the altitude and heading from the
+fields above, while ground agents walk to the x/y on the map plane.
+
+From the command line:
+
 ```bash
 ros2 topic pub --once /agents/go1/goal_pose geometry_msgs/msg/PoseStamped \
   '{header: {frame_id: map}, pose: {position: {x: 25.0, y: 8.0}}}'
@@ -55,6 +62,11 @@ Everything is in [`config/agents.yaml`](config/agents.yaml): which robots exist,
 where they start, how fast they walk, and how each joint moves over a gait cycle.
 The launch file and the driver node both read it, so adding a robot is a config
 change.
+
+Each agent also carries one forward-facing camera, mounted on its root link —
+the quadruped's trunk, the humanoid's pelvis — so the view is carried by the body
+and is not swung around by the animated legs. The GUI shows it beside the UAV's
+own feeds.
 
 A gait is one sinusoid per joint over a cycle completed every `stride_m` metres:
 

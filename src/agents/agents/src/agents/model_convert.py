@@ -57,11 +57,13 @@ def convert(
     output_dir: Path,
     animated_joints: Sequence[str],
     description: str = "",
+    camera=None,
 ) -> Path:
     """Write ``output_dir`` as a self-contained kinematic agent model.
 
     ``animated_joints`` are the joints the gait animator drives; each gets its
-    own position-controller topic. Returns the written ``model.sdf`` path.
+    own position-controller topic. ``camera``, when given, mounts one
+    forward-facing camera on the root link. Returns the written ``model.sdf``.
     """
     sdf_text = _run_gz_sdf(urdf_file)
     root = _parse(sdf_text, urdf_file)
@@ -74,6 +76,8 @@ def convert(
     _rewrite_mesh_uris(model, model_name)
     _disable_gravity(model)
     _check_joints(model, animated_joints, urdf_file)
+    if camera is not None:
+        _add_camera(model, camera, model_name)
     _add_control_plugins(model, model_name, animated_joints)
 
     meshes_out = output_dir / "meshes"
@@ -215,6 +219,61 @@ def _check_joints(
             f"available: {', '.join(sorted(name for name in present if name))}")
 
 
+def _add_camera(model: ElementTree.Element, camera, model_name: str) -> None:
+    """Give the agent one forward-facing camera on its root link.
+
+    The upstream sensors were stripped wholesale, so this adds back exactly one
+    deliberate sensor rather than inheriting whatever the description shipped.
+    It is mounted on the root link — the trunk of the quadruped, the pelvis of
+    the humanoid — so the view is carried by the body and is not swung around by
+    the animated legs.
+    """
+    root = model.find("link")
+    if root is None or not root.get("name"):
+        raise ModelConvertError(f"model '{model_name}' has no link to mount a camera on")
+    root_name = root.get("name")
+    link_name = "front_camera_link"
+
+    link = ElementTree.SubElement(model, "link", {"name": link_name})
+    x, y, z = camera.pose
+    pose = ElementTree.SubElement(link, "pose", {"relative_to": root_name})
+    pose.text = f"{x} {y} {z} 0 {camera.pitch_rad} 0"
+    ElementTree.SubElement(link, "gravity").text = "false"
+
+    inertial = ElementTree.SubElement(link, "inertial")
+    ElementTree.SubElement(inertial, "mass").text = "0.05"
+    inertia = ElementTree.SubElement(inertial, "inertia")
+    for axis, value in (("ixx", "1e-5"), ("iyy", "1e-5"), ("izz", "1e-5"),
+                        ("ixy", "0"), ("ixz", "0"), ("iyz", "0")):
+        ElementTree.SubElement(inertia, axis).text = value
+
+    visual = ElementTree.SubElement(link, "visual", {"name": "housing"})
+    geometry = ElementTree.SubElement(visual, "geometry")
+    ElementTree.SubElement(ElementTree.SubElement(geometry, "box"), "size").text = "0.05 0.03 0.03"
+    material = ElementTree.SubElement(visual, "material")
+    ElementTree.SubElement(material, "diffuse").text = "0.1 0.1 0.1 1"
+
+    sensor = ElementTree.SubElement(link, "sensor", {"name": "front_camera", "type": "camera"})
+    ElementTree.SubElement(sensor, "always_on").text = "1"
+    ElementTree.SubElement(sensor, "update_rate").text = str(camera.update_rate_hz)
+    ElementTree.SubElement(sensor, "topic").text = camera.topic
+    ElementTree.SubElement(sensor, "gz_frame_id").text = link_name
+    camera_element = ElementTree.SubElement(sensor, "camera", {"name": "front_camera"})
+    ElementTree.SubElement(camera_element, "horizontal_fov").text = str(camera.hfov_rad)
+    image = ElementTree.SubElement(camera_element, "image")
+    ElementTree.SubElement(image, "width").text = str(camera.width)
+    ElementTree.SubElement(image, "height").text = str(camera.height)
+    ElementTree.SubElement(image, "format").text = "R8G8B8"
+    clip = ElementTree.SubElement(camera_element, "clip")
+    ElementTree.SubElement(clip, "near").text = "0.05"
+    ElementTree.SubElement(clip, "far").text = "100.0"
+
+    joint = ElementTree.SubElement(
+        model, "joint", {"name": f"{root_name}_front_camera_joint", "type": "fixed"})
+    ElementTree.SubElement(joint, "parent").text = root_name
+    ElementTree.SubElement(joint, "child").text = link_name
+
+
 def _add_control_plugins(
     model: ElementTree.Element,
     model_name: str,
@@ -269,8 +328,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_dir=arguments.output,
         animated_joints=spec.gait.joint_names,
         description=arguments.description,
+        camera=spec.camera,
     )
-    print(f"wrote {written} ({len(spec.gait.joint_names)} animated joint(s))")
+    camera_note = f", camera on {spec.camera.topic}" if spec.camera else ", no camera"
+    print(f"wrote {written} ({len(spec.gait.joint_names)} animated joint(s){camera_note})")
     return 0
 
 

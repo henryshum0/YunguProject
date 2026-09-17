@@ -93,6 +93,44 @@ class TestSpawnConversion:
         assert config.gz_spawn_pose(config.agent("go1"))[2] == pytest.approx(1.32)
 
 
+class TestCamera:
+    def test_both_shipped_agents_carry_a_front_camera(self) -> None:
+        config = AgentsConfig.load(SHIPPED_CONFIG)
+        for spec in config.agents:
+            assert spec.camera is not None, f"{spec.name} has no camera"
+            assert spec.camera.topic == f"/agents/{spec.name}/front_camera/image"
+
+    def test_a_camera_is_optional(self) -> None:
+        assert _config().agent("go1").camera is None
+
+    def test_defaults_fill_in_around_a_bare_camera(self) -> None:
+        payload = _payload()
+        payload["agents"][0]["camera"] = {"pose": [0.3, 0.0, 0.0]}
+        config = AgentsConfig.from_mapping(payload, config_file=Path("/tmp/a.yaml"))
+        camera = config.agent("go1").camera
+        assert camera.topic == "/agents/go1/front_camera/image"
+        assert (camera.width, camera.height) == (640, 480)
+
+    @pytest.mark.parametrize(("field", "value", "match"), [
+        ("pose", [0.0, 0.0], "three numbers"),
+        ("width", 0, "positive"),
+        ("hfov_deg", 0.0, "hfov_deg"),
+        ("update_rate_hz", 0.0, "update_rate_hz"),
+        ("topic", "relative/topic", "absolute"),
+    ])
+    def test_invalid_camera_fields_are_rejected(self, field, value, match) -> None:
+        payload = _payload()
+        payload["agents"][0]["camera"] = {"pose": [0.3, 0.0, 0.0], field: value}
+        with pytest.raises(AgentConfigError, match=match):
+            AgentsConfig.from_mapping(payload, config_file=Path("/tmp/a.yaml"))
+
+    def test_an_unknown_camera_key_is_rejected(self) -> None:
+        payload = _payload()
+        payload["agents"][0]["camera"] = {"fov_deg": 90.0}
+        with pytest.raises(AgentConfigError, match="unknown key"):
+            AgentsConfig.from_mapping(payload, config_file=Path("/tmp/a.yaml"))
+
+
 class TestTopics:
     def test_each_agent_gets_its_own_topics(self) -> None:
         spec = _config().agent("go1")
