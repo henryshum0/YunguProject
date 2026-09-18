@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from queue import Empty, Full, Queue
-from threading import Event, Thread
+from threading import Event, Lock, Thread
+from time import monotonic
 from typing import Any
 
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
+
+
+CAMERA_QOS = QoSProfile(
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+)
 
 
 class ImageDecodeError(ValueError):
@@ -80,6 +89,20 @@ def decode_ros_image(message: Any) -> CameraFrame:
         raise ImageDecodeError(
             f"image data has {len(source)} bytes; expected at least {expected_size}")
 
+    # Gazebo's RGB cameras normally publish tightly-packed rgb8 images.  Keep
+    # that common path in C-level byte copying instead of visiting 921,600
+    # individual channel values in Python for every 640x480 frame.
+    if encoding == "rgb8":
+        if step == minimum_step:
+            return CameraFrame(width=width, height=height, rgb=source[:expected_size])
+        return CameraFrame(
+            width=width,
+            height=height,
+            rgb=b"".join(
+                source[row * step:row * step + minimum_step]
+                for row in range(height)),
+        )
+
     output = bytearray(width * height * 3)
     destination = 0
     for row in range(height):
@@ -94,24 +117,56 @@ def decode_ros_image(message: Any) -> CameraFrame:
 
 
 class CameraPreview:
-    """Own an image-only ROS node/executor so it never races GUI service calls."""
+    """Latest-frame ROS preview that never lets camera work backlog the GUI."""
 
-    def __init__(self, topic: str, *, node_name: str = "skills_test_gui_camera") -> None:
+    def __init__(
+        self,
+        topic: str,
+        *,
+        node_name: str = "skills_test_gui_camera",
+        maximum_fps: float = 15.0,
+        maximum_width: int | None = None,
+        maximum_height: int | None = None,
+    ) -> None:
         if not topic.strip():
             raise ValueError("camera image topic must not be empty")
         if not node_name.strip():
             raise ValueError("camera preview node name must not be empty")
+        if not isfinite(maximum_fps) or maximum_fps <= 0.0:
+            raise ValueError("camera preview maximum_fps must be greater than zero")
+        if (maximum_width is None) != (maximum_height is None):
+            raise ValueError("camera preview maximum_width and maximum_height must be set together")
+        if maximum_width is not None and (maximum_width <= 0 or maximum_height <= 0):
+            raise ValueError("camera preview dimensions must be positive")
         self.topic = topic.strip()
+        self.maximum_fps = float(maximum_fps)
+        self._maximum_size = (
+            (int(maximum_width), int(maximum_height))
+            if maximum_width is not None and maximum_height is not None
+            else None
+        )
         self._frames: Queue[CameraFrame] = Queue(maxsize=1)
         self._errors: Queue[str] = Queue(maxsize=1)
         self._stop = Event()
+        self._image_ready = Event()
+        self._image_lock = Lock()
+        self._latest_image: Image | None = None
+        self._received_frames = 0
+        self._dropped_frames = 0
+        self._decoded_frames = 0
         self._node: Node = rclpy.create_node(node_name.strip())
         self._executor = SingleThreadedExecutor()
         self._executor.add_node(self._node)
         self._subscription = self._node.create_subscription(
-            Image, self.topic, self._on_image, qos_profile_sensor_data)
+            Image, self.topic, self._on_image, CAMERA_QOS)
         self._thread = Thread(target=self._spin, name="skills-camera-preview", daemon=True)
+        self._decode_thread = Thread(
+            target=self._decode_latest_images,
+            name="skills-camera-decode",
+            daemon=True,
+        )
         self._thread.start()
+        self._decode_thread.start()
 
     def _spin(self) -> None:
         while not self._stop.is_set():
@@ -131,10 +186,45 @@ class CameraPreview:
         queue.put_nowait(value)
 
     def _on_image(self, message: Image) -> None:
-        try:
-            self._put_latest(self._frames, decode_ros_image(message))
-        except ImageDecodeError as error:
-            self._put_latest(self._errors, str(error))
+        # ROS callbacks must be short. Keep exactly one image and replace it
+        # when a newer frame arrives; decoding happens outside the executor.
+        with self._image_lock:
+            if self._latest_image is not None:
+                self._dropped_frames += 1
+            self._latest_image = message
+            self._received_frames += 1
+        self._image_ready.set()
+
+    def _decode_latest_images(self) -> None:
+        minimum_period = 1.0 / self.maximum_fps
+        next_decode_time = 0.0
+        while not self._stop.is_set():
+            self._image_ready.wait(timeout=0.1)
+            if self._stop.is_set():
+                return
+            now = monotonic()
+            if now < next_decode_time:
+                self._stop.wait(next_decode_time - now)
+                if self._stop.is_set():
+                    return
+            self._image_ready.clear()
+            with self._image_lock:
+                message = self._latest_image
+                self._latest_image = None
+            if message is None:
+                continue
+            try:
+                frame = decode_ros_image(message)
+                # Downsampling is pure byte work, so do it here rather than
+                # blocking Tk's event loop with a large image resize.
+                if self._maximum_size is not None:
+                    frame = frame.resized_to_fit(*self._maximum_size)
+                self._put_latest(self._frames, frame)
+                with self._image_lock:
+                    self._decoded_frames += 1
+            except ImageDecodeError as error:
+                self._put_latest(self._errors, str(error))
+            next_decode_time = monotonic() + minimum_period
 
     def latest_frame(self) -> CameraFrame | None:
         frame: CameraFrame | None = None
@@ -152,10 +242,17 @@ class CameraPreview:
             except Empty:
                 return error
 
+    def statistics(self) -> tuple[int, int, int]:
+        """Return received, discarded-stale, and decoded frame counts."""
+        with self._image_lock:
+            return self._received_frames, self._dropped_frames, self._decoded_frames
+
     def close(self) -> None:
         if self._stop.is_set():
             return
         self._stop.set()
+        self._image_ready.set()
         self._executor.shutdown(timeout_sec=1.0)
         self._thread.join(timeout=1.0)
+        self._decode_thread.join(timeout=1.0)
         self._node.destroy_node()

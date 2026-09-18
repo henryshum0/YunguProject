@@ -21,6 +21,8 @@ if str(WORKSPACE_ROOT) not in sys.path:
 # horizontal space away from the operations controls and map.
 CAMERA_PREVIEW_WIDTH = 640
 CAMERA_PREVIEW_HEIGHT = 480
+CAMERA_PREVIEW_FPS = 15.0
+CAMERA_POLL_INTERVAL_MS = 50
 
 import rclpy
 from rclpy.node import Node
@@ -80,7 +82,7 @@ class SkillsTestGui(tk.Tk):
         self._load_map()
         self.protocol("WM_DELETE_WINDOW", self._close)
         self.after(50, self._poll_completed_actions)
-        self.after(50, self._poll_camera_previews)
+        self.after(CAMERA_POLL_INTERVAL_MS, self._poll_camera_previews)
         self.after(100, self._poll_operations_telemetry)
         self.after_idle(self._start_camera_previews)
         self.after_idle(self._start_operations_telemetry)
@@ -261,7 +263,13 @@ class SkillsTestGui(tk.Tk):
             status = self._camera_statuses[key]
             label = self._camera_labels[key]
             try:
-                self._camera_previews[key] = CameraPreview(topic, node_name=node_name)
+                self._camera_previews[key] = CameraPreview(
+                    topic,
+                    node_name=node_name,
+                    maximum_fps=CAMERA_PREVIEW_FPS,
+                    maximum_width=CAMERA_PREVIEW_WIDTH,
+                    maximum_height=CAMERA_PREVIEW_HEIGHT,
+                )
             except Exception as error:
                 status.set(f"Preview error: {error}")
                 label.configure(image="", text="Camera preview unavailable.")
@@ -292,17 +300,26 @@ class SkillsTestGui(tk.Tk):
             frame = preview.latest_frame()
             if frame is not None:
                 try:
-                    display_frame = frame.resized_to_fit(
-                        CAMERA_PREVIEW_WIDTH, CAMERA_PREVIEW_HEIGHT)
-                    photo = tk.PhotoImage(data=display_frame.ppm_bytes(), format="PPM")
+                    ppm = frame.ppm_bytes()
+                    photo = self._camera_photos.get(key)
+                    if photo is None or (
+                        photo.width() != frame.width or
+                        photo.height() != frame.height
+                    ):
+                        photo = tk.PhotoImage(data=ppm, format="PPM")
+                        self._camera_photos[key] = photo
+                        label.configure(image=photo, text="")
+                    else:
+                        photo.configure(data=ppm, format="PPM")
                 except tk.TclError as image_error:
                     status.set(f"Preview display error: {image_error}")
                     continue
-                self._camera_photos[key] = photo
-                label.configure(image=photo, text="")
+                received, dropped, decoded = preview.statistics()
                 status.set(
-                    f"Receiving {frame.width}x{frame.height} RGB frames on {preview.topic}.")
-        self.after(100, self._poll_camera_previews)
+                    f"Receiving {frame.width}x{frame.height} RGB on {preview.topic}; "
+                    f"display capped at {preview.maximum_fps:g} fps "
+                    f"({dropped} stale of {received} received; {decoded} decoded).")
+        self.after(CAMERA_POLL_INTERVAL_MS, self._poll_camera_previews)
 
     def _takeoff(self) -> None:
         self._confirm_and_request("Take off", "Request takeoff from the offboard FSM?", "takeoff")

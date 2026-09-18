@@ -22,6 +22,18 @@ def test_decode_ros_image_converts_bgr_and_row_padding_to_rgb() -> None:
     assert frame.ppm_bytes().startswith(b"P6\n2 1\n255\n")
 
 
+def test_decode_ros_image_keeps_rgb_rows_and_removes_padding() -> None:
+    frame = decode_ros_image(image(
+        width=2,
+        height=2,
+        encoding="rgb8",
+        step=8,
+        data=bytes((1, 2, 3, 4, 5, 6, 99, 99, 7, 8, 9, 10, 11, 12, 99, 99)),
+    ))
+
+    assert frame.rgb == bytes((1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+
+
 def test_camera_frame_resizes_to_fit_without_distorting_aspect_ratio() -> None:
     frame = CameraFrame(width=4, height=2, rgb=bytes((10, 20, 30)) * 8)
     preview = frame.resized_to_fit(3, 3)

@@ -47,8 +47,10 @@ vehicle-odometry, queue-status, and timeout settings remain independently editab
 - **Camera feeds** are a persistent sidebar, so they remain visible while navigating or planning.
   The front camera defaults to `/swan_gamma_v2/front_camera/image`; the follow camera defaults to
   `/swan_gamma_v2/follow_camera/image`. Each has its own ROS subscriber/executor, while the GUI
-  stacks both in an aspect-preserving native-resolution 640×480 preview. Use **Start / reconnect feeds** after
-  changing either topic; preview work does not block planner or waypoint service actions. Both
+  stacks both in an aspect-preserving 640×480 preview. It retains only the newest camera image,
+  decodes/resizes outside Tk, and renders at up to 15 fps so an overloaded system drops stale
+  frames instead of showing delayed video. Use **Start / reconnect feeds** after changing either
+  topic; preview work does not block planner or waypoint service actions. Both
   simulated feeds require `ros-humble-ros-gz-image` and the normal `utils/start_sim.sh` bridge.
 
 ## Coverage map selection
