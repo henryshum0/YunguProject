@@ -5,6 +5,12 @@
 setpoints. It owns takeoff, hover, queued EGO goals, abort/clear, and native
 PX4 landing.
 
+If this adapter restarts while PX4 is armed and airborne, it captures the
+current pose and recovers directly to `IDLE`; it does not command another
+takeoff. Queued goals wait for EGO's `WAIT_TARGET` state and are retransmitted
+only until EGO acknowledges planning, preventing a DDS-discovery race from
+silently losing the first goal.
+
 It is configured externally by:
 
 - `src/navigation/config/offboard/topics.yaml`

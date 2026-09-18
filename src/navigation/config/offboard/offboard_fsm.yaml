@@ -9,15 +9,18 @@ offboard_fsm:
   arm_retry_sec: 1.0
   command_timeout_sec: 0.5
   goal_accept_timeout_sec: 8.0
+  # Re-send an unacknowledged manual goal only while EGO is still in
+  # WAIT_TARGET. This handles DDS discovery during an offboard restart.
+  ego_goal_retry_sec: 0.5
 
 ego_planner:
   # EGO keeps this bounded dense grid world-aligned, then rolls it in x/y as
   # the vehicle moves. It is intentionally local: the complete Yungu collider
   # map is much larger than a practical dense grid.
   grid_resolution_m: 0.2
-  map_size_x_m: 20.0
-  map_size_y_m: 20.0
-  map_size_z_m: 20.0
+  map_size_x_m: 30.0
+  map_size_y_m: 30.0
+  map_size_z_m: 30.0
   local_update_range_x_m: 15.0
   local_update_range_y_m: 15.0
   local_update_range_z_m: 15.0
@@ -26,7 +29,7 @@ ego_planner:
   obstacle_inflation_m: 0.5
   map_visualization_rate_hz: 2.0
   direct_cloud_mode: true
-  rolling_recenter_distance_m: 10.0
+  rolling_recenter_distance_m: 5.0
   rolling_recenter_distance_z_m: 5.0
   obstacle_ttl_sec: 30.0
   occupancy_hit_probability: 0.70

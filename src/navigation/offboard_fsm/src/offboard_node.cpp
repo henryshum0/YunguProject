@@ -42,6 +42,7 @@ public:
     takeoff_tolerance_m_ = declare_parameter<double>("takeoff_tolerance_m", 0.3);
     command_timeout_sec_ = declare_parameter<double>("command_timeout_sec", 0.5);
     goal_accept_timeout_sec_ = declare_parameter<double>("goal_accept_timeout_sec", 8.0);
+    ego_goal_retry_sec_ = declare_parameter<double>("ego_goal_retry_sec", 0.5);
     arm_retry_sec_ = declare_parameter<double>("arm_retry_sec", 1.0);
 
     local_position_topic_ = declare_parameter<std::string>(
@@ -66,8 +67,9 @@ public:
     vehicle_command_topic_ = declare_parameter<std::string>(
       "vehicle_command_topic", "/fmu/in/vehicle_command");
 
-    if (update_rate_hz_ <= 1.0) {
-      throw std::runtime_error("update_rate_hz must be greater than 1 Hz");
+    if (update_rate_hz_ <= 1.0 || ego_goal_retry_sec_ <= 0.0) {
+      throw std::runtime_error(
+        "update_rate_hz must be greater than 1 Hz and ego_goal_retry_sec must be positive");
     }
 
     const auto px4_qos = rclcpp::QoS(10).best_effort();
@@ -148,7 +150,22 @@ private:
     publish_offboard_mode();
     ensure_hold();
     publish_hold();
-    if (!takeoff_requested_ || !has_valid_position()) {
+    if (!has_valid_position()) {
+      return;
+    }
+    // A restarted adapter must not require a second takeoff request while the
+    // vehicle is already armed and airborne. Capture its current NED pose and
+    // resume safe IDLE holding; a landed/disarmed vehicle still requires the
+    // normal explicit takeoff service.
+    if (is_armed() && land_detected_ && !is_landed()) {
+      capture_hold();
+      takeoff_requested_ = false;
+      takeoff_target_set_ = false;
+      set_state(State::IDLE);
+      RCLCPP_INFO(get_logger(), "Recovered airborne vehicle after adapter restart");
+      return;
+    }
+    if (!takeoff_requested_) {
       return;
     }
     if (state_elapsed() < warmup_sec_) {
@@ -204,12 +221,26 @@ private:
     if (active_goal_ || queue_.empty()) {
       return;
     }
+    if (ego_state_ != "WAIT_TARGET") {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000,
+        "Waiting for EGO planner readiness (state='%s') before dispatching queued goal",
+        ego_state_.empty() ? "no state received" : ego_state_.c_str());
+      return;
+    }
+    if (ego_goal_pub_->get_subscription_count() == 0U) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000,
+        "Waiting for EGO goal subscriber on '%s' before dispatching queued goal",
+        ego_goal_topic_.c_str());
+      return;
+    }
     active_goal_ = queue_.front();
     queue_.pop_front();
     latest_ego_command_.reset();
     awaiting_execution_ = true;
     execution_observed_ = false;
-    ego_goal_pub_->publish(*active_goal_);
+    publish_active_ego_goal();
     publish_queue_status();
     set_state(State::MOVE);
     RCLCPP_INFO(get_logger(), "Dispatched EGO goal: (%.2f, %.2f, %.2f)",
@@ -227,6 +258,23 @@ private:
     if (awaiting_execution_ && ego_state_ == "EXEC_TRAJ") {
       awaiting_execution_ = false;
       execution_observed_ = true;
+    }
+    // EGO's manual-goal topic is a one-shot interface. If the two nodes were
+    // restarting or discovering each other when the goal was sent, retry only
+    // while EGO still explicitly advertises that it is waiting for a target.
+    // Never repeat after EGO begins planning or executing, which would restart
+    // a valid trajectory.
+    if (awaiting_execution_ && ego_state_ == "WAIT_TARGET" &&
+      time_since(last_ego_goal_publish_) >= ego_goal_retry_sec_)
+    {
+      if (ego_goal_pub_->get_subscription_count() > 0U) {
+        publish_active_ego_goal();
+        RCLCPP_WARN(get_logger(), "EGO did not acknowledge goal; retransmitting it");
+      } else {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 5000,
+          "EGO goal subscriber disconnected while waiting for acknowledgement");
+      }
     }
     if (awaiting_execution_ && state_elapsed() > goal_accept_timeout_sec_) {
       abort_route("EGO planner did not accept the goal before timeout");
@@ -441,6 +489,15 @@ private:
     queue_status_pub_->publish(status);
   }
 
+  void publish_active_ego_goal()
+  {
+    if (!active_goal_) {
+      return;
+    }
+    ego_goal_pub_->publish(*active_goal_);
+    last_ego_goal_publish_ = now();
+  }
+
   void ensure_hold()
   {
     if (!have_hold_) {
@@ -530,6 +587,7 @@ private:
   double takeoff_tolerance_m_{0.3};
   double command_timeout_sec_{0.5};
   double goal_accept_timeout_sec_{8.0};
+  double ego_goal_retry_sec_{0.5};
   double arm_retry_sec_{1.0};
   std::string local_position_topic_, vehicle_status_topic_, land_detected_topic_;
   std::string ego_goal_topic_, ego_state_topic_, ego_command_topic_;
@@ -548,6 +606,7 @@ private:
   float takeoff_x_{0.0f}, takeoff_y_{0.0f}, takeoff_z_{0.0f};
   rclcpp::Time state_entered_{0, 0, RCL_ROS_TIME};
   rclcpp::Time latest_ego_command_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_ego_goal_publish_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_vehicle_command_{0, 0, RCL_ROS_TIME};
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr local_position_sub_;
